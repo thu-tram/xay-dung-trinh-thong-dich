@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Classes &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Classes<small>12</small></a></h3>
+
+<ul>
+    <li><a href="#oop-&amp;-class"><small>12.1</small> OOP &amp; Class</a></li>
+    <li><a href="#khai-báo-class"><small>12.2</small> Khai báo Class</a></li>
+    <li><a href="#tạo-instance"><small>12.3</small> Tạo Instance</a></li>
+    <li><a href="#thuộc-tính-properties-trên-instance"><small>12.4</small> Thuộc tính (Properties) trên Instance</a></li>
+    <li><a href="#method-trong-class"><small>12.5</small> Method trong Class</a></li>
+    <li><a href="#this"><small>12.6</small> This</a></li>
+    <li><a href="#constructor-&amp;-initializer"><small>12.7</small> Constructor &amp; Initializer</a></li>
+    <li><a href="#thử-thách"><small>12.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-prototype-&amp;-sức-mạnh"><small>12.9</small> Ghi chú thiết kế: Prototype &amp; Sức mạnh</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="resolving-and-binding.html" title="Resolving and Binding" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="inheritance.html" title="Inheritance" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="resolving-and-binding.html" title="Resolving and Binding" class="prev">←</a>
+<a href="inheritance.html" title="Inheritance" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Classes<small>12</small></a></h3>
+
+<ul>
+    <li><a href="#oop-&amp;-class"><small>12.1</small> OOP &amp; Class</a></li>
+    <li><a href="#khai-báo-class"><small>12.2</small> Khai báo Class</a></li>
+    <li><a href="#tạo-instance"><small>12.3</small> Tạo Instance</a></li>
+    <li><a href="#thuộc-tính-properties-trên-instance"><small>12.4</small> Thuộc tính (Properties) trên Instance</a></li>
+    <li><a href="#method-trong-class"><small>12.5</small> Method trong Class</a></li>
+    <li><a href="#this"><small>12.6</small> This</a></li>
+    <li><a href="#constructor-&amp;-initializer"><small>12.7</small> Constructor &amp; Initializer</a></li>
+    <li><a href="#thử-thách"><small>12.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-prototype-&amp;-sức-mạnh"><small>12.9</small> Ghi chú thiết kế: Prototype &amp; Sức mạnh</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="resolving-and-binding.html" title="Resolving and Binding" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="inheritance.html" title="Inheritance" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">12</div>
+  <h1>Classes</h1>
+
+<blockquote>
+<p>Không ai có quyền yêu hay ghét bất cứ điều gì nếu chưa hiểu tường tận bản chất của nó. Tình yêu lớn nảy sinh từ sự hiểu biết sâu sắc về đối tượng được yêu, và nếu bạn chỉ biết chút ít, bạn sẽ chỉ có thể yêu nó một chút hoặc chẳng yêu chút nào.</p>
+<p><cite>Leonardo da Vinci</cite></p>
+</blockquote>
+<p>Chúng ta đã đi đến chương thứ mười một, và interpreter đang nằm trên máy bạn giờ đây gần như đã là một ngôn ngữ scripting hoàn chỉnh. Nó có thể cần thêm vài cấu trúc dữ liệu dựng sẵn như list và map, và chắc chắn cần một thư viện lõi cho file I/O, nhập liệu từ người dùng, v.v. Nhưng bản thân ngôn ngữ thì đã đủ dùng. Chúng ta đang có một ngôn ngữ thủ tục nhỏ, cùng “dòng họ” với BASIC, Tcl, Scheme (trừ macro), và những phiên bản đầu của Python và Lua.</p>
+<p>Nếu đây là thập niên 80, có lẽ ta sẽ dừng lại ở đây. Nhưng ngày nay, nhiều ngôn ngữ phổ biến hỗ trợ “lập trình hướng đối tượng”. Thêm tính năng này vào Lox sẽ mang đến cho người dùng một bộ công cụ quen thuộc để viết các chương trình lớn hơn. Ngay cả khi cá nhân bạn không <span name="hate">thích</span> OOP, chương này và <a href="inheritance.html">chương tiếp theo</a> sẽ giúp bạn hiểu cách người khác thiết kế và xây dựng hệ thống đối tượng.</p>
+<aside name="hate">
+<p>Nếu bạn <em>thực sự</em> ghét class, bạn có thể bỏ qua hai chương này. Chúng khá tách biệt với phần còn lại của cuốn sách. Cá nhân tôi thấy rằng việc tìm hiểu kỹ hơn về những thứ mình không thích là điều tốt. Từ xa, mọi thứ trông đơn giản, nhưng khi lại gần, các chi tiết hiện ra và tôi có được góc nhìn tinh tế hơn.</p>
+</aside>
+<h2><a href="#oop-&-class" id="oop-&-class"><small>12&#8202;.&#8202;1</small>OOP &amp; Class</a></h2>
+<p>Có ba hướng tiếp cận chính với lập trình hướng đối tượng: class, <a href="http://gameprogrammingpatterns.com/prototype.html">prototype</a>, và <span name="multimethods"><a href="https://en.wikipedia.org/wiki/Multiple_dispatch">multimethod</a></span>. Class xuất hiện đầu tiên và là phong cách phổ biến nhất. Với sự trỗi dậy của JavaScript (và ở mức độ nhỏ hơn là <a href="https://www.lua.org/pil/13.4.1.html">Lua</a>), prototype được biết đến rộng rãi hơn trước đây. Tôi sẽ nói thêm về chúng <a href="#design-note">sau</a>. Với Lox, chúng ta sẽ chọn cách tiếp cận… cổ điển.</p>
+<aside name="multimethods">
+<p>Multimethod là hướng tiếp cận mà có lẽ bạn ít quen thuộc nhất. Tôi rất muốn nói nhiều hơn về chúng — tôi từng thiết kế <a href="http://magpie-lang.org/">một ngôn ngữ “nghịch”</a> xoay quanh chúng và chúng <em>cực kỳ thú vị</em> — nhưng số trang của cuốn sách là có hạn. Nếu bạn muốn tìm hiểu thêm, hãy xem <a href="https://en.wikipedia.org/wiki/Common_Lisp_Object_System">CLOS</a> (hệ thống đối tượng trong Common Lisp), <a href="https://opendylan.org/">Dylan</a>, <a href="https://julialang.org/">Julia</a>, hoặc <a href="https://docs.raku.org/language/functions#Multi-dispatch">Raku</a>.</p>
+</aside>
+<p>Vì bạn đã cùng tôi viết khoảng cả nghìn dòng Java, tôi sẽ giả định rằng bạn không cần một phần giới thiệu chi tiết về lập trình hướng đối tượng. Mục tiêu chính là gói dữ liệu cùng với code xử lý nó. Người dùng làm điều đó bằng cách khai báo một <em>class</em>:</p>
+<p><span name="circle"></span></p>
+<ol>
+<li>Cung cấp một <em>constructor</em> để tạo và khởi tạo <em>instance</em> mới của class  </li>
+<li>Cung cấp cách lưu trữ và truy cập <em>field</em> trên instance  </li>
+<li>Định nghĩa một tập <em>method</em> được chia sẻ bởi tất cả instance của class, hoạt động trên trạng thái của từng instance  </li>
+</ol>
+<p>Đó là mức tối giản nhất. Hầu hết các ngôn ngữ hướng đối tượng, từ thời Simula, cũng có tính năng kế thừa để tái sử dụng hành vi giữa các class. Chúng ta sẽ thêm phần đó ở <a href="inheritance.html">chương sau</a>. Ngay cả khi bỏ qua nó, vẫn còn khá nhiều việc phải làm. Đây là một chương lớn và mọi thứ sẽ chỉ thực sự “ăn khớp” khi ta có đủ các mảnh ghép trên, nên hãy chuẩn bị tinh thần.</p>
+<aside name="circle"><img src="image/classes/circle.png" alt="Mối quan hệ giữa class, method, instance, constructor, và field." />
+<p>Giống như “vòng tròn của sự sống”, chỉ là <em>không có</em> Sir Elton John.</p>
+</aside>
+<h2><a href="#khai-báo-class" id="khai-báo-class"><small>12&#8202;.&#8202;2</small>Khai báo Class</a></h2>
+<p>Như thường lệ, ta sẽ bắt đầu với cú pháp. Một câu lệnh <code>class</code> giới thiệu một tên mới, nên nó nằm trong luật ngữ pháp <code>declaration</code>.</p>
+<div class="codehilite"><pre><span class="i">declaration</span>    → <span class="i">classDecl</span>
+               | <span class="i">funDecl</span>
+               | <span class="i">varDecl</span>
+               | <span class="i">statement</span> ;
+
+<span class="i">classDecl</span>      → <span class="s">&quot;class&quot;</span> <span class="t">IDENTIFIER</span> <span class="s">&quot;{&quot;</span> <span class="i">function</span>* <span class="s">&quot;}&quot;</span> ;
+</pre></div>
+<p>Luật <code>classDecl</code> mới này dựa vào luật <code>function</code> mà ta đã định nghĩa <a href="functions.html#function-declarations">trước đó</a>. Nhắc lại cho bạn nhớ:</p>
+<div class="codehilite"><pre><span class="i">function</span>       → <span class="t">IDENTIFIER</span> <span class="s">&quot;(&quot;</span> <span class="i">parameters</span>? <span class="s">&quot;)&quot;</span> <span class="i">block</span> ;
+<span class="i">parameters</span>     → <span class="t">IDENTIFIER</span> ( <span class="s">&quot;,&quot;</span> <span class="t">IDENTIFIER</span> )* ;
+</pre></div>
+<p>Nói đơn giản, một khai báo class gồm từ khóa <code>class</code>, theo sau là tên class, rồi đến phần thân trong dấu ngoặc nhọn. Bên trong là danh sách các khai báo method. Khác với khai báo hàm, method không có từ khóa <span name="fun"><code>fun</code></span> ở đầu. Mỗi method gồm tên, danh sách tham số và phần thân. Ví dụ:</p>
+<aside name="fun">
+<p>Không phải tôi đang ám chỉ rằng method không “fun” đâu nhé.</p>
+</aside>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Breakfast</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Eggs a-fryin&#39;!&quot;</span>;
+  }
+
+  <span class="i">serve</span>(<span class="i">who</span>) {
+    <span class="k">print</span> <span class="s">&quot;Enjoy your breakfast, &quot;</span> + <span class="i">who</span> + <span class="s">&quot;.&quot;</span>;
+  }
+}
+</pre></div>
+<p>Giống như hầu hết các ngôn ngữ dynamic typing, field không được liệt kê rõ ràng trong khai báo class. Instance chỉ là những “túi dữ liệu” lỏng lẻo và bạn có thể tự do thêm field vào chúng tùy ý bằng code mệnh lệnh thông thường.</p>
+<p>Trong trình tạo AST của chúng ta, luật ngữ pháp <code>classDecl</code> có riêng một statement <span name="class-ast">node</span>.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Block      : List&lt;Stmt&gt; statements&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Class      : Token name, List&lt;Stmt.Function&gt; methods&quot;</span>,
+</pre><pre class="insert-after">      &quot;Expression : Expr expression&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="class-ast">
+<p>Code được generated cho node mới này nằm ở <a href="appendix-ii.html#class-statement">Phụ lục II</a>.</p>
+</aside>
+<p>Node này lưu tên class và các method bên trong phần thân. Method được biểu diễn bằng class <code>Stmt.Function</code> hiện có mà ta dùng cho các node AST khai báo hàm. Điều đó cho chúng ta đầy đủ các thành phần trạng thái cần thiết cho một method: tên, danh sách tham số và phần thân.</p>
+<p>Một class có thể xuất hiện ở bất kỳ đâu mà một khai báo có tên được phép, được kích hoạt bởi từ khóa <code>class</code> ở đầu.</p>
+<div class="codehilite"><pre class="insert-before">    try {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>declaration</em>()</div>
+<pre class="insert">      <span class="k">if</span> (<span class="i">match</span>(<span class="i">CLASS</span>)) <span class="k">return</span> <span class="i">classDeclaration</span>();
+</pre><pre class="insert-after">      if (match(FUN)) return function(&quot;function&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>declaration</em>()</div>
+
+<p>Lệnh này gọi tới:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>declaration</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">classDeclaration</span>() {
+    <span class="t">Token</span> <span class="i">name</span> = <span class="i">consume</span>(<span class="i">IDENTIFIER</span>, <span class="s">&quot;Expect class name.&quot;</span>);
+    <span class="i">consume</span>(<span class="i">LEFT_BRACE</span>, <span class="s">&quot;Expect &#39;{&#39; before class body.&quot;</span>);
+
+    <span class="t">List</span>&lt;<span class="t">Stmt</span>.<span class="t">Function</span>&gt; <span class="i">methods</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+    <span class="k">while</span> (!<span class="i">check</span>(<span class="i">RIGHT_BRACE</span>) &amp;&amp; !<span class="i">isAtEnd</span>()) {
+      <span class="i">methods</span>.<span class="i">add</span>(<span class="i">function</span>(<span class="s">&quot;method&quot;</span>));
+    }
+
+    <span class="i">consume</span>(<span class="i">RIGHT_BRACE</span>, <span class="s">&quot;Expect &#39;}&#39; after class body.&quot;</span>);
+
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Class</span>(<span class="i">name</span>, <span class="i">methods</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>declaration</em>()</div>
+
+<p>Phần này “nặng” hơn hầu hết các phương thức parse khác, nhưng về cơ bản vẫn bám sát grammar. Chúng ta đã đọc từ khóa <code>class</code>, nên tiếp theo sẽ tìm tên class như mong đợi, rồi đến dấu ngoặc nhọn mở. Khi đã vào bên trong phần thân, ta tiếp tục parse các khai báo method cho đến khi gặp dấu ngoặc nhọn đóng. Mỗi khai báo method được parse bằng lời gọi tới <code>function()</code>, hàm mà ta đã định nghĩa trong <a href="functions.html">chương giới thiệu hàm</a>.</p>
+<p>Như mọi vòng lặp mở trong parser, ta cũng kiểm tra xem có chạm tới cuối file không. Điều này sẽ không xảy ra trong code đúng, vì một class phải có dấu ngoặc nhọn đóng ở cuối, nhưng nó đảm bảo parser không bị kẹt trong vòng lặp vô hạn nếu người dùng mắc lỗi cú pháp và quên kết thúc phần thân class.</p>
+<p>Chúng ta gói tên và danh sách method vào một node <code>Stmt.Class</code> và xong. Trước đây, ta sẽ nhảy thẳng sang interpreter, nhưng giờ cần đưa node này qua resolver trước.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitClassStmt</span>(<span class="t">Stmt</span>.<span class="t">Class</span> <span class="i">stmt</span>) {
+    <span class="i">declare</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+    <span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Chúng ta chưa cần xử lý việc resolve các method, nên hiện tại chỉ cần khai báo class bằng tên của nó. Việc khai báo class như một biến local không phổ biến, nhưng Lox cho phép, nên ta cần xử lý đúng.</p>
+<p>Giờ ta interpret khai báo class.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitClassStmt</span>(<span class="t">Stmt</span>.<span class="t">Class</span> <span class="i">stmt</span>) {
+    <span class="i">environment</span>.<span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>, <span class="k">null</span>);
+    <span class="t">LoxClass</span> <span class="i">klass</span> = <span class="k">new</span> <span class="t">LoxClass</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>);
+    <span class="i">environment</span>.<span class="i">assign</span>(<span class="i">stmt</span>.<span class="i">name</span>, <span class="i">klass</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Phần này trông giống cách ta execute khai báo hàm. Ta khai báo tên class trong environment hiện tại. Sau đó, ta biến <em>syntax node</em> của class thành một <code>LoxClass</code>, tức là biểu diễn <em>runtime</em> của class. Tiếp theo, ta quay lại và lưu object class vào biến vừa khai báo. Quy trình binding biến hai bước này cho phép tham chiếu tới class bên trong chính các method của nó.</p>
+<p>Chúng ta sẽ tinh chỉnh nó trong suốt chương, nhưng bản nháp đầu tiên của <code>LoxClass</code> trông như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxClass.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.List</span>;
+<span class="k">import</span> <span class="i">java.util.Map</span>;
+
+<span class="k">class</span> <span class="t">LoxClass</span> {
+  <span class="k">final</span> <span class="t">String</span> <span class="i">name</span>;
+
+  <span class="t">LoxClass</span>(<span class="t">String</span> <span class="i">name</span>) {
+    <span class="k">this</span>.<span class="i">name</span> = <span class="i">name</span>;
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">toString</span>() {
+    <span class="k">return</span> <span class="i">name</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, create new file</div>
+
+<p>Về cơ bản chỉ là một lớp bọc quanh tên. Chúng ta thậm chí chưa lưu method. Không hữu ích lắm, nhưng nó có phương thức <code>toString()</code> để ta có thể viết một script đơn giản và kiểm tra rằng object class thực sự được parse và execute.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">DevonshireCream</span> {
+  <span class="i">serveOn</span>() {
+    <span class="k">return</span> <span class="s">&quot;Scones&quot;</span>;
+  }
+}
+
+<span class="k">print</span> <span class="t">DevonshireCream</span>; <span class="c">// In ra &quot;DevonshireCream&quot;.</span>
+</pre></div>
+<h2><a href="#tạo-instance" id="tạo-instance"><small>12&#8202;.&#8202;3</small>Tạo Instance</a></h2>
+<p>Chúng ta đã có class, nhưng chúng chưa làm được gì. Lox không có method “static” để gọi trực tiếp trên class, nên nếu không có instance thực sự, class là vô dụng. Vì vậy, bước tiếp theo là instance.</p>
+<p>Mặc dù một số cú pháp và ngữ nghĩa khá tiêu chuẩn giữa các ngôn ngữ OOP, cách tạo instance mới thì không. Ruby, theo Smalltalk, tạo instance bằng cách gọi một method trên chính object class — một cách tiếp cận <span name="turtles">đệ quy</span> duyên dáng. Một số ngôn ngữ như C++ và Java có từ khóa <code>new</code> dành riêng cho việc “sinh” object mới. Python thì “gọi” class như một hàm. (JavaScript, vốn kỳ quặc, thì kiểu như làm cả hai.)</p>
+<aside name="turtles">
+<p>Trong Smalltalk, ngay cả <em>class</em> cũng được tạo bằng cách gọi method trên một object hiện có, thường là superclass mong muốn. Nó giống như câu chuyện “rùa chồng rùa” bất tận. Cuối cùng, nó dừng lại ở một vài class “ma thuật” như <code>Object</code> và <code>Metaclass</code> mà runtime tự tạo ra <em>từ hư vô</em>.</p>
+</aside>
+<p>Tôi chọn cách tiếp cận tối giản cho Lox. Chúng ta đã có object class, và đã có lời gọi hàm, nên sẽ dùng biểu thức gọi (call expression) trên object class để tạo instance mới. Giống như một class là một hàm nhà máy tạo ra instance của chính nó. Cách này vừa gọn gàng, vừa tránh phải thêm cú pháp như <code>new</code>. Do đó, ta có thể bỏ qua phần front end và đi thẳng vào runtime.</p>
+<p>Hiện tại, nếu bạn thử:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Bagel</span> {}
+<span class="t">Bagel</span>();
+</pre></div>
+<p>Bạn sẽ gặp runtime error. <code>visitCallExpr()</code> kiểm tra xem object được gọi có implement <code>LoxCallable</code> không và báo lỗi vì <code>LoxClass</code> chưa làm điều đó. <em>Chưa</em> thôi.</p>
+<div class="codehilite"><pre class="insert-before">import java.util.Map;
+
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+replace 1 line</div>
+<pre class="insert"><span class="k">class</span> <span class="t">LoxClass</span> <span class="k">implements</span> <span class="t">LoxCallable</span> {
+</pre><pre class="insert-after">  final String name;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, replace 1 line</div>
+
+<p>Việc implement interface này yêu cầu hai phương thức.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxClass.java</em><br>
+add after <em>toString</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">call</span>(<span class="t">Interpreter</span> <span class="i">interpreter</span>,
+                     <span class="t">List</span>&lt;<span class="t">Object</span>&gt; <span class="i">arguments</span>) {
+    <span class="t">LoxInstance</span> <span class="i">instance</span> = <span class="k">new</span> <span class="t">LoxInstance</span>(<span class="k">this</span>);
+    <span class="k">return</span> <span class="i">instance</span>;
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">int</span> <span class="i">arity</span>() {
+    <span class="k">return</span> <span class="n">0</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, add after <em>toString</em>()</div>
+
+<p>Phương thức thú vị là <code>call()</code>. Khi bạn “gọi” một class, nó sẽ tạo một <code>LoxInstance</code> mới cho class được gọi và trả về. Phương thức <code>arity()</code> giúp interpreter xác nhận rằng bạn truyền đúng số lượng argument cho callable. Hiện tại, ta sẽ quy định là không được truyền argument nào. Khi đến phần constructor do người dùng định nghĩa, ta sẽ quay lại đây.</p>
+<p>Điều đó dẫn ta đến <code>LoxInstance</code>, biểu diễn runtime của một instance thuộc class Lox. Một lần nữa, bản cài đặt đầu tiên sẽ rất đơn giản.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxInstance.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.HashMap</span>;
+<span class="k">import</span> <span class="i">java.util.Map</span>;
+
+<span class="k">class</span> <span class="t">LoxInstance</span> {
+  <span class="k">private</span> <span class="t">LoxClass</span> <span class="i">klass</span>;
+
+  <span class="t">LoxInstance</span>(<span class="t">LoxClass</span> <span class="i">klass</span>) {
+    <span class="k">this</span>.<span class="i">klass</span> = <span class="i">klass</span>;
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">toString</span>() {
+    <span class="k">return</span> <span class="i">klass</span>.<span class="i">name</span> + <span class="s">&quot; instance&quot;</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, create new file</div>
+
+<p>Giống như <code>LoxClass</code>, nó khá sơ sài, nhưng chúng ta mới chỉ bắt đầu. Nếu muốn thử, bạn có thể chạy script sau:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Bagel</span> {}
+<span class="k">var</span> <span class="i">bagel</span> = <span class="t">Bagel</span>();
+<span class="k">print</span> <span class="i">bagel</span>; <span class="c">// In ra &quot;Bagel instance&quot;.</span>
+</pre></div>
+<p>Chương trình này chưa làm được nhiều, nhưng ít nhất nó đã bắt đầu <em>làm được gì đó</em>.</p>
+<h2><a href="#thuộc-tính-properties-trên-instance" id="thuộc-tính-properties-trên-instance"><small>12&#8202;.&#8202;4</small>Thuộc tính (Properties) trên Instance</a></h2>
+<p>Chúng ta đã có instance, vậy giờ hãy làm cho chúng hữu ích. Ở đây ta đứng trước một ngã rẽ: có thể thêm hành vi trước — tức method — hoặc bắt đầu với trạng thái — tức property. Chúng ta sẽ chọn cách thứ hai, vì như sẽ thấy, hai thứ này gắn bó với nhau theo một cách thú vị, và sẽ dễ hiểu hơn nếu ta làm property hoạt động trước.</p>
+<p>Lox xử lý trạng thái giống JavaScript và Python. Mỗi instance là một tập hợp mở các giá trị có tên. Method trong class của instance có thể truy cập và thay đổi property, nhưng code <span name="outside">bên ngoài</span> cũng có thể làm vậy. Property được truy cập bằng cú pháp dấu <code>.</code>.</p>
+<aside name="outside">
+<p>Cho phép code bên ngoài class trực tiếp thay đổi field của object đi ngược lại nguyên tắc OOP rằng class <em>đóng gói</em> trạng thái. Một số ngôn ngữ có lập trường nguyên tắc hơn. Trong Smalltalk, field được truy cập bằng các identifier đơn giản — về cơ bản là biến chỉ có phạm vi trong method của class. Ruby dùng ký tự <code>@</code> theo sau là tên để truy cập field trong object. Cú pháp này chỉ có ý nghĩa bên trong method và luôn truy cập trạng thái của object hiện tại.</p>
+<p>Lox, dù tốt hay xấu, không quá “mộ đạo” với đức tin OOP của mình.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">someObject</span>.<span class="i">someProperty</span>
+</pre></div>
+<p>Một biểu thức theo sau bởi <code>.</code> và một identifier sẽ đọc property có tên đó từ object mà biểu thức trả về. Dấu chấm này có độ ưu tiên ngang với dấu ngoặc đơn trong lời gọi hàm, nên ta đưa nó vào grammar bằng cách thay thế luật <code>call</code> hiện tại bằng:</p>
+<div class="codehilite"><pre><span class="i">call</span>           → <span class="i">primary</span> ( <span class="s">&quot;(&quot;</span> <span class="i">arguments</span>? <span class="s">&quot;)&quot;</span> | <span class="s">&quot;.&quot;</span> <span class="t">IDENTIFIER</span> )* ;
+</pre></div>
+<p>Sau một biểu thức primary, ta cho phép một chuỗi bất kỳ kết hợp giữa lời gọi có ngoặc và truy cập property bằng dấu chấm. “Property access” nghe hơi dài dòng, nên từ đây ta sẽ gọi chúng là “get expression”.</p>
+<h3><a href="#get-expression" id="get-expression"><small>12&#8202;.&#8202;4&#8202;.&#8202;1</small>Get expression</a></h3>
+<p><span name="get-ast">Node cây cú pháp</span> là:</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Call     : Expr callee, Token paren, List&lt;Expr&gt; arguments&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Get      : Expr object, Token name&quot;</span>,
+</pre><pre class="insert-after">      &quot;Grouping : Expr expression&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="get-ast">
+<p>Code sinh ra cho node mới này nằm ở <a href="appendix-ii.html#get-expression">Phụ lục II</a>.</p>
+</aside>
+<p>Theo grammar, code parse mới sẽ nằm trong method <code>call()</code> hiện có.</p>
+<div class="codehilite"><pre class="insert-before">    while (true) {<span name="while-true"> </span>
+      if (match(LEFT_PAREN)) {
+        expr = finishCall(expr);
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>call</em>()</div>
+<pre class="insert">      } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="i">DOT</span>)) {
+        <span class="t">Token</span> <span class="i">name</span> = <span class="i">consume</span>(<span class="i">IDENTIFIER</span>,
+            <span class="s">&quot;Expect property name after &#39;.&#39;.&quot;</span>);
+        <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Get</span>(<span class="i">expr</span>, <span class="i">name</span>);
+</pre><pre class="insert-after">      } else {
+        break;
+      }
+    }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>call</em>()</div>
+
+<p>Vòng lặp <code>while</code> bên ngoài tương ứng với dấu <code>*</code> trong luật grammar. Chúng ta “lướt” qua các token, xây dựng một chuỗi các lời gọi và get khi gặp dấu ngoặc hoặc dấu chấm, như thế này:</p><img src="image/classes/zip.png" alt="Parsing một chuỗi biểu thức '.' và '()' thành AST." />
+<p>Các instance của node <code>Expr.Get</code> mới sẽ được đưa vào resolver.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitCallExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitGetExpr</span>(<span class="t">Expr</span>.<span class="t">Get</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">object</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitCallExpr</em>()</div>
+
+<p>OK, không có gì nhiều ở đây. Vì property được tra cứu <span name="dispatch">một cách động</span>, chúng không được resolve. Trong quá trình resolve, ta chỉ đệ quy vào biểu thức bên trái dấu chấm. Việc truy cập property thực sự diễn ra trong interpreter.</p>
+<aside name="dispatch">
+<p>Bạn có thể thấy rõ rằng property dispatch trong Lox là động, vì chúng ta không xử lý tên property trong bước resolve tĩnh.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitCallExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitGetExpr</span>(<span class="t">Expr</span>.<span class="t">Get</span> <span class="i">expr</span>) {
+    <span class="t">Object</span> <span class="i">object</span> = <span class="i">evaluate</span>(<span class="i">expr</span>.<span class="i">object</span>);
+    <span class="k">if</span> (<span class="i">object</span> <span class="k">instanceof</span> <span class="t">LoxInstance</span>) {
+      <span class="k">return</span> ((<span class="t">LoxInstance</span>) <span class="i">object</span>).<span class="i">get</span>(<span class="i">expr</span>.<span class="i">name</span>);
+    }
+
+    <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">expr</span>.<span class="i">name</span>,
+        <span class="s">&quot;Only instances have properties.&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitCallExpr</em>()</div>
+
+<p>Đầu tiên, ta đánh giá biểu thức có property đang được truy cập. Trong Lox, chỉ instance của class mới có property. Nếu object là kiểu khác như số, việc gọi getter trên nó là một runtime error.</p>
+<p>Nếu object là <code>LoxInstance</code>, ta yêu cầu nó tra cứu property. Đã đến lúc cho <code>LoxInstance</code> có trạng thái thực sự. Một map là đủ.</p>
+<div class="codehilite"><pre class="insert-before">  private LoxClass klass;
+</pre><div class="source-file"><em>lox/LoxInstance.java</em><br>
+in class <em>LoxInstance</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">Object</span>&gt; <span class="i">fields</span> = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+</pre><pre class="insert-after">
+
+  LoxInstance(LoxClass klass) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, in class <em>LoxInstance</em></div>
+
+<p>Mỗi key trong map là tên property và giá trị tương ứng là giá trị của property đó. Để tra cứu property trên một instance:</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxInstance.java</em><br>
+add after <em>LoxInstance</em>()</div>
+<pre>  <span class="t">Object</span> <span class="i">get</span>(<span class="t">Token</span> <span class="i">name</span>) {
+    <span class="k">if</span> (<span class="i">fields</span>.<span class="i">containsKey</span>(<span class="i">name</span>.<span class="i">lexeme</span>)) {
+      <span class="k">return</span> <span class="i">fields</span>.<span class="i">get</span>(<span class="i">name</span>.<span class="i">lexeme</span>);
+    }
+
+    <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">name</span>,<span name="hidden"> </span>
+        <span class="s">&quot;Undefined property &#39;&quot;</span> + <span class="i">name</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;.&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, add after <em>LoxInstance</em>()</div>
+
+<aside name="hidden">
+<p>Tra cứu hash table cho mỗi lần truy cập field là đủ nhanh với nhiều bản cài đặt ngôn ngữ, nhưng không lý tưởng. Các VM hiệu năng cao cho ngôn ngữ như JavaScript dùng các tối ưu hóa tinh vi như “<a href="http://richardartoul.github.io/jekyll/update/2015/04/26/hidden-classes.html">hidden classes</a>” để tránh overhead này.</p>
+<p>Trớ trêu thay, nhiều tối ưu hóa được phát minh để làm ngôn ngữ dynamic chạy nhanh lại dựa trên quan sát rằng — ngay cả trong các ngôn ngữ đó — hầu hết code khá tĩnh về kiểu object mà nó làm việc và các field của chúng.</p>
+</aside>
+<p>Một trường hợp biên thú vị cần xử lý là khi instance không <em>có</em> property với tên đã cho. Ta có thể âm thầm trả về một giá trị giả như <code>nil</code>, nhưng kinh nghiệm của tôi với các ngôn ngữ như JavaScript cho thấy hành vi này thường che giấu bug hơn là mang lại điều gì hữu ích. Thay vào đó, ta sẽ biến nó thành runtime error.</p>
+<p>Vì vậy, việc đầu tiên là kiểm tra xem instance thực sự có field với tên đó không. Chỉ khi đó ta mới trả về. Nếu không, ta báo lỗi.</p>
+<p>Hãy để ý cách tôi chuyển từ “property” sang “field”. Có một sự khác biệt tinh tế giữa hai khái niệm này. Field là những phần trạng thái có tên được lưu trực tiếp trong instance. Property là những “thứ” có tên mà một get expression có thể trả về. Mọi field đều là property, nhưng như ta sẽ thấy <span name="foreshadowing">sau này</span>, không phải mọi property đều là field.</p>
+<aside name="foreshadowing">
+<p>Ồ, báo trước kìa. Rùng rợn chưa!</p>
+</aside>
+<p>Về lý thuyết, giờ ta có thể đọc property trên object. Nhưng vì chưa có cách nào để thực sự nhét trạng thái vào một instance, nên chẳng có field nào để truy cập. Trước khi thử đọc, ta phải hỗ trợ việc ghi đã.</p>
+<h3><a href="#biểu-thức-set" id="biểu-thức-set"><small>12&#8202;.&#8202;4&#8202;.&#8202;2</small>Biểu thức Set</a></h3>
+<p>Setter dùng cùng cú pháp với getter, chỉ khác là chúng xuất hiện ở phía bên trái của một phép gán.</p>
+<div class="codehilite"><pre><span class="i">someObject</span>.<span class="i">someProperty</span> = <span class="i">value</span>;
+</pre></div>
+<p>Trong phần grammar, chúng ta mở rộng luật cho assignment để cho phép các identifier có dấu chấm ở phía bên trái.</p>
+<div class="codehilite"><pre><span class="i">assignment</span>     → ( <span class="i">call</span> <span class="s">&quot;.&quot;</span> )? <span class="t">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="i">assignment</span>
+               | <span class="i">logic_or</span> ;
+</pre></div>
+<p>Không giống getter, setter không thể chain. Tuy nhiên, tham chiếu tới <code>call</code> cho phép bất kỳ biểu thức có độ ưu tiên cao nào trước dấu chấm cuối cùng, bao gồm cả một số lượng <em>getter</em> bất kỳ, như trong ví dụ:</p><img src="image/classes/setter.png" alt="breakfast.omelette.filling.meat = ham" />
+<p>Lưu ý rằng chỉ phần <em>cuối cùng</em>, <code>.meat</code>, mới là <em>setter</em>. Các phần <code>.omelette</code> và <code>.filling</code> đều là <em>get expression</em>.</p>
+<p>Cũng giống như chúng ta có hai node AST riêng biệt cho việc truy cập biến và gán biến, ta cần một <span name="set-ast">node setter thứ hai</span> để bổ sung cho node getter.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Logical  : Expr left, Token operator, Expr right&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Set      : Expr object, Token name, Expr value&quot;</span>,
+</pre><pre class="insert-after">      &quot;Unary    : Token operator, Expr right&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="set-ast">
+<p>Code sinh ra cho node mới này nằm ở <a href="appendix-ii.html#set-expression">Phụ lục II</a>.</p>
+</aside>
+<p>Nếu bạn không nhớ, cách chúng ta xử lý assignment trong parser hơi đặc biệt. Chúng ta không thể dễ dàng biết được một chuỗi token là phía bên trái của một phép gán cho đến khi gặp dấu <code>=</code>. Giờ đây, khi luật grammar của assignment có <code>call</code> ở bên trái, mà <code>call</code> có thể mở rộng thành những biểu thức lớn tùy ý, thì dấu <code>=</code> cuối cùng có thể cách rất xa điểm mà ta cần biết mình đang parse một assignment.</p>
+<p>Thay vào đó, mẹo của chúng ta là parse phía bên trái như một biểu thức bình thường. Sau đó, khi bắt gặp dấu bằng phía sau nó, ta lấy biểu thức đã parse và biến nó thành node cây cú pháp phù hợp cho assignment.</p>
+<p>Chúng ta thêm một nhánh nữa vào quá trình biến đổi đó để xử lý việc chuyển một biểu thức <code>Expr.Get</code> ở bên trái thành <code>Expr.Set</code> tương ứng.</p>
+<div class="codehilite"><pre class="insert-before">        return new Expr.Assign(name, value);
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>assignment</em>()</div>
+<pre class="insert">      } <span class="k">else</span> <span class="k">if</span> (<span class="i">expr</span> <span class="k">instanceof</span> <span class="t">Expr</span>.<span class="t">Get</span>) {
+        <span class="t">Expr</span>.<span class="t">Get</span> <span class="i">get</span> = (<span class="t">Expr</span>.<span class="t">Get</span>)<span class="i">expr</span>;
+        <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Set</span>(<span class="i">get</span>.<span class="i">object</span>, <span class="i">get</span>.<span class="i">name</span>, <span class="i">value</span>);
+</pre><pre class="insert-after">      }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>assignment</em>()</div>
+
+<p>Vậy là xong phần parse cú pháp. Ta đưa node này qua resolver.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitLogicalExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitSetExpr</span>(<span class="t">Expr</span>.<span class="t">Set</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">value</span>);
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">object</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitLogicalExpr</em>()</div>
+
+<p>Tương tự như <code>Expr.Get</code>, bản thân property được đánh giá một cách động, nên không có gì để resolve ở đây. Tất cả những gì cần làm là đệ quy vào hai biểu thức con của <code>Expr.Set</code>: object có property đang được gán, và giá trị sẽ gán cho nó.</p>
+<p>Tiếp theo là interpreter.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitLogicalExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitSetExpr</span>(<span class="t">Expr</span>.<span class="t">Set</span> <span class="i">expr</span>) {
+    <span class="t">Object</span> <span class="i">object</span> = <span class="i">evaluate</span>(<span class="i">expr</span>.<span class="i">object</span>);
+
+    <span class="k">if</span> (!(<span class="i">object</span> <span class="k">instanceof</span> <span class="t">LoxInstance</span>)) {<span name="order"> </span>
+      <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">expr</span>.<span class="i">name</span>,
+                             <span class="s">&quot;Only instances have fields.&quot;</span>);
+    }
+
+    <span class="t">Object</span> <span class="i">value</span> = <span class="i">evaluate</span>(<span class="i">expr</span>.<span class="i">value</span>);
+    ((<span class="t">LoxInstance</span>)<span class="i">object</span>).<span class="i">set</span>(<span class="i">expr</span>.<span class="i">name</span>, <span class="i">value</span>);
+    <span class="k">return</span> <span class="i">value</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitLogicalExpr</em>()</div>
+
+<p>Chúng ta đánh giá object có property đang được gán và kiểm tra xem nó có phải là <code>LoxInstance</code> không. Nếu không, đó là runtime error. Nếu có, ta đánh giá giá trị cần gán và lưu nó vào instance. Việc này dựa vào một method mới trong <code>LoxInstance</code>.</p>
+<aside name="order">
+<p>Đây là một trường hợp biên về ngữ nghĩa. Có ba thao tác riêng biệt:</p>
+<ol>
+<li>
+<p>Đánh giá object.</p>
+</li>
+<li>
+<p>Gây ra runtime error nếu nó không phải là instance của một class.</p>
+</li>
+<li>
+<p>Đánh giá giá trị.</p>
+</li>
+</ol>
+<p>Thứ tự thực hiện các bước này có thể ảnh hưởng đến hành vi mà người dùng thấy được, nghĩa là chúng ta cần chỉ rõ và đảm bảo các bản cài đặt thực hiện theo cùng một thứ tự.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/LoxInstance.java</em><br>
+add after <em>get</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">set</span>(<span class="t">Token</span> <span class="i">name</span>, <span class="t">Object</span> <span class="i">value</span>) {
+    <span class="i">fields</span>.<span class="i">put</span>(<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, add after <em>get</em>()</div>
+
+<p>Không có gì “ma thuật” ở đây. Chúng ta đưa thẳng giá trị vào Java map nơi các field được lưu. Vì Lox cho phép tự do tạo field mới trên instance, nên không cần kiểm tra xem key đã tồn tại hay chưa.</p>
+<h2><a href="#method-trong-class" id="method-trong-class"><small>12&#8202;.&#8202;5</small>Method trong Class</a></h2>
+<p>Bạn có thể tạo instance của class và nhét dữ liệu vào chúng, nhưng bản thân class thì chưa thực sự <em>làm</em> gì cả. Instance hiện tại chỉ như những map, và tất cả instance đều na ná nhau. Để khiến chúng thực sự mang cảm giác là instance <em>của class</em>, chúng ta cần hành vi — tức method.</p>
+<p>Parser của chúng ta vốn đã parse được khai báo method, nên phần đó ổn. Chúng ta cũng không cần thêm hỗ trợ parser mới cho lời gọi method. Ta đã có <code>.</code> (getter) và <code>()</code> (lời gọi hàm). Một “lời gọi method” đơn giản chỉ là kết hợp hai thứ đó lại.</p><img src="image/classes/method.png" alt="Cây cú pháp cho 'object.method(argument)" />
+<p>Điều này dẫn đến một câu hỏi thú vị: chuyện gì xảy ra nếu tách hai biểu thức đó ra? Giả sử <code>method</code> trong ví dụ này là một method của class của <code>object</code> chứ không phải một field trên instance, thì đoạn code sau sẽ làm gì?</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">m</span> = <span class="i">object</span>.<span class="i">method</span>;
+<span class="i">m</span>(<span class="i">argument</span>);
+</pre></div>
+<p>Chương trình này “tra cứu” method và lưu kết quả — bất kể nó là gì — vào một biến, rồi gọi object đó sau. Điều này có được phép không? Bạn có thể coi method như một hàm trên instance không?</p>
+<p>Còn chiều ngược lại thì sao?</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Box</span> {}
+
+<span class="k">fun</span> <span class="i">notMethod</span>(<span class="i">argument</span>) {
+  <span class="k">print</span> <span class="s">&quot;called function with &quot;</span> + <span class="i">argument</span>;
+}
+
+<span class="k">var</span> <span class="i">box</span> = <span class="t">Box</span>();
+<span class="i">box</span>.<span class="i">function</span> = <span class="i">notMethod</span>;
+<span class="i">box</span>.<span class="i">function</span>(<span class="s">&quot;argument&quot;</span>);
+</pre></div>
+<p>Chương trình này tạo một instance rồi lưu một hàm vào một field của nó. Sau đó, nó gọi hàm đó bằng cùng cú pháp như gọi method. Điều này có hoạt động không?</p>
+<p>Các ngôn ngữ khác nhau có câu trả lời khác nhau cho những câu hỏi này. Người ta có thể viết hẳn một bài luận về nó. Với Lox, chúng ta sẽ nói rằng câu trả lời cho cả hai là “có, hoạt động”. Chúng ta có vài lý do để biện minh cho điều đó. Với ví dụ thứ hai — gọi một hàm được lưu trong field — ta muốn hỗ trợ vì hàm là first-class và việc lưu chúng trong field là điều hoàn toàn bình thường.</p>
+<p>Ví dụ đầu tiên thì mơ hồ hơn. Một lý do là người dùng thường kỳ vọng có thể “tách” một biểu thức con ra thành biến local mà không làm thay đổi ý nghĩa chương trình. Bạn có thể viết:</p>
+<div class="codehilite"><pre><span class="i">breakfast</span>(<span class="i">omelette</span>.<span class="i">filledWith</span>(<span class="i">cheese</span>), <span class="i">sausage</span>);
+</pre></div>
+<p>Và biến nó thành:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">eggs</span> = <span class="i">omelette</span>.<span class="i">filledWith</span>(<span class="i">cheese</span>);
+<span class="i">breakfast</span>(<span class="i">eggs</span>, <span class="i">sausage</span>);
+</pre></div>
+<p>Và nó vẫn làm đúng như vậy. Tương tự, vì <code>.</code> và <code>()</code> trong một lời gọi method <em>là</em> hai biểu thức riêng biệt, nên có vẻ hợp lý khi bạn có thể tách phần <em>lookup</em> ra thành một biến rồi gọi nó <span name="callback">sau</span>. Chúng ta cần suy nghĩ kỹ về “thứ” mà bạn nhận được khi tra cứu một method là gì, và nó hoạt động thế nào, kể cả trong những trường hợp kỳ quặc như:</p>
+<aside name="callback">
+<p>Một động lực khác cho việc này là callback. Thường thì bạn muốn truyền một callback mà phần thân chỉ đơn giản là gọi một method trên một object nào đó. Có thể tra cứu method và truyền nó trực tiếp sẽ giúp bạn khỏi phải viết thủ công một hàm bọc quanh nó. So sánh:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">callback</span>(<span class="i">a</span>, <span class="i">b</span>, <span class="i">c</span>) {
+  <span class="i">object</span>.<span class="i">method</span>(<span class="i">a</span>, <span class="i">b</span>, <span class="i">c</span>);
+}
+
+<span class="i">takeCallback</span>(<span class="i">callback</span>);
+</pre></div>
+<p>Với:</p>
+<div class="codehilite"><pre><span class="i">takeCallback</span>(<span class="i">object</span>.<span class="i">method</span>);
+</pre></div>
+</aside>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Person</span> {
+  <span class="i">sayName</span>() {
+    <span class="k">print</span> <span class="k">this</span>.<span class="i">name</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">jane</span> = <span class="t">Person</span>();
+<span class="i">jane</span>.<span class="i">name</span> = <span class="s">&quot;Jane&quot;</span>;
+
+<span class="k">var</span> <span class="i">method</span> = <span class="i">jane</span>.<span class="i">sayName</span>;
+<span class="i">method</span>(); <span class="c">// ?</span>
+</pre></div>
+<p>Nếu bạn lấy một method từ một instance và gọi nó sau đó, nó có “nhớ” instance mà nó được lấy ra không? <code>this</code> bên trong method đó có còn trỏ tới object gốc không?</p>
+<p>Đây là một ví dụ “hack não” hơn:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Person</span> {
+  <span class="i">sayName</span>() {
+    <span class="k">print</span> <span class="k">this</span>.<span class="i">name</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">jane</span> = <span class="t">Person</span>();
+<span class="i">jane</span>.<span class="i">name</span> = <span class="s">&quot;Jane&quot;</span>;
+
+<span class="k">var</span> <span class="i">bill</span> = <span class="t">Person</span>();
+<span class="i">bill</span>.<span class="i">name</span> = <span class="s">&quot;Bill&quot;</span>;
+
+<span class="i">bill</span>.<span class="i">sayName</span> = <span class="i">jane</span>.<span class="i">sayName</span>;
+<span class="i">bill</span>.<span class="i">sayName</span>(); <span class="c">// ?</span>
+</pre></div>
+<p>Dòng cuối sẽ in “Bill” vì đó là instance mà ta <em>gọi</em> method thông qua, hay “Jane” vì đó là instance mà ta lấy method lần đầu?</p>
+<p>Code tương đương trong Lua và JavaScript sẽ in “Bill”. Các ngôn ngữ đó thực ra không có khái niệm “method” rõ ràng. Mọi thứ đều kiểu như “hàm trong field”, nên không rõ <code>jane</code> “sở hữu” <code>sayName</code> hơn <code>bill</code> ở điểm nào.</p>
+<p>Nhưng Lox có cú pháp class thực sự, nên ta biết rõ cái gì là method và cái gì là function. Vì vậy, giống như Python, C# và một số ngôn ngữ khác, chúng ta sẽ để method “bind” <code>this</code> với instance gốc khi method được lấy ra lần đầu. Python gọi <span name="bound">những thứ này</span> là <strong>bound method</strong>.</p>
+<aside name="bound">
+<p>Tôi biết, cái tên thật “sáng tạo”, đúng không?</p>
+</aside>
+<p>Trên thực tế, đó thường là điều bạn muốn. Nếu bạn lấy một tham chiếu tới một method trên một object nào đó để dùng làm callback sau này, bạn sẽ muốn “ghi nhớ” instance mà nó thuộc về, ngay cả khi callback đó tình flag được lưu trong một field của một object khác.</p>
+<p>Rồi, vậy là bạn vừa phải nạp khá nhiều khái niệm ngữ nghĩa vào đầu. Tạm quên những trường hợp biên đi, chúng ta sẽ quay lại sau. Bây giờ, hãy làm cho lời gọi method cơ bản hoạt động trước đã. Chúng ta đã parse được các khai báo method bên trong thân class, nên bước tiếp theo là resolve chúng.</p>
+<div class="codehilite"><pre class="insert-before">    define(stmt.name);
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">
+
+    <span class="k">for</span> (<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">method</span> : <span class="i">stmt</span>.<span class="i">methods</span>) {
+      <span class="t">FunctionType</span> <span class="i">declaration</span> = <span class="t">FunctionType</span>.<span class="i">METHOD</span>;
+      <span class="i">resolveFunction</span>(<span class="i">method</span>, <span class="i">declaration</span>);<span name="local"> </span>
+    }
+
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<aside name="local">
+<p>Hiện tại, việc lưu kiểu hàm vào một biến local chưa có tác dụng gì, nhưng chẳng bao lâu nữa chúng ta sẽ mở rộng đoạn code này và khi đó nó sẽ hợp lý hơn.</p>
+</aside>
+<p>Chúng ta lặp qua các method trong thân class và gọi hàm <code>resolveFunction()</code> mà ta đã viết để xử lý khai báo hàm. Điểm khác biệt duy nhất là ta truyền vào một giá trị enum FunctionType mới.</p>
+<div class="codehilite"><pre class="insert-before">    NONE,
+</pre><pre class="insert-before">    <span class="i">FUNCTION</span><span class="insert-comma">,</span>
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in enum <em>FunctionType</em><br>
+add <em>&ldquo;,&rdquo;</em> to previous line</div>
+<pre class="insert">    <span class="i">METHOD</span>
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in enum <em>FunctionType</em>, add <em>&ldquo;,&rdquo;</em> to previous line</div>
+
+<p>Điều này sẽ quan trọng khi chúng ta resolve các biểu thức <code>this</code>. Còn bây giờ thì chưa cần lo. Phần thú vị nằm ở interpreter.</p>
+<div class="codehilite"><pre class="insert-before">    environment.define(stmt.name.lexeme, null);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">
+
+    <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">LoxFunction</span>&gt; <span class="i">methods</span> = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+    <span class="k">for</span> (<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">method</span> : <span class="i">stmt</span>.<span class="i">methods</span>) {
+      <span class="t">LoxFunction</span> <span class="i">function</span> = <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">method</span>, <span class="i">environment</span>);
+      <span class="i">methods</span>.<span class="i">put</span>(<span class="i">method</span>.<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">function</span>);
+    }
+
+    <span class="t">LoxClass</span> <span class="i">klass</span> = <span class="k">new</span> <span class="t">LoxClass</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">methods</span>);
+</pre><pre class="insert-after">    environment.assign(stmt.name, klass);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>(), replace 1 line</div>
+
+<p>Khi chúng ta execute một câu lệnh khai báo class, ta biến biểu diễn cú pháp của class — node AST của nó — thành biểu diễn runtime. Giờ, ta cũng cần làm điều đó cho các method chứa trong class. Mỗi khai báo method sẽ “nở” thành một object <code>LoxFunction</code>.</p>
+<p>Chúng ta gom tất cả chúng lại và bọc vào một map, với key là tên method. Map này được lưu trong <code>LoxClass</code>.</p>
+<div class="codehilite"><pre class="insert-before">  final String name;
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+in class <em>LoxClass</em><br>
+replace 4 lines</div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">LoxFunction</span>&gt; <span class="i">methods</span>;
+
+  <span class="t">LoxClass</span>(<span class="t">String</span> <span class="i">name</span>, <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">LoxFunction</span>&gt; <span class="i">methods</span>) {
+    <span class="k">this</span>.<span class="i">name</span> = <span class="i">name</span>;
+    <span class="k">this</span>.<span class="i">methods</span> = <span class="i">methods</span>;
+  }
+</pre><pre class="insert-after">
+
+  @Override
+  public String toString() {
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, in class <em>LoxClass</em>, replace 4 lines</div>
+
+<p>Nếu instance lưu trữ trạng thái, thì class lưu trữ hành vi. <code>LoxInstance</code> có map các field, còn <code>LoxClass</code> có map các method. Dù method thuộc về class, chúng vẫn được truy cập thông qua các instance của class đó.</p>
+<div class="codehilite"><pre class="insert-before">  Object get(Token name) {
+    if (fields.containsKey(name.lexeme)) {
+      return fields.get(name.lexeme);
+    }
+
+</pre><div class="source-file"><em>lox/LoxInstance.java</em><br>
+in <em>get</em>()</div>
+<pre class="insert">    <span class="t">LoxFunction</span> <span class="i">method</span> = <span class="i">klass</span>.<span class="i">findMethod</span>(<span class="i">name</span>.<span class="i">lexeme</span>);
+    <span class="k">if</span> (<span class="i">method</span> != <span class="k">null</span>) <span class="k">return</span> <span class="i">method</span>;
+
+</pre><pre class="insert-after">    throw new RuntimeError(name,<span name="hidden"> </span>
+        &quot;Undefined property '&quot; + name.lexeme + &quot;'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, in <em>get</em>()</div>
+
+<p>Khi tra cứu một property trên instance, nếu không <span name="shadow">tìm</span> thấy field trùng tên, ta sẽ tìm method có tên đó trong class của instance. Nếu tìm thấy, ta trả về method đó. Đây chính là lúc sự khác biệt giữa “field” và “property” trở nên có ý nghĩa. Khi truy cập một property, bạn có thể nhận được một field — một phần trạng thái được lưu trên instance — hoặc có thể gặp một method được định nghĩa trên class của instance.</p>
+<p>Việc tra cứu method được thực hiện bằng hàm sau:</p>
+<aside name="shadow">
+<p>Việc tìm field trước ngụ ý rằng field sẽ “che khuất” method, một điểm ngữ nghĩa tinh tế nhưng quan trọng.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/LoxClass.java</em><br>
+add after <em>LoxClass</em>()</div>
+<pre>  <span class="t">LoxFunction</span> <span class="i">findMethod</span>(<span class="t">String</span> <span class="i">name</span>) {
+    <span class="k">if</span> (<span class="i">methods</span>.<span class="i">containsKey</span>(<span class="i">name</span>)) {
+      <span class="k">return</span> <span class="i">methods</span>.<span class="i">get</span>(<span class="i">name</span>);
+    }
+
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, add after <em>LoxClass</em>()</div>
+
+<p>Bạn có thể đoán rằng hàm này sẽ trở nên thú vị hơn sau này. Hiện tại, chỉ cần một lần tra cứu map đơn giản trên bảng method của class là đủ để bắt đầu. Hãy thử nhé:</p>
+<p><span name="crunch"></span></p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Bacon</span> {
+  <span class="i">eat</span>() {
+    <span class="k">print</span> <span class="s">&quot;Crunch crunch crunch!&quot;</span>;
+  }
+}
+
+<span class="t">Bacon</span>().<span class="i">eat</span>(); <span class="c">// Prints &quot;Crunch crunch crunch!&quot;.</span>
+</pre></div>
+<aside name="crunch">
+<p>Xin lỗi nếu bạn thích thịt xông khói mềm hơn là giòn. Cứ thoải mái chỉnh lại script cho hợp khẩu vị.</p>
+</aside>
+<h2><a href="#this" id="this"><small>12&#8202;.&#8202;6</small>This</a></h2>
+<p>Chúng ta có thể định nghĩa cả hành vi lẫn trạng thái trên object, nhưng chúng vẫn chưa được gắn kết với nhau. Bên trong một method, ta chưa có cách nào để truy cập các field của object “hiện tại” — tức instance mà method được gọi trên đó — cũng như không thể gọi các method khác trên cùng object đó.</p>
+<p>Để truy cập được instance đó, nó cần một <span name="i">tên</span>. Smalltalk, Ruby và Swift dùng “self”. Simula, C++, Java và nhiều ngôn ngữ khác dùng “this”. Python dùng “self” theo thông lệ, nhưng về mặt kỹ thuật bạn có thể gọi nó là gì cũng được.</p>
+<aside name="i">
+<p>“I” lẽ ra sẽ là một lựa chọn tuyệt vời, nhưng việc dùng “i” cho biến vòng lặp đã có từ trước thời OOP và bắt nguồn từ Fortran. Chúng ta là “nạn nhân” của những lựa chọn ngẫu nhiên của các bậc tiền bối.</p>
+</aside>
+<p>Với Lox, vì chúng ta thường bám theo phong cách giống Java, nên sẽ dùng từ khóa <code>"this"</code>. Bên trong thân một method, một biểu thức <code>this</code> sẽ được đánh giá thành instance mà method đó được gọi trên. Hoặc, nói chính xác hơn, vì method được truy cập và sau đó mới được gọi qua hai bước, nên <code>this</code> sẽ tham chiếu tới object mà method được <em>truy cập</em> từ đó.</p>
+<p>Điều này khiến công việc của chúng ta khó hơn. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Egotist</span> {
+  <span class="i">speak</span>() {
+    <span class="k">print</span> <span class="k">this</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">method</span> = <span class="t">Egotist</span>().<span class="i">speak</span>;
+<span class="i">method</span>();
+</pre></div>
+<p>Ở dòng áp chót, chúng ta lấy một tham chiếu tới method <code>speak()</code> từ một instance của class. Điều đó trả về một hàm, và hàm này cần phải “ghi nhớ” instance mà nó được lấy ra, để <em>sau này</em>, ở dòng cuối cùng, nó vẫn có thể tìm lại instance đó khi hàm được gọi.</p>
+<p>Chúng ta cần lấy <code>this</code> tại thời điểm method được truy cập và gắn nó vào hàm theo cách nào đó để nó tồn tại lâu như ta cần. Hmm… một cách để lưu trữ thêm dữ liệu đi kèm với một hàm và tồn tại cùng nó, nghe rất giống với <em>closure</em>, đúng không?</p>
+<p>Nếu chúng ta định nghĩa <code>this</code> như một biến ẩn trong một environment bao quanh hàm được trả về khi tra cứu method, thì các lần sử dụng <code>this</code> trong thân hàm sẽ có thể tìm thấy nó sau này. <code>LoxFunction</code> vốn đã có khả năng giữ lại environment bao quanh, nên chúng ta đã có sẵn cơ chế cần thiết.</p>
+<p>Hãy đi qua một ví dụ để xem nó hoạt động thế nào:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Cake</span> {
+  <span class="i">taste</span>() {
+    <span class="k">var</span> <span class="i">adjective</span> = <span class="s">&quot;delicious&quot;</span>;
+    <span class="k">print</span> <span class="s">&quot;The &quot;</span> + <span class="k">this</span>.<span class="i">flavor</span> + <span class="s">&quot; cake is &quot;</span> + <span class="i">adjective</span> + <span class="s">&quot;!&quot;</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">cake</span> = <span class="t">Cake</span>();
+<span class="i">cake</span>.<span class="i">flavor</span> = <span class="s">&quot;German chocolate&quot;</span>;
+<span class="i">cake</span>.<span class="i">taste</span>(); <span class="c">// Prints &quot;The German chocolate cake is delicious!&quot;.</span>
+</pre></div>
+<p>Khi chúng ta lần đầu đánh giá định nghĩa class, ta tạo một <code>LoxFunction</code> cho <code>taste()</code>. Closure của nó là environment bao quanh class, trong trường hợp này là environment toàn cục. Vì vậy, <code>LoxFunction</code> mà ta lưu trong method map của class trông như sau:</p><img src="image/classes/closure.png" alt="Closure ban đầu cho method." />
+<p>Khi chúng ta đánh giá biểu thức get <code>cake.taste</code>, ta tạo một environment mới, bind <code>this</code> tới object mà method được truy cập từ đó (ở đây là <code>cake</code>). Sau đó, ta tạo một <code>LoxFunction</code> <em>mới</em> với cùng phần code như bản gốc nhưng sử dụng environment mới này làm closure.</p><img src="image/classes/bound-method.png" alt="Closure mới bind 'this'." />
+<p>Đây là <code>LoxFunction</code> được trả về khi đánh giá biểu thức get cho tên method. Khi hàm này sau đó được gọi bởi một biểu thức <code>()</code>, ta tạo một environment cho thân method như bình thường.</p><img src="image/classes/call.png" alt="Gọi bound method và tạo environment mới cho thân method." />
+<p>Parent của environment thân hàm chính là environment mà ta đã tạo trước đó để bind <code>this</code> tới object hiện tại. Do đó, mọi lần sử dụng <code>this</code> bên trong thân hàm đều sẽ được resolve thành instance đó.</p>
+<p>Việc tái sử dụng code environment để triển khai <code>this</code> cũng xử lý tốt các trường hợp thú vị khi method và function tương tác với nhau, ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Thing</span> {
+  <span class="i">getCallback</span>() {
+    <span class="k">fun</span> <span class="i">localFunction</span>() {
+      <span class="k">print</span> <span class="k">this</span>;
+    }
+
+    <span class="k">return</span> <span class="i">localFunction</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">callback</span> = <span class="t">Thing</span>().<span class="i">getCallback</span>();
+<span class="i">callback</span>();
+</pre></div>
+<p>Trong JavaScript chẳng hạn, việc trả về một callback từ bên trong method là khá phổ biến. Callback đó có thể muốn giữ lại và truy cập vào object gốc — giá trị <code>this</code> — mà method gắn liền với nó. Hỗ trợ hiện tại của chúng ta cho closure và chuỗi environment sẽ xử lý đúng tất cả những điều này.</p>
+<p>Giờ hãy bắt tay vào code. Bước đầu tiên là thêm <span name="this-ast">cú pháp mới</span> cho <code>this</code>.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Set      : Expr object, Token name, Expr value&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;This     : Token keyword&quot;</span>,
+</pre><pre class="insert-after">      &quot;Unary    : Token operator, Expr right&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="this-ast">
+<p>Code sinh ra cho node mới này nằm ở <a href="appendix-ii.html#this-expression">Phụ lục II</a>.</p>
+</aside>
+<p>Việc parse khá đơn giản vì đây chỉ là một token duy nhất mà lexer của chúng ta đã nhận diện là một từ khóa dành riêng.</p>
+<div class="codehilite"><pre class="insert-before">      return new Expr.Literal(previous().literal);
+    }
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>primary</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">THIS</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">This</span>(<span class="i">previous</span>());
+</pre><pre class="insert-after">
+
+    if (match(IDENTIFIER)) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>primary</em>()</div>
+
+<p>Bạn sẽ bắt đầu thấy <code>this</code> hoạt động giống như một biến khi chúng ta đến phần resolver.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitSetExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitThisExpr</span>(<span class="t">Expr</span>.<span class="t">This</span> <span class="i">expr</span>) {
+    <span class="i">resolveLocal</span>(<span class="i">expr</span>, <span class="i">expr</span>.<span class="i">keyword</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitSetExpr</em>()</div>
+
+<p>Chúng ta resolve nó giống hệt như bất kỳ biến local nào khác, dùng <code>"this"</code> làm tên cho “biến” đó. Tất nhiên, hiện tại điều này sẽ không hoạt động, vì <code>"this"</code> <em>không</em> được khai báo trong bất kỳ scope nào. Hãy sửa điều đó trong <code>visitClassStmt()</code>.</p>
+<div class="codehilite"><pre class="insert-before">    define(stmt.name);
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="i">beginScope</span>();
+    <span class="i">scopes</span>.<span class="i">peek</span>().<span class="i">put</span>(<span class="s">&quot;this&quot;</span>, <span class="k">true</span>);
+
+</pre><pre class="insert-after">    for (Stmt.Function method : stmt.methods) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Trước khi bắt đầu resolve thân các method, chúng ta đẩy một scope mới và định nghĩa <code>"this"</code> trong đó như thể nó là một biến. Sau đó, khi xong việc, ta loại bỏ scope bao quanh đó.</p>
+<div class="codehilite"><pre class="insert-before">    }
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="i">endScope</span>();
+
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Giờ đây, bất cứ khi nào gặp một biểu thức <code>this</code> (ít nhất là bên trong method) nó sẽ được resolve thành một “biến local” được định nghĩa trong một scope ẩn ngay bên ngoài block của thân method.</p>
+<p>Resolver có một <em>scope</em> mới cho <code>this</code>, nên interpreter cần tạo một <em>environment</em> tương ứng cho nó. Hãy nhớ rằng, chúng ta luôn phải giữ cho chuỗi scope của resolver và chuỗi environment liên kết của interpreter đồng bộ với nhau. Tại runtime, ta tạo environment sau khi tìm thấy method trên instance. Ta thay dòng code trước đây chỉ đơn giản trả về <code>LoxFunction</code> của method bằng đoạn này:</p>
+<div class="codehilite"><pre class="insert-before">    LoxFunction method = klass.findMethod(name.lexeme);
+</pre><div class="source-file"><em>lox/LoxInstance.java</em><br>
+in <em>get</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">method</span> != <span class="k">null</span>) <span class="k">return</span> <span class="i">method</span>.<span class="i">bind</span>(<span class="k">this</span>);
+</pre><pre class="insert-after">
+
+    throw new RuntimeError(name,<span name="hidden"> </span>
+        &quot;Undefined property '&quot; + name.lexeme + &quot;'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxInstance.java</em>, in <em>get</em>(), replace 1 line</div>
+
+<p>Lưu ý lời gọi mới tới <code>bind()</code>. Nó trông như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+add after <em>LoxFunction</em>()</div>
+<pre>  <span class="t">LoxFunction</span> <span class="i">bind</span>(<span class="t">LoxInstance</span> <span class="i">instance</span>) {
+    <span class="t">Environment</span> <span class="i">environment</span> = <span class="k">new</span> <span class="t">Environment</span>(<span class="i">closure</span>);
+    <span class="i">environment</span>.<span class="i">define</span>(<span class="s">&quot;this&quot;</span>, <span class="i">instance</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">declaration</span>, <span class="i">environment</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, add after <em>LoxFunction</em>()</div>
+
+<p>Không có gì phức tạp ở đây. Chúng ta tạo một environment mới lồng bên trong closure gốc của method. Kiểu như một closure-bên-trong-closure. Khi method được gọi, environment này sẽ trở thành parent của environment thân method.</p>
+<p>Chúng ta khai báo <code>"this"</code> như một biến trong environment đó và bind nó với instance được truyền vào — instance mà method được truy cập từ đó. <em>Et voilà</em>, <code>LoxFunction</code> được trả về giờ đây mang theo “thế giới nhỏ” của riêng nó, nơi <code>"this"</code> được bind với object.</p>
+<p>Nhiệm vụ còn lại là interpret các biểu thức <code>this</code>. Giống như resolver, nó tương tự như interpret một biểu thức biến.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitSetExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitThisExpr</span>(<span class="t">Expr</span>.<span class="t">This</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">lookUpVariable</span>(<span class="i">expr</span>.<span class="i">keyword</span>, <span class="i">expr</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitSetExpr</em>()</div>
+
+<p>Hãy thử ngay với ví dụ cake ở phần trước. Chỉ với chưa đến hai mươi dòng code, interpreter của chúng ta xử lý <code>this</code> bên trong method, kể cả trong những tình huống phức tạp khi nó tương tác với class lồng nhau, function bên trong method, handle tới method, v.v.</p>
+<h3><a href="#các-cách-dùng-`this`-không-hợp-lệ" id="các-cách-dùng-`this`-không-hợp-lệ"><small>12&#8202;.&#8202;6&#8202;.&#8202;1</small>Các cách dùng <code>this</code> không hợp lệ</a></h3>
+<p>Khoan đã. Chuyện gì xảy ra nếu bạn cố dùng <code>this</code> <em>bên ngoài</em> một method? Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="k">this</span>;
+</pre></div>
+<p>Hoặc:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">notAMethod</span>() {
+  <span class="k">print</span> <span class="k">this</span>;
+}
+</pre></div>
+<p>Sẽ không có instance nào để <code>this</code> trỏ tới nếu bạn không ở trong một method. Chúng ta có thể gán cho nó một giá trị mặc định như <code>nil</code> hoặc biến nó thành một runtime error, nhưng rõ ràng người dùng đã mắc lỗi. Càng phát hiện và sửa lỗi sớm, họ sẽ càng vui.</p>
+<p>Bước resolve là nơi lý tưởng để phát hiện lỗi này một cách tĩnh. Nó vốn đã phát hiện các câu lệnh <code>return</code> bên ngoài hàm. Chúng ta sẽ làm điều tương tự cho <code>this</code>. Theo phong cách của enum <code>FunctionType</code> hiện có, ta định nghĩa thêm một enum <code>ClassType</code> mới.</p>
+<div class="codehilite"><pre class="insert-before">  }
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+add after enum <em>FunctionType</em></div>
+<pre class="insert">
+
+  <span class="k">private</span> <span class="k">enum</span> <span class="t">ClassType</span> {
+    <span class="i">NONE</span>,
+    <span class="i">CLASS</span>
+  }
+
+  <span class="k">private</span> <span class="t">ClassType</span> <span class="i">currentClass</span> = <span class="t">ClassType</span>.<span class="i">NONE</span>;
+
+</pre><pre class="insert-after">  void resolve(List&lt;Stmt&gt; statements) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after enum <em>FunctionType</em></div>
+
+<p>Đúng là nó có thể chỉ là một Boolean. Khi chúng ta đến phần kế thừa, nó sẽ có thêm giá trị thứ ba, nên giờ dùng enum là hợp lý. Ta cũng thêm một trường tương ứng, <code>currentClass</code>. Giá trị của nó cho biết ta hiện đang ở bên trong một khai báo class khi duyệt cây cú pháp hay không. Ban đầu nó là <code>NONE</code>, nghĩa là ta không ở trong class nào.</p>
+<p>Khi bắt đầu resolve một khai báo class, ta thay đổi giá trị đó.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitClassStmt(Stmt.Class stmt) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="t">ClassType</span> <span class="i">enclosingClass</span> = <span class="i">currentClass</span>;
+    <span class="i">currentClass</span> = <span class="t">ClassType</span>.<span class="i">CLASS</span>;
+
+</pre><pre class="insert-after">    declare(stmt.name);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Giống như với <code>currentFunction</code>, ta lưu giá trị trước đó của trường này vào một biến local. Cách này cho phép ta tận dụng JVM để giữ một stack các giá trị <code>currentClass</code>. Nhờ vậy, ta không bị mất dấu giá trị trước đó nếu một class lồng bên trong class khác.</p>
+<p>Khi các method đã được resolve xong, ta “pop” stack đó bằng cách khôi phục giá trị cũ.</p>
+<div class="codehilite"><pre class="insert-before">    endScope();
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="i">currentClass</span> = <span class="i">enclosingClass</span>;
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Khi resolve một biểu thức <code>this</code>, trường <code>currentClass</code> cung cấp thông tin cần thiết để báo lỗi nếu biểu thức đó không nằm bên trong thân một method.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitThisExpr(Expr.This expr) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitThisExpr</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">currentClass</span> == <span class="t">ClassType</span>.<span class="i">NONE</span>) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">expr</span>.<span class="i">keyword</span>,
+          <span class="s">&quot;Can&#39;t use &#39;this&#39; outside of a class.&quot;</span>);
+      <span class="k">return</span> <span class="k">null</span>;
+    }
+
+</pre><pre class="insert-after">    resolveLocal(expr, expr.keyword);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitThisExpr</em>()</div>
+
+<p>Điều này sẽ giúp người dùng sử dụng <code>this</code> đúng cách, và giúp chúng ta không phải xử lý việc dùng sai ở runtime trong interpreter.</p>
+<h2><a href="#constructor-&-initializer" id="constructor-&-initializer"><small>12&#8202;.&#8202;7</small>Constructor &amp; Initializer</a></h2>
+<p>Giờ chúng ta đã có thể làm gần như mọi thứ với class, và khi sắp kết thúc chương này, thật kỳ lạ là chúng ta lại tập trung vào… phần khởi đầu. Method và field cho phép ta đóng gói trạng thái và hành vi lại với nhau để một object luôn <em>duy trì</em> ở trạng thái hợp lệ. Nhưng làm sao để đảm bảo một object mới tinh <em>bắt đầu</em> ở trạng thái tốt?</p>
+<p>Để làm được điều đó, ta cần constructor. Theo tôi, đây là một trong những phần khó thiết kế nhất của một ngôn ngữ, và nếu bạn quan sát kỹ hầu hết các ngôn ngữ khác, bạn sẽ thấy những <span name="cracks">“vết nứt”</span> quanh quá trình tạo object, nơi mà các mảnh ghép thiết kế không hoàn toàn khớp nhau. Có lẽ khoảnh khắc “chào đời” vốn dĩ đã lộn xộn.</p>
+<aside name="cracks">
+<p>Một vài ví dụ: Trong Java, dù các field <code>final</code> bắt buộc phải được khởi tạo, vẫn có thể đọc chúng <em>trước khi</em> được gán giá trị. Exception — một tính năng lớn và phức tạp — được thêm vào C++ chủ yếu để cho phép báo lỗi từ constructor.</p>
+</aside>
+<p>“Xây dựng” (construct) một object thực ra gồm hai bước:</p>
+<ol>
+<li>
+<p>Runtime <span name="allocate"><em>cấp phát</em></span> bộ nhớ cần thiết cho một instance mới. Trong hầu hết các ngôn ngữ, thao tác này nằm ở tầng rất thấp, bên dưới những gì code của người dùng có thể truy cập.</p>
+<aside name="allocate">
+<p>“<a href="https://en.wikipedia.org/wiki/Placement_syntax">placement new</a>” của C++ là một ví dụ hiếm hoi cho phép lập trình viên “mò” vào tận ruột gan của quá trình cấp phát.</p>
+</aside></li>
+<li>
+<p>Sau đó, một đoạn code do người dùng cung cấp sẽ được gọi để <em>khởi tạo</em> object còn “thô” này.</p>
+</li>
+</ol>
+<p>Bước thứ hai này mới là điều chúng ta thường nghĩ đến khi nghe từ “constructor”, nhưng ngôn ngữ thường đã làm một số việc chuẩn bị trước khi đến đó. Thực tế, interpreter Lox của chúng ta đã lo xong phần này khi tạo một object <code>LoxInstance</code> mới.</p>
+<p>Giờ chúng ta sẽ làm phần còn lại — khởi tạo do người dùng định nghĩa. Các ngôn ngữ có nhiều cách ký hiệu khác nhau cho đoạn code thiết lập object mới của một class. C++, Java và C# dùng một method có tên trùng với tên class. Ruby và Python gọi nó là <code>init()</code>. Cách sau ngắn gọn và dễ nhớ, nên ta sẽ dùng nó.</p>
+<p>Trong phần cài đặt <code>LoxCallable</code> của <code>LoxClass</code>, ta thêm vài dòng code.</p>
+<div class="codehilite"><pre class="insert-before">                     List&lt;Object&gt; arguments) {
+    LoxInstance instance = new LoxInstance(this);
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+in <em>call</em>()</div>
+<pre class="insert">    <span class="t">LoxFunction</span> <span class="i">initializer</span> = <span class="i">findMethod</span>(<span class="s">&quot;init&quot;</span>);
+    <span class="k">if</span> (<span class="i">initializer</span> != <span class="k">null</span>) {
+      <span class="i">initializer</span>.<span class="i">bind</span>(<span class="i">instance</span>).<span class="i">call</span>(<span class="i">interpreter</span>, <span class="i">arguments</span>);
+    }
+
+</pre><pre class="insert-after">    return instance;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, in <em>call</em>()</div>
+
+<p>Khi một class được gọi, sau khi <code>LoxInstance</code> được tạo, ta tìm method <code>"init"</code>. Nếu tìm thấy, ta lập tức bind và gọi nó như một lời gọi method bình thường. Danh sách đối số được truyền tiếp nguyên vẹn.</p>
+<p>Điều này có nghĩa là ta cũng cần chỉnh lại cách class khai báo arity.</p>
+<div class="codehilite"><pre class="insert-before">  public int arity() {
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+in <em>arity</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">LoxFunction</span> <span class="i">initializer</span> = <span class="i">findMethod</span>(<span class="s">&quot;init&quot;</span>);
+    <span class="k">if</span> (<span class="i">initializer</span> == <span class="k">null</span>) <span class="k">return</span> <span class="n">0</span>;
+    <span class="k">return</span> <span class="i">initializer</span>.<span class="i">arity</span>();
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, in <em>arity</em>(), replace 1 line</div>
+
+<p>Nếu có initializer, arity của method đó sẽ quyết định số lượng đối số bạn phải truyền khi gọi class. Tuy nhiên, ta không <em>bắt buộc</em> class phải có initializer. Nếu không có, arity mặc định vẫn là 0.</p>
+<p>Về cơ bản, chỉ vậy thôi. Vì ta bind method <code>init()</code> trước khi gọi, nó sẽ có quyền truy cập <code>this</code> bên trong thân hàm. Điều đó, cùng với các đối số truyền vào class, là tất cả những gì bạn cần để thiết lập instance mới theo ý muốn.</p>
+<h3><a href="#gọi-trực-tiếp-init" id="gọi-trực-tiếp-init"><small>12&#8202;.&#8202;7&#8202;.&#8202;1</small>Gọi trực tiếp init()</a></h3>
+<p>Như thường lệ, việc khám phá vùng ngữ nghĩa mới này lại khơi ra vài tình huống kỳ lạ. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Foo</span> {
+  <span class="i">init</span>() {
+    <span class="k">print</span> <span class="k">this</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">foo</span> = <span class="t">Foo</span>();
+<span class="k">print</span> <span class="i">foo</span>.<span class="i">init</span>();
+</pre></div>
+<p>Bạn có thể “khởi tạo lại” một object bằng cách gọi trực tiếp method <code>init()</code> của nó không? Nếu có, nó sẽ trả về gì? Một câu trả lời <span name="compromise">hợp lý</span> là <code>nil</code>, vì đó là những gì phần thân hàm trả về.</p>
+<p>Tuy nhiên — và tôi thường không thích phải thỏa hiệp chỉ để chiều theo phần cài đặt — sẽ dễ dàng hơn nhiều cho việc triển khai constructor trong clox nếu ta quy định rằng method <code>init()</code> luôn trả về <code>this</code>, ngay cả khi được gọi trực tiếp. Để giữ cho jlox tương thích với điều này, ta thêm một chút code đặc biệt vào <code>LoxFunction</code>.</p>
+<aside name="compromise">
+<p>Có lẽ “không thích” là hơi quá. Việc để các ràng buộc và nguồn lực của phần cài đặt ảnh hưởng đến thiết kế ngôn ngữ là điều hợp lý. Một ngày chỉ có ngần ấy giờ, và nếu cắt bớt vài góc cạnh ở đây đó giúp bạn mang nhiều tính năng hơn đến tay người dùng nhanh hơn, thì đó có thể là một chiến thắng lớn cho sự hài lòng và năng suất của họ. Mấu chốt là phải xác định <em>những</em> góc nào có thể cắt mà không khiến người dùng và chính bạn trong tương lai phải nguyền rủa vì tầm nhìn ngắn hạn.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">      return returnValue.value;
+    }
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in <em>call</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">isInitializer</span>) <span class="k">return</span> <span class="i">closure</span>.<span class="i">getAt</span>(<span class="n">0</span>, <span class="s">&quot;this&quot;</span>);
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in <em>call</em>()</div>
+
+<p>Nếu hàm là một initializer, chúng ta sẽ ghi đè giá trị trả về thực tế và buộc nó trả về <code>this</code>. Điều này dựa vào một trường mới <code>isInitializer</code>.</p>
+<div class="codehilite"><pre class="insert-before">  private final Environment closure;
+
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in class <em>LoxFunction</em><br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">boolean</span> <span class="i">isInitializer</span>;
+
+  <span class="t">LoxFunction</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">declaration</span>, <span class="t">Environment</span> <span class="i">closure</span>,
+              <span class="t">boolean</span> <span class="i">isInitializer</span>) {
+    <span class="k">this</span>.<span class="i">isInitializer</span> = <span class="i">isInitializer</span>;
+</pre><pre class="insert-after">    this.closure = closure;
+    this.declaration = declaration;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in class <em>LoxFunction</em>, replace 1 line</div>
+
+<p>Chúng ta không thể chỉ đơn giản kiểm tra xem tên của <code>LoxFunction</code> có phải là <code>"init"</code> hay không, vì người dùng có thể định nghĩa một <em>hàm</em> với tên đó. Trong trường hợp đó, sẽ <em>không</em> có <code>this</code> để trả về. Để tránh trường hợp biên kỳ quặc này, chúng ta sẽ lưu trực tiếp thông tin về việc <code>LoxFunction</code> có đại diện cho một method initializer hay không. Điều này có nghĩa là ta cần quay lại và sửa những chỗ tạo <code>LoxFunction</code>.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitFunctionStmt(Stmt.Function stmt) {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitFunctionStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">LoxFunction</span> <span class="i">function</span> = <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">stmt</span>, <span class="i">environment</span>,
+                                           <span class="k">false</span>);
+</pre><pre class="insert-after">    environment.define(stmt.name.lexeme, function);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitFunctionStmt</em>(), replace 1 line</div>
+
+<p>Với các khai báo hàm thông thường, <code>isInitializer</code> luôn là <code>false</code>. Với method, ta sẽ kiểm tra tên.</p>
+<div class="codehilite"><pre class="insert-before">    for (Stmt.Function method : stmt.methods) {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">      <span class="t">LoxFunction</span> <span class="i">function</span> = <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">method</span>, <span class="i">environment</span>,
+          <span class="i">method</span>.<span class="i">name</span>.<span class="i">lexeme</span>.<span class="i">equals</span>(<span class="s">&quot;init&quot;</span>));
+</pre><pre class="insert-after">      methods.put(method.name.lexeme, function);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>(), replace 1 line</div>
+
+<p>Và trong <code>bind()</code>, nơi chúng ta tạo closure bind <code>this</code> vào một method, ta truyền kèm giá trị gốc của method đó.</p>
+<div class="codehilite"><pre class="insert-before">    environment.define(&quot;this&quot;, instance);
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in <em>bind</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">return</span> <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">declaration</span>, <span class="i">environment</span>,
+                           <span class="i">isInitializer</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in <em>bind</em>(), replace 1 line</div>
+
+<h3><a href="#trả-về-từ-init" id="trả-về-từ-init"><small>12&#8202;.&#8202;7&#8202;.&#8202;2</small>Trả về từ init()</a></h3>
+<p>Chúng ta vẫn chưa xong. Từ trước đến giờ, ta giả định rằng một initializer do người dùng viết sẽ không trả về giá trị một cách tường minh, vì hầu hết constructor đều không làm vậy. Nhưng nếu người dùng thử:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Foo</span> {
+  <span class="i">init</span>() {
+    <span class="k">return</span> <span class="s">&quot;something else&quot;</span>;
+  }
+}
+</pre></div>
+<p>Chắc chắn nó sẽ không làm điều họ mong muốn, nên tốt nhất là biến nó thành một lỗi tĩnh. Quay lại resolver, ta thêm một trường hợp mới vào <code>FunctionType</code>.</p>
+<div class="codehilite"><pre class="insert-before">    FUNCTION,
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in enum <em>FunctionType</em></div>
+<pre class="insert">    <span class="i">INITIALIZER</span>,
+</pre><pre class="insert-after">    METHOD
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in enum <em>FunctionType</em></div>
+
+<p>Chúng ta dùng tên của method đang được duyệt để xác định xem mình có đang resolve một initializer hay không.</p>
+<div class="codehilite"><pre class="insert-before">      FunctionType declaration = FunctionType.METHOD;
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">      <span class="k">if</span> (<span class="i">method</span>.<span class="i">name</span>.<span class="i">lexeme</span>.<span class="i">equals</span>(<span class="s">&quot;init&quot;</span>)) {
+        <span class="i">declaration</span> = <span class="t">FunctionType</span>.<span class="i">INITIALIZER</span>;
+      }
+
+</pre><pre class="insert-after">      resolveFunction(method, declaration);<span name="local"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Khi sau đó duyệt vào một câu lệnh <code>return</code>, ta kiểm tra trường này và báo lỗi nếu trả về một giá trị từ bên trong method <code>init()</code>.</p>
+<div class="codehilite"><pre class="insert-before">    if (stmt.value != null) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitReturnStmt</em>()</div>
+<pre class="insert">      <span class="k">if</span> (<span class="i">currentFunction</span> == <span class="t">FunctionType</span>.<span class="i">INITIALIZER</span>) {
+        <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">stmt</span>.<span class="i">keyword</span>,
+            <span class="s">&quot;Can&#39;t return a value from an initializer.&quot;</span>);
+      }
+
+</pre><pre class="insert-after">      resolve(stmt.value);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitReturnStmt</em>()</div>
+
+<p>Nhưng <em>vẫn</em> chưa xong. Chúng ta đã chặn việc trả về một <em>giá trị</em> từ initializer, nhưng bạn vẫn có thể dùng một <code>return</code> sớm rỗng:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Foo</span> {
+  <span class="i">init</span>() {
+    <span class="k">return</span>;
+  }
+}
+</pre></div>
+<p>Thực tế, đôi khi điều này cũng hữu ích, nên ta không muốn cấm hoàn toàn. Thay vào đó, nó nên trả về <code>this</code> thay vì <code>nil</code>. Đây là một chỉnh sửa đơn giản trong <code>LoxFunction</code>.</p>
+<div class="codehilite"><pre class="insert-before">    } catch (Return returnValue) {
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in <em>call</em>()</div>
+<pre class="insert">      <span class="k">if</span> (<span class="i">isInitializer</span>) <span class="k">return</span> <span class="i">closure</span>.<span class="i">getAt</span>(<span class="n">0</span>, <span class="s">&quot;this&quot;</span>);
+
+</pre><pre class="insert-after">      return returnValue.value;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in <em>call</em>()</div>
+
+<p>Nếu chúng ta đang ở trong một initializer và execute câu lệnh <code>return</code>, thay vì trả về giá trị (luôn là <code>nil</code>), ta sẽ trả về <code>this</code>.</p>
+<p>Phù! Đó là cả một danh sách việc phải làm, nhưng phần thưởng là interpreter nhỏ bé của chúng ta đã có thêm cả một mô hình lập trình hoàn chỉnh: class, method, field, <code>this</code>, và constructor. Ngôn ngữ “bé con” của chúng ta giờ trông đã rất trưởng thành.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>12&#8202;.&#8202;8</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Chúng ta đã có method trên instance, nhưng chưa có cách định nghĩa method “static” có thể được gọi trực tiếp trên object class. Hãy thêm hỗ trợ cho chúng. Dùng từ khóa <code>class</code> đứng trước method để chỉ ra đây là static method gắn với object class.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Math</span> {
+  <span class="k">class</span> <span class="i">square</span>(<span class="i">n</span>) {
+    <span class="k">return</span> <span class="i">n</span> * <span class="i">n</span>;
+  }
+}
+
+<span class="k">print</span> <span class="t">Math</span>.<span class="i">square</span>(<span class="n">3</span>); <span class="c">// Prints &quot;9&quot;.</span>
+</pre></div>
+<p>Bạn có thể giải quyết theo cách mình muốn, nhưng “<a href="https://en.wikipedia.org/wiki/Metaclass">metaclass</a>” được Smalltalk và Ruby sử dụng là một cách tiếp cận đặc biệt tinh tế. <em>Gợi ý: Cho <code>LoxClass</code> kế thừa <code>LoxInstance</code> và bắt đầu từ đó.</em></p>
+</li>
+<li>
+<p>Hầu hết các ngôn ngữ hiện đại hỗ trợ “getter” và “setter” — các thành viên trong class trông giống như đọc/ghi field nhưng thực tế lại execute code do người dùng định nghĩa. Hãy mở rộng Lox để hỗ trợ getter method. Chúng được khai báo không có danh sách tham số. Phần thân getter sẽ được execute khi một property có tên đó được truy cập.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Circle</span> {
+  <span class="i">init</span>(<span class="i">radius</span>) {
+    <span class="k">this</span>.<span class="i">radius</span> = <span class="i">radius</span>;
+  }
+
+  <span class="i">area</span> {
+    <span class="k">return</span> <span class="n">3.141592653</span> * <span class="k">this</span>.<span class="i">radius</span> * <span class="k">this</span>.<span class="i">radius</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">circle</span> = <span class="t">Circle</span>(<span class="n">4</span>);
+<span class="k">print</span> <span class="i">circle</span>.<span class="i">area</span>; <span class="c">// Prints roughly &quot;50.2655&quot;.</span>
+</pre></div>
+</li>
+<li>
+<p>Python và JavaScript cho phép bạn tự do truy cập field của object từ bên ngoài method của nó. Ruby và Smalltalk thì đóng gói trạng thái instance: chỉ method trong class mới có thể truy cập field thô, và class sẽ quyết định trạng thái nào được lộ ra. Hầu hết các ngôn ngữ static typing cung cấp các modifier như <code>private</code> và <code>public</code> để kiểm soát phần nào của class có thể truy cập từ bên ngoài, theo từng thành viên.</p>
+<p>Những đánh đổi giữa các cách tiếp cận này là gì và tại sao một ngôn ngữ có thể ưu tiên cách này hơn cách kia?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-prototype-&-sức-mạnh" id="ghi-chú-thiết-kế-prototype-&-sức-mạnh"><small>12&#8202;.&#8202;9</small>Ghi chú thiết kế: Prototype &amp; Sức mạnh</a></h2>
+<p>Trong chương này, chúng ta đã giới thiệu hai thực thể runtime mới, <code>LoxClass</code> và <code>LoxInstance</code>. Cái đầu tiên là nơi chứa hành vi của object, còn cái thứ hai là nơi lưu trữ trạng thái. Vậy nếu bạn có thể định nghĩa method ngay trên một object đơn lẻ, bên trong <code>LoxInstance</code> thì sao? Khi đó, chúng ta sẽ chẳng cần <code>LoxClass</code> nữa. <code>LoxInstance</code> sẽ là một gói hoàn chỉnh để định nghĩa cả hành vi lẫn trạng thái của một object.</p>
+<p>Chúng ta vẫn sẽ muốn có cách — không cần class — để tái sử dụng hành vi giữa nhiều instance. Ta có thể cho phép một <code>LoxInstance</code> <a href="https://en.wikipedia.org/wiki/Prototype-based_programming#Delegation"><em>delegate</em></a> trực tiếp tới một <code>LoxInstance</code> khác để dùng lại field và method của nó, kiểu như kế thừa.</p>
+<p>Người dùng sẽ mô hình hóa chương trình của mình như một chòm sao các object, một số trong đó delegate cho nhau để phản ánh những điểm chung. Các object được dùng làm delegate sẽ đại diện cho những object “chuẩn” hoặc “mẫu” mà các object khác tinh chỉnh lại. Kết quả là một runtime đơn giản hơn, chỉ với một cấu trúc nội bộ duy nhất: <code>LoxInstance</code>.</p>
+<p>Đó chính là nguồn gốc của tên gọi <strong><a href="https://en.wikipedia.org/wiki/Prototype-based_programming">prototype</a></strong> cho mô hình này. Nó được David Ungar và Randall Smith phát minh trong một ngôn ngữ tên là <a href="http://www.selflanguage.org/">Self</a>. Họ bắt đầu từ Smalltalk và thực hiện bài tập tư duy ở trên để xem có thể lược giản nó đến mức nào.</p>
+<p>Prototype đã từng là một khái niệm học thuật trong thời gian dài — hấp dẫn, tạo ra nhiều nghiên cứu thú vị nhưng không tạo được ảnh hưởng lớn trong thế giới lập trình — cho đến khi Brendan Eich nhét prototype vào JavaScript, và rồi nó nhanh chóng thống trị thế giới. Rất nhiều (rất nhiều) <span name="words">bài viết</span> đã được viết về prototype trong JavaScript. Liệu điều đó chứng tỏ prototype là một ý tưởng xuất sắc hay gây rối — hay cả hai — vẫn là một câu hỏi bỏ ngỏ.</p>
+<aside name="words">
+<p>Bao gồm <a href="http://gameprogrammingpatterns.com/prototype.html">không ít bài</a> của chính tôi.</p>
+</aside>
+<p>Tôi sẽ không bàn về việc prototype có phải là một ý tưởng hay cho một ngôn ngữ hay không. Tôi đã từng tạo ra những ngôn ngữ <a href="http://finch.stuffwithstuff.com/">dựa trên prototype</a> và <a href="http://wren.io/">dựa trên class</a>, và quan điểm của tôi về cả hai đều phức tạp. Điều tôi muốn nói ở đây là vai trò của <em>sự đơn giản</em> trong một ngôn ngữ.</p>
+<p>Prototype đơn giản hơn class — ít code hơn cho người triển khai ngôn ngữ phải viết, và ít khái niệm hơn cho người dùng phải học và hiểu. Điều đó có khiến chúng tốt hơn không? Những người mê ngôn ngữ như chúng ta thường có xu hướng “tôn thờ” chủ nghĩa tối giản. Cá nhân tôi nghĩ sự đơn giản chỉ là một phần của phương trình. Điều chúng ta thực sự muốn mang lại cho người dùng là <em>sức mạnh</em>, mà tôi định nghĩa như sau:</p>
+<div class="codehilite"><pre>power = breadth × ease ÷ complexity
+</pre></div>
+<p>Không yếu tố nào trong số này là thước đo số học chính xác. Tôi dùng toán học ở đây như một phép ẩn dụ, không phải để định lượng thực sự.</p>
+<ul>
+<li>
+<p><strong>Breadth</strong> (độ bao quát) là phạm vi các thứ khác nhau mà ngôn ngữ cho phép bạn biểu đạt. C có độ bao quát rất lớn — nó được dùng cho mọi thứ từ hệ điều hành, ứng dụng người dùng, đến trò chơi. Các ngôn ngữ chuyên biệt như AppleScript và Matlab có độ bao quát nhỏ hơn.</p>
+</li>
+<li>
+<p><strong>Ease</strong> (độ dễ dàng) là mức độ ít nỗ lực cần bỏ ra để khiến ngôn ngữ làm điều bạn muốn. “Usability” (tính khả dụng) có thể là một thuật ngữ khác, dù nó mang nhiều hàm ý hơn tôi muốn. Các ngôn ngữ “bậc cao” thường có độ dễ dàng cao hơn các ngôn ngữ “bậc thấp”. Hầu hết ngôn ngữ đều có một “hướng” tự nhiên, nơi một số việc cảm thấy dễ diễn đạt hơn những việc khác.</p>
+</li>
+<li>
+<p><strong>Complexity</strong> (độ phức tạp) là kích thước của ngôn ngữ (bao gồm runtime, thư viện lõi, công cụ, hệ sinh thái, v.v.). Người ta thường nói về số trang trong đặc tả ngôn ngữ, hoặc số lượng từ khóa nó có. Nó là lượng kiến thức mà người dùng phải nạp vào “bộ não ướt” của mình trước khi có thể làm việc hiệu quả. Đây là phản nghĩa của sự đơn giản.</p>
+</li>
+</ul>
+<p>Giảm độ phức tạp <em>có</em> làm tăng sức mạnh. Mẫu số càng nhỏ, giá trị kết quả càng lớn, nên trực giác của chúng ta rằng sự đơn giản là tốt là hoàn toàn đúng. Tuy nhiên, khi giảm độ phức tạp, ta phải cẩn thận không hy sinh độ bao quát hoặc độ dễ dàng, nếu không tổng sức mạnh có thể giảm. Java sẽ là một ngôn ngữ <em>đơn giản</em> hơn nếu bỏ đi string, nhưng khi đó nó sẽ không xử lý tốt các tác vụ xử lý văn bản, và cũng không dễ để hoàn thành công việc.</p>
+<p>Nghệ thuật ở đây là tìm ra những phần phức tạp <em>ngẫu nhiên</em> có thể bỏ đi — những tính năng và tương tác của ngôn ngữ không xứng đáng với chi phí mà chúng mang lại về độ bao quát hoặc độ dễ dàng.</p>
+<p>Nếu người dùng muốn biểu đạt chương trình của họ theo các nhóm đối tượng, thì việc tích hợp class vào ngôn ngữ sẽ tăng độ dễ dàng khi làm điều đó, hy vọng là đủ nhiều để bù cho độ phức tạp tăng thêm. Nhưng nếu đó không phải là cách người dùng sử dụng ngôn ngữ của bạn, thì cứ mạnh dạn bỏ class đi.</p>
+</div>
+
+<footer>
+<a href="inheritance.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Inheritance&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

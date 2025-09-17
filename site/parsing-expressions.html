@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Parsing Expressions &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Parsing Expressions<small>6</small></a></h3>
+
+<ul>
+    <li><a href="#sự-mơ-hồ-&amp;-“trò-chơi”-parsing"><small>6.1</small> Sự mơ hồ &amp; “trò chơi” Parsing</a></li>
+    <li><a href="#recursive-descent-parsing"><small>6.2</small> Recursive Descent Parsing</a></li>
+    <li><a href="#lỗi-cú-pháp-syntax-errors"><small>6.3</small> Lỗi cú pháp (Syntax Errors)</a></li>
+    <li><a href="#kết-nối-parser"><small>6.4</small> Kết nối Parser</a></li>
+    <li><a href="#thử-thách"><small>6.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-logic-&amp;-lịch-sử"><small>6.6</small> Ghi chú thiết kế: Logic &amp; Lịch sử</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="representing-code.html" title="Representing Code" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="evaluating-expressions.html" title="Evaluating Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="representing-code.html" title="Representing Code" class="prev">←</a>
+<a href="evaluating-expressions.html" title="Evaluating Expressions" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Parsing Expressions<small>6</small></a></h3>
+
+<ul>
+    <li><a href="#sự-mơ-hồ-&amp;-“trò-chơi”-parsing"><small>6.1</small> Sự mơ hồ &amp; “trò chơi” Parsing</a></li>
+    <li><a href="#recursive-descent-parsing"><small>6.2</small> Recursive Descent Parsing</a></li>
+    <li><a href="#lỗi-cú-pháp-syntax-errors"><small>6.3</small> Lỗi cú pháp (Syntax Errors)</a></li>
+    <li><a href="#kết-nối-parser"><small>6.4</small> Kết nối Parser</a></li>
+    <li><a href="#thử-thách"><small>6.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-logic-&amp;-lịch-sử"><small>6.6</small> Ghi chú thiết kế: Logic &amp; Lịch sử</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="representing-code.html" title="Representing Code" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="evaluating-expressions.html" title="Evaluating Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">6</div>
+  <h1>Parsing Expressions</h1>
+
+<blockquote>
+<p>Ngữ pháp, thứ có thể kiểm soát cả các vị vua.<br />
+<cite>Molière</cite></p>
+</blockquote>
+<p><span name="parse">Chương</span> này đánh dấu cột mốc lớn đầu tiên của cuốn sách. Nhiều người trong chúng ta từng chắp vá một mớ hỗn độn các biểu thức chính quy và thao tác chuỗi con để cố gắng moi ra chút ý nghĩa từ một đống văn bản. Đoạn code đó có lẽ đầy rẫy lỗi và cực khó bảo trì. Việc viết một <em>parser</em> “xịn” — có xử lý lỗi tử tế, cấu trúc nội bộ mạch lạc, và khả năng xử lý vững vàng một cú pháp phức tạp — được xem là một kỹ năng hiếm và ấn tượng. Trong chương này, bạn sẽ <span name="attain">đạt được</span> nó.</p>
+<aside name="parse">
+<p>Từ “Parse” trong tiếng Anh bắt nguồn từ tiếng Pháp cổ “pars” nghĩa là “thành phần của câu”. Nó có nghĩa là lấy một văn bản và ánh xạ từng từ vào ngữ pháp của ngôn ngữ. Ở đây, ta dùng nó với nghĩa tương tự, chỉ khác là ngôn ngữ của ta hiện đại hơn nhiều so với tiếng Pháp cổ.</p>
+</aside>
+<aside name="attain">
+<p>Giống như nhiều “nghi thức trưởng thành”, bạn có thể sẽ thấy nó trông nhỏ bé hơn, bớt đáng sợ hơn khi đã vượt qua, so với lúc nó còn lơ lửng phía trước.</p>
+</aside>
+<p>Nó dễ hơn bạn nghĩ, một phần vì ta đã “gánh” trước khá nhiều việc khó trong <a href="representing-code.html">chương trước</a>. Bạn đã quen thuộc với ngữ pháp hình thức. Bạn đã biết về syntax tree, và ta đã có sẵn một số class Java để biểu diễn chúng. Mảnh ghép duy nhất còn thiếu là parsing — biến đổi một chuỗi token thành một trong những syntax tree đó.</p>
+<p>Một số giáo trình khoa học máy tính rất coi trọng parser. Vào thập niên 60, các nhà khoa học máy tính — vốn đã quá mệt mỏi với việc lập trình bằng hợp ngữ — bắt đầu thiết kế những ngôn ngữ tinh vi hơn, thân thiện hơn với <span name="human">con người</span> như Fortran và ALGOL. Tiếc là, chúng lại không mấy “thân thiện” với <em>máy</em> tính nguyên thủy thời đó.</p>
+<aside name="human">
+<p>Hãy tưởng tượng việc lập trình hợp ngữ trên những cỗ máy cũ kỹ đó khổ sở thế nào, đến mức họ coi <em>Fortran</em> là một bước tiến.</p>
+</aside>
+<p>Những người tiên phong này đã thiết kế ra các ngôn ngữ mà chính họ cũng không chắc làm sao để viết compiler cho chúng, rồi thực hiện những công trình đột phá, phát minh ra các kỹ thuật parsing và compiling có thể xử lý những ngôn ngữ lớn mới mẻ này trên những cỗ máy nhỏ bé, cũ kỹ.</p>
+<p>Những cuốn sách compiler kinh điển thường viết như những bản “thánh ca” ca ngợi các anh hùng và công cụ của họ. Bìa cuốn <em>Compilers: Principles, Techniques, and Tools</em> thậm chí còn vẽ một con rồng mang nhãn “độ phức tạp của thiết kế compiler” bị một hiệp sĩ cầm kiếm và khiên khắc chữ “LALR parser generator” và “syntax directed translation” hạ gục. Họ thực sự “đẩy” sự tôn vinh này lên cao.</p>
+<p>Một chút tự khen là xứng đáng, nhưng sự thật là bạn không cần biết hầu hết những thứ đó để viết ra một parser chất lượng cao cho máy tính hiện đại. Như mọi khi, tôi khuyến khích bạn mở rộng kiến thức và tìm hiểu thêm sau này, nhưng cuốn sách này sẽ bỏ qua “tủ trưng bày cúp”.</p>
+<h2><a href="#sự-mơ-hồ-&-“trò-chơi”-parsing" id="sự-mơ-hồ-&-“trò-chơi”-parsing"><small>6&#8202;.&#8202;1</small>Sự mơ hồ &amp; “trò chơi” Parsing</a></h2>
+<p>Trong chương trước, tôi đã nói bạn có thể “chơi” một ngữ pháp phi ngữ cảnh như một trò chơi để <em>tạo ra</em> chuỗi. Parser thì chơi trò đó theo hướng ngược lại. Cho một chuỗi — một dãy token — ta ánh xạ các token đó tới các terminal trong ngữ pháp để tìm ra những quy tắc nào <em>có thể</em> đã tạo ra chuỗi đó.</p>
+<p>Phần “có thể” này khá thú vị. Hoàn toàn có thể tạo ra một ngữ pháp <em>mơ hồ</em>, nơi các lựa chọn production khác nhau có thể dẫn đến cùng một chuỗi. Khi bạn dùng ngữ pháp để <em>tạo</em> chuỗi, điều đó không quan trọng lắm. Một khi đã có chuỗi, ai quan tâm bạn tạo ra nó bằng cách nào?</p>
+<p>Khi parsing, sự mơ hồ đồng nghĩa với việc parser có thể hiểu sai code của người dùng. Khi parse, ta không chỉ xác định xem chuỗi đó có phải code Lox hợp lệ hay không, mà còn theo dõi quy tắc nào khớp với phần nào của nó để biết mỗi token thuộc về phần nào của ngôn ngữ. Đây là ngữ pháp biểu thức Lox mà ta đã xây dựng ở chương trước:</p>
+<div class="codehilite"><pre><span class="i">expression</span>     → <span class="i">literal</span>
+               | <span class="i">unary</span>
+               | <span class="i">binary</span>
+               | <span class="i">grouping</span> ;
+
+<span class="i">literal</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span> ;
+<span class="i">grouping</span>       → <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
+<span class="i">unary</span>          → ( <span class="s">&quot;-&quot;</span> | <span class="s">&quot;!&quot;</span> ) <span class="i">expression</span> ;
+<span class="i">binary</span>         → <span class="i">expression</span> <span class="i">operator</span> <span class="i">expression</span> ;
+<span class="i">operator</span>       → <span class="s">&quot;==&quot;</span> | <span class="s">&quot;!=&quot;</span> | <span class="s">&quot;&lt;&quot;</span> | <span class="s">&quot;&lt;=&quot;</span> | <span class="s">&quot;&gt;&quot;</span> | <span class="s">&quot;&gt;=&quot;</span>
+               | <span class="s">&quot;+&quot;</span>  | <span class="s">&quot;-&quot;</span>  | <span class="s">&quot;*&quot;</span> | <span class="s">&quot;/&quot;</span> ;
+</pre></div>
+<p>Đây là một chuỗi hợp lệ trong ngữ pháp đó:</p><img src="image/parsing-expressions/tokens.png" alt="6 / 3 - 1" />
+<p>Nhưng có hai cách ta có thể đã tạo ra nó. Một cách là:</p>
+<ol>
+<li>Bắt đầu từ <code>expression</code>, chọn <code>binary</code>.</li>
+<li>Với <code>expression</code> bên trái, chọn <code>NUMBER</code> và dùng <code>6</code>.</li>
+<li>Với operator, chọn <code>"/"</code>.</li>
+<li>Với <code>expression</code> bên phải, lại chọn <code>binary</code>.</li>
+<li>Trong <code>binary</code> lồng này, chọn <code>3 - 1</code>.</li>
+</ol>
+<p>Cách khác:</p>
+<ol>
+<li>Bắt đầu từ <code>expression</code>, chọn <code>binary</code>.</li>
+<li>Với <code>expression</code> bên trái, lại chọn <code>binary</code>.</li>
+<li>Trong <code>binary</code> lồng này, chọn <code>6 / 3</code>.</li>
+<li>Quay lại <code>binary</code> bên ngoài, với operator, chọn <code>"-"</code>.</li>
+<li>Với <code>expression</code> bên phải, chọn <code>NUMBER</code> và dùng <code>1</code>.</li>
+</ol>
+<p>Chúng tạo ra cùng một <em>chuỗi</em>, nhưng không phải cùng một <em>syntax tree</em>:</p><img src="image/parsing-expressions/syntax-trees.png" alt="Two valid syntax trees: (6 / 3) - 1 and 6 / (3 - 1)" />
+<p>Nói cách khác, ngữ pháp này cho phép ta nhìn biểu thức dưới dạng <code>(6 / 3) - 1</code> hoặc <code>6 / (3 - 1)</code>. Quy tắc <code>binary</code> cho phép các toán hạng được lồng vào nhau theo bất kỳ cách nào bạn muốn. Điều đó sẽ ảnh hưởng trực tiếp đến kết quả khi đánh giá cây cú pháp đã parse. Cách mà các nhà toán học đã giải quyết sự mơ hồ này từ khi bảng đen mới ra đời là định nghĩa các quy tắc về độ ưu tiên (precedence) và tính kết hợp (associativity).</p>
+<ul>
+<li>
+<p><span name="nonassociative"><strong>Precedence</strong></span> (độ ưu tiên) xác định toán tử nào được tính trước trong một biểu thức chứa nhiều loại toán tử khác nhau. Quy tắc precedence cho ta biết rằng trong ví dụ trên, ta sẽ tính <code>/</code> trước <code>-</code>. Toán tử có độ ưu tiên cao hơn sẽ được tính trước toán tử có độ ưu tiên thấp hơn. Nói cách khác, toán tử có độ ưu tiên cao hơn được gọi là “ràng buộc chặt hơn” (bind tighter).</p>
+</li>
+<li>
+<p><strong>Associativity</strong> (tính kết hợp) xác định toán tử nào được tính trước trong một chuỗi các toán tử <em>giống nhau</em>. Khi một toán tử là <strong>left-associative</strong> (kết hợp trái, hiểu là “từ trái sang phải”), các toán tử bên trái sẽ được tính trước các toán tử bên phải. Vì <code>-</code> là left-associative, biểu thức:</p>
+<div class="codehilite"><pre><span class="n">5</span> - <span class="n">3</span> - <span class="n">1</span>
+</pre></div>
+<p>tương đương với:</p>
+<div class="codehilite"><pre>(<span class="n">5</span> - <span class="n">3</span>) - <span class="n">1</span>
+</pre></div>
+<p>Ngược lại, phép gán (assignment) là <strong>right-associative</strong> (kết hợp phải). Biểu thức:</p>
+<div class="codehilite"><pre><span class="i">a</span> = <span class="i">b</span> = <span class="i">c</span>
+</pre></div>
+<p>tương đương với:</p>
+<div class="codehilite"><pre><span class="i">a</span> = (<span class="i">b</span> = <span class="i">c</span>)
+</pre></div>
+</li>
+</ul>
+<aside name="nonassociative">
+<p>Dù không phổ biến ngày nay, một số ngôn ngữ quy định rằng một số cặp toán tử <em>không</em> có độ ưu tiên tương đối. Điều đó khiến việc trộn các toán tử này trong cùng một biểu thức mà không dùng nhóm rõ ràng (explicit grouping) sẽ là lỗi cú pháp.</p>
+<p>Tương tự, một số toán tử là <strong>non-associative</strong> (không kết hợp). Nghĩa là sẽ là lỗi nếu dùng toán tử đó nhiều hơn một lần liên tiếp. Ví dụ, toán tử range của Perl không có tính kết hợp, nên <code>a .. b</code> thì OK, nhưng <code>a .. b .. c</code> sẽ là lỗi.</p>
+</aside>
+<p>Nếu không có quy tắc precedence và associativity được định nghĩa rõ ràng, một biểu thức dùng nhiều toán tử sẽ trở nên mơ hồ — nó có thể được parse thành các cây cú pháp khác nhau, và từ đó cho ra các kết quả khác nhau khi đánh giá. Ta sẽ khắc phục điều này trong Lox bằng cách áp dụng cùng quy tắc precedence như C, từ thấp đến cao.</p><table>
+<thead>
+<tr>
+  <td>Name</td>
+  <td>Operators</td>
+  <td>Associates</td>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Equality</td>
+  <td><code>==</code> <code>!=</code></td>
+  <td>Left</td>
+</tr>
+<tr>
+  <td>Comparison</td>
+  <td><code>&gt;</code> <code>&gt;=</code>
+      <code>&lt;</code> <code>&lt;=</code></td>
+  <td>Left</td>
+</tr>
+<tr>
+  <td>Term</td>
+  <td><code>-</code> <code>+</code></td>
+  <td>Left</td>
+</tr>
+<tr>
+  <td>Factor</td>
+  <td><code>/</code> <code>*</code></td>
+  <td>Left</td>
+</tr>
+<tr>
+  <td>Unary</td>
+  <td><code>!</code> <code>-</code></td>
+  <td>Right</td>
+</tr>
+</tbody>
+</table>
+<p>Hiện tại, ngữ pháp đang nhồi tất cả các loại biểu thức vào chung một quy tắc <code>expression</code>. Quy tắc này cũng được dùng làm non-terminal cho các toán hạng, điều này khiến ngữ pháp chấp nhận bất kỳ loại biểu thức nào làm biểu thức con, bất kể quy tắc precedence có cho phép hay không.</p>
+<p>Ta sẽ sửa điều đó bằng cách <span name="massage">phân tầng</span> ngữ pháp. Ta định nghĩa một quy tắc riêng cho mỗi mức precedence.</p>
+<div class="codehilite"><pre><span class="i">expression</span>     → ...
+<span class="i">equality</span>       → ...
+<span class="i">comparison</span>     → ...
+<span class="i">term</span>           → ...
+<span class="i">factor</span>         → ...
+<span class="i">unary</span>          → ...
+<span class="i">primary</span>        → ...
+</pre></div>
+<aside name="massage">
+<p>Thay vì “nướng” precedence trực tiếp vào các quy tắc ngữ pháp, một số parser generator cho phép bạn giữ nguyên ngữ pháp mơ hồ nhưng đơn giản, rồi thêm một chút metadata về độ ưu tiên toán tử ở bên ngoài để phân giải mơ hồ.</p>
+</aside>
+<p>Mỗi quy tắc ở đây chỉ khớp với các biểu thức ở mức precedence của nó hoặc cao hơn. Ví dụ, <code>unary</code> khớp với một biểu thức unary như <code>!negated</code> hoặc một biểu thức primary như <code>1234</code>. Còn <code>term</code> có thể khớp <code>1 + 2</code> nhưng cũng có thể khớp <code>3 * 4 / 5</code>. Quy tắc <code>primary</code> cuối cùng bao phủ các dạng có precedence cao nhất — literal và biểu thức trong ngoặc.</p>
+<p>Giờ ta chỉ cần điền các production cho từng quy tắc đó. Ta sẽ làm các quy tắc dễ trước. Quy tắc <code>expression</code> ở trên cùng khớp với bất kỳ biểu thức nào ở bất kỳ mức precedence nào. Vì <span name="equality"><code>equality</code></span> có precedence thấp nhất, nếu ta khớp được nó thì nó sẽ bao trùm tất cả.</p>
+<aside name="equality">
+<p>Ta có thể bỏ <code>expression</code> và chỉ dùng <code>equality</code> trong các quy tắc khác chứa biểu thức, nhưng dùng <code>expression</code> sẽ khiến các quy tắc đó dễ đọc hơn một chút.</p>
+<p>Ngoài ra, ở các chương sau khi ta mở rộng ngữ pháp để bao gồm phép gán và toán tử logic, ta chỉ cần thay đổi production của <code>expression</code> thay vì phải sửa mọi quy tắc chứa biểu thức.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">expression</span>     → <span class="i">equality</span>
+</pre></div>
+<p>Ở đầu kia của bảng precedence, một biểu thức primary chứa tất cả literal và biểu thức nhóm trong ngoặc.</p>
+<div class="codehilite"><pre><span class="i">primary</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span>
+               | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
+</pre></div>
+<p>Một biểu thức unary bắt đầu bằng một toán tử unary theo sau là toán hạng. Vì toán tử unary có thể lồng nhau — <code>!!true</code> là một biểu thức hợp lệ dù hơi kỳ — nên toán hạng cũng có thể lại là một toán tử unary. Quy tắc đệ quy xử lý điều này rất gọn.</p>
+<div class="codehilite"><pre><span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span> ;
+</pre></div>
+<p>Nhưng quy tắc này có vấn đề: nó sẽ không bao giờ kết thúc.</p>
+<p>Hãy nhớ, mỗi quy tắc cần khớp với các biểu thức ở mức precedence đó <em>hoặc cao hơn</em>, nên ta cũng cần cho phép nó khớp với một biểu thức primary.</p>
+<div class="codehilite"><pre><span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">primary</span> ;
+</pre></div>
+<p>Vậy là ổn.</p>
+<p>Các quy tắc còn lại đều là toán tử nhị phân. Ta sẽ bắt đầu với quy tắc cho phép nhân và chia. Đây là thử đầu tiên:</p>
+<div class="codehilite"><pre><span class="i">factor</span>         → <span class="i">factor</span> ( <span class="s">&quot;/&quot;</span> | <span class="s">&quot;*&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">unary</span> ;
+</pre></div>
+<p>Quy tắc này đệ quy để khớp toán hạng bên trái. Điều đó cho phép quy tắc khớp một chuỗi các phép nhân và chia như <code>1 * 2 / 3</code>. Đặt production đệ quy ở bên trái và <code>unary</code> ở bên phải khiến quy tắc này <span name="mult">left-associative</span> và không mơ hồ.</p>
+<aside name="mult">
+<p>Về nguyên tắc, việc bạn coi phép nhân là left- hay right-associative không quan trọng — bạn sẽ nhận được cùng kết quả. Nhưng, trong thế giới thực với độ chính xác hữu hạn, việc làm tròn và tràn số có thể khiến tính kết hợp ảnh hưởng đến kết quả của một chuỗi phép nhân. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="n">0.1</span> * (<span class="n">0.2</span> * <span class="n">0.3</span>);
+<span class="k">print</span> (<span class="n">0.1</span> * <span class="n">0.2</span>) * <span class="n">0.3</span>;
+</pre></div>
+<p>Trong các ngôn ngữ như Lox dùng số dấu chấm động double-precision <a href="https://en.wikipedia.org/wiki/Double-precision_floating-point_format">IEEE 754</a>, biểu thức đầu cho ra <code>0.006</code>, trong khi biểu thức thứ hai cho ra <code>0.006000000000000001</code>. Đôi khi sự khác biệt nhỏ đó lại quan trọng. <a href="https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html">Bài viết này</a> là một nơi tốt để tìm hiểu thêm.</p>
+</aside>
+<p>Tất cả những điều này đều đúng, nhưng việc ký hiệu đầu tiên trong thân quy tắc giống với ký hiệu ở đầu quy tắc nghĩa là production này <strong>left-recursive</strong>. Một số kỹ thuật parsing, bao gồm cả kỹ thuật ta sẽ dùng, gặp khó khăn với left recursion. (Đệ quy ở chỗ khác, như trong <code>unary</code> và đệ quy gián tiếp cho grouping trong <code>primary</code>, thì không vấn đề gì.)</p>
+<p>Có nhiều ngữ pháp bạn có thể định nghĩa để khớp cùng một ngôn ngữ. Việc chọn cách mô hình hóa một ngôn ngữ cụ thể vừa là vấn đề sở thích, vừa là vấn đề thực dụng. Quy tắc này đúng, nhưng không tối ưu cho cách ta định parse nó. Thay vì dùng quy tắc left-recursive, ta sẽ dùng một quy tắc khác.</p>
+<div class="codehilite"><pre><span class="i">factor</span>         → <span class="i">unary</span> ( ( <span class="s">&quot;/&quot;</span> | <span class="s">&quot;*&quot;</span> ) <span class="i">unary</span> )* ;
+</pre></div>
+<p>Ta định nghĩa một biểu thức factor là một <em>chuỗi</em> phẳng các phép nhân và chia. Quy tắc này khớp cùng cú pháp với quy tắc trước, nhưng phản ánh tốt hơn cấu trúc code ta sẽ viết để parse Lox. Ta sẽ dùng cùng cấu trúc này cho tất cả các mức precedence của toán tử nhị phân khác, cho ta toàn bộ ngữ pháp biểu thức hoàn chỉnh như sau:</p>
+<div class="codehilite"><pre><span class="i">expression</span>     → <span class="i">equality</span> ;
+<span class="i">equality</span>       → <span class="i">comparison</span> ( ( <span class="s">&quot;!=&quot;</span> | <span class="s">&quot;==&quot;</span> ) <span class="i">comparison</span> )* ;
+<span class="i">comparison</span>     → <span class="i">term</span> ( ( <span class="s">&quot;&gt;&quot;</span> | <span class="s">&quot;&gt;=&quot;</span> | <span class="s">&quot;&lt;&quot;</span> | <span class="s">&quot;&lt;=&quot;</span> ) <span class="i">term</span> )* ;
+<span class="i">term</span>           → <span class="i">factor</span> ( ( <span class="s">&quot;-&quot;</span> | <span class="s">&quot;+&quot;</span> ) <span class="i">factor</span> )* ;
+<span class="i">factor</span>         → <span class="i">unary</span> ( ( <span class="s">&quot;/&quot;</span> | <span class="s">&quot;*&quot;</span> ) <span class="i">unary</span> )* ;
+<span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">primary</span> ;
+<span class="i">primary</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span>
+               | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
+</pre></div>
+<p>Ngữ pháp này phức tạp hơn so với cái ta có trước đây, nhưng đổi lại, ta đã loại bỏ được sự mơ hồ của ngữ pháp cũ. Đây chính là thứ ta cần để tạo ra một parser.</p>
+<h2><a href="#recursive-descent-parsing" id="recursive-descent-parsing"><small>6&#8202;.&#8202;2</small>Recursive Descent Parsing</a></h2>
+<p>Có cả một “bầy” kỹ thuật parsing với tên gọi chủ yếu là sự kết hợp của các chữ “L” và “R” — <a href="https://en.wikipedia.org/wiki/LL_parser">LL(k)</a>, <a href="https://en.wikipedia.org/wiki/LR_parser">LR(1)</a>, <a href="https://en.wikipedia.org/wiki/LALR_parser">LALR</a> — cùng với những “sinh vật” kỳ lạ hơn như <a href="https://en.wikipedia.org/wiki/Parser_combinator">parser combinators</a>, <a href="https://en.wikipedia.org/wiki/Earley_parser">Earley parsers</a>, <a href="https://en.wikipedia.org/wiki/Shunting-yard_algorithm">thuật toán shunting yard</a>, và <a href="https://en.wikipedia.org/wiki/Parsing_expression_grammar">packrat parsing</a>. Với interpreter đầu tiên của chúng ta, chỉ một kỹ thuật là quá đủ: <strong>recursive descent</strong>.</p>
+<p>Recursive descent là cách đơn giản nhất để xây dựng một parser, và không cần dùng đến các công cụ parser generator phức tạp như Yacc, Bison hay ANTLR. Tất cả những gì bạn cần là code viết tay đơn giản, rõ ràng. Nhưng đừng để sự đơn giản đó đánh lừa bạn. Parser kiểu recursive descent nhanh, ổn định, và có thể hỗ trợ xử lý lỗi tinh vi. Thực tế, GCC, V8 (JavaScript VM trong Chrome), Roslyn (C# compiler viết bằng C#) và nhiều hiện thực ngôn ngữ “hạng nặng” khác đều dùng recursive descent. Nó thực sự rất “đỉnh”.</p>
+<p>Recursive descent được coi là một <strong>top-down parser</strong> vì nó bắt đầu từ quy tắc ngữ pháp cao nhất hoặc ngoài cùng (ở đây là <code>expression</code>) và lần lượt đi <span name="descent">xuống</span> các biểu thức con lồng nhau trước khi cuối cùng chạm tới các lá của syntax tree. Điều này trái ngược với các parser bottom-up như LR, vốn bắt đầu từ các biểu thức primary và ghép chúng thành các khối cú pháp lớn dần.</p>
+<aside name="descent">
+<p>Nó được gọi là &ldquo;recursive <em>descent</em>&rdquo; vì nó đi <em>xuống</em> ngữ pháp. Trớ trêu thay, ta cũng dùng ẩn dụ về hướng khi nói về precedence “cao” và “thấp”, nhưng hướng lại đảo ngược. Trong một top-down parser, bạn sẽ gặp các biểu thức có precedence thấp nhất trước, vì chúng có thể chứa các biểu thức con có precedence cao hơn.</p><img src="image/parsing-expressions/direction.png" alt="Các quy tắc ngữ pháp top-down theo thứ tự precedence tăng dần." />
+<p>Giới khoa học máy tính thực sự nên ngồi lại với nhau để thống nhất các ẩn dụ này. Đừng để tôi bắt đầu nói về việc ngăn xếp (stack) “mọc” theo hướng nào hay tại sao cây lại có “rễ” ở phía trên.</p>
+</aside>
+<p>Một recursive descent parser là bản dịch gần như nguyên văn các quy tắc ngữ pháp sang code mệnh lệnh. Mỗi quy tắc trở thành một hàm. Phần thân của quy tắc được dịch thành code có dạng gần như sau:</p><table>
+<thead>
+<tr>
+  <td>Grammar notation</td>
+  <td>Code representation</td>
+</tr>
+</thead>
+<tbody>
+  <tr><td>Terminal</td><td>Code to match and consume a token</td></tr>
+  <tr><td>Nonterminal</td><td>Call to that rule&rsquo;s function</td></tr>
+  <tr><td><code>|</code></td><td><code>if</code> or <code>switch</code> statement</td></tr>
+  <tr><td><code>*</code> or <code>+</code></td><td><code>while</code> or <code>for</code> loop</td></tr>
+  <tr><td><code>?</code></td><td><code>if</code> statement</td></tr>
+</tbody>
+</table>
+<p>Việc “descent” (đi xuống) được gọi là “recursive” (đệ quy) vì khi một quy tắc ngữ pháp tham chiếu tới chính nó — trực tiếp hoặc gián tiếp — điều đó sẽ được dịch thành một lời gọi hàm đệ quy.</p>
+<h3><a href="#lớp-parser" id="lớp-parser"><small>6&#8202;.&#8202;2&#8202;.&#8202;1</small>Lớp parser</a></h3>
+<p>Mỗi quy tắc ngữ pháp sẽ trở thành một phương thức bên trong lớp mới này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.List</span>;
+
+<span class="k">import static</span> <span class="i">com.craftinginterpreters.lox.TokenType.*</span>;
+
+<span class="k">class</span> <span class="t">Parser</span> {
+  <span class="k">private</span> <span class="k">final</span> <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">tokens</span>;
+  <span class="k">private</span> <span class="t">int</span> <span class="i">current</span> = <span class="n">0</span>;
+
+  <span class="t">Parser</span>(<span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">tokens</span>) {
+    <span class="k">this</span>.<span class="i">tokens</span> = <span class="i">tokens</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, create new file</div>
+
+<p>Giống như scanner, parser tiêu thụ một chuỗi đầu vào phẳng, chỉ khác là giờ ta đang đọc token thay vì ký tự. Ta lưu danh sách token và dùng biến <code>current</code> để trỏ tới token tiếp theo đang chờ được parse.</p>
+<p>Giờ ta sẽ đi thẳng qua toàn bộ ngữ pháp biểu thức và dịch từng quy tắc sang code Java. Quy tắc đầu tiên, <code>expression</code>, đơn giản chỉ mở rộng thành quy tắc <code>equality</code>, nên khá dễ dàng.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>Parser</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">expression</span>() {
+    <span class="k">return</span> <span class="i">equality</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>Parser</em>()</div>
+
+<p>Mỗi phương thức parse một quy tắc ngữ pháp sẽ tạo ra một syntax tree cho quy tắc đó và trả về cho hàm gọi nó. Khi phần thân của quy tắc chứa một nonterminal — tham chiếu tới một quy tắc khác — ta sẽ <span name="left">gọi</span> phương thức của quy tắc đó.</p>
+<aside name="left">
+<p>Đây là lý do tại sao left recursion lại gây vấn đề cho recursive descent. Hàm của một quy tắc left-recursive sẽ ngay lập tức gọi lại chính nó, rồi lại gọi tiếp, và cứ thế cho đến khi parser bị tràn stack và “chết”.</p>
+</aside>
+<p>Quy tắc cho <code>equality</code> phức tạp hơn một chút.</p>
+<div class="codehilite"><pre><span class="i">equality</span>       → <span class="i">comparison</span> ( ( <span class="s">&quot;!=&quot;</span> | <span class="s">&quot;==&quot;</span> ) <span class="i">comparison</span> )* ;
+</pre></div>
+<p>Trong Java, nó trở thành:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expression</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">equality</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">comparison</span>();
+
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">BANG_EQUAL</span>, <span class="i">EQUAL_EQUAL</span>)) {
+      <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">right</span> = <span class="i">comparison</span>();
+      <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expression</em>()</div>
+
+<p>Hãy cùng phân tích. Nonterminal <code>comparison</code> đầu tiên trong phần thân được dịch thành lời gọi đầu tiên tới <code>comparison()</code> trong phương thức. Ta lấy kết quả đó và lưu vào một biến cục bộ.</p>
+<p>Tiếp theo, vòng lặp <code>( ... )*</code> trong quy tắc được ánh xạ thành vòng lặp <code>while</code>. Ta cần biết khi nào thì thoát khỏi vòng lặp này. Có thể thấy rằng bên trong quy tắc, trước tiên ta phải tìm thấy một token <code>!=</code> hoặc <code>==</code>. Vậy nên, nếu <em>không</em> thấy một trong số đó, ta biết là đã xong chuỗi các toán tử equality. Ta diễn đạt việc kiểm tra này bằng phương thức tiện lợi <code>match()</code>.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>equality</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">match</span>(<span class="t">TokenType</span>... <span class="i">types</span>) {
+    <span class="k">for</span> (<span class="t">TokenType</span> <span class="i">type</span> : <span class="i">types</span>) {
+      <span class="k">if</span> (<span class="i">check</span>(<span class="i">type</span>)) {
+        <span class="i">advance</span>();
+        <span class="k">return</span> <span class="k">true</span>;
+      }
+    }
+
+    <span class="k">return</span> <span class="k">false</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>equality</em>()</div>
+
+<p>Phương thức này kiểm tra xem token hiện tại có thuộc một trong các loại được truyền vào hay không. Nếu có, nó tiêu thụ token đó và trả về <code>true</code>. Nếu không, nó trả về <code>false</code> và giữ nguyên token hiện tại. <code>match()</code> được định nghĩa dựa trên hai thao tác cơ bản hơn.</p>
+<p>Phương thức <code>check()</code> trả về <code>true</code> nếu token hiện tại có kiểu được chỉ định. Không giống <code>match()</code>, nó không bao giờ tiêu thụ token, chỉ nhìn vào nó.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>match</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">check</span>(<span class="t">TokenType</span> <span class="i">type</span>) {
+    <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="k">false</span>;
+    <span class="k">return</span> <span class="i">peek</span>().<span class="i">type</span> == <span class="i">type</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>match</em>()</div>
+
+<p>Phương thức <code>advance()</code> tiêu thụ token hiện tại và trả về nó, tương tự như cách phương thức tương ứng của scanner duyệt qua các ký tự.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>check</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Token</span> <span class="i">advance</span>() {
+    <span class="k">if</span> (!<span class="i">isAtEnd</span>()) <span class="i">current</span>++;
+    <span class="k">return</span> <span class="i">previous</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>check</em>()</div>
+
+<p>Các phương thức này dựa trên một vài thao tác nguyên thủy cuối cùng.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>advance</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">isAtEnd</span>() {
+    <span class="k">return</span> <span class="i">peek</span>().<span class="i">type</span> == <span class="i">EOF</span>;
+  }
+
+  <span class="k">private</span> <span class="t">Token</span> <span class="i">peek</span>() {
+    <span class="k">return</span> <span class="i">tokens</span>.<span class="i">get</span>(<span class="i">current</span>);
+  }
+
+  <span class="k">private</span> <span class="t">Token</span> <span class="i">previous</span>() {
+    <span class="k">return</span> <span class="i">tokens</span>.<span class="i">get</span>(<span class="i">current</span> - <span class="n">1</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>advance</em>()</div>
+
+<p><code>isAtEnd()</code> kiểm tra xem ta đã hết token để parse chưa. <code>peek()</code> trả về token hiện tại mà ta chưa tiêu thụ, và <code>previous()</code> trả về token vừa được tiêu thụ gần nhất. Cái sau giúp ta dễ dàng dùng <code>match()</code> rồi truy cập token vừa khớp.</p>
+<p>Đó là hầu hết phần hạ tầng parsing mà ta cần. Ta đang ở đâu nhỉ? À đúng rồi, nếu ta đang ở bên trong vòng lặp <code>while</code> trong <code>equality()</code>, thì ta biết mình vừa tìm thấy một toán tử <code>!=</code> hoặc <code>==</code> và phải parse một biểu thức equality.</p>
+<p>Ta lấy token toán tử vừa khớp để biết mình đang xử lý loại biểu thức equality nào. Sau đó ta gọi lại <code>comparison()</code> để parse toán hạng bên phải. Ta kết hợp toán tử và hai toán hạng của nó thành một node syntax tree <code>Expr.Binary</code> mới, rồi quay lại vòng lặp. Mỗi vòng lặp, ta lưu biểu thức kết quả vào lại biến cục bộ <code>expr</code>. Khi ta duyệt qua một chuỗi các biểu thức equality, điều này sẽ tạo ra một cây lồng nhau theo kiểu left-associative gồm các node toán tử nhị phân.</p>
+<p><span name="sequence"></span></p><img src="image/parsing-expressions/sequence.png" alt="Cây cú pháp được tạo ra khi parse 'a == b == c == d == e'" />
+<aside name="sequence">
+<p>Parse <code>a == b == c == d == e</code>. Mỗi vòng lặp, ta tạo một biểu thức nhị phân mới, dùng biểu thức trước đó làm toán hạng bên trái.</p>
+</aside>
+<p>Parser sẽ thoát khỏi vòng lặp ngay khi gặp một token không phải là toán tử equality. Cuối cùng, nó trả về biểu thức. Lưu ý rằng nếu parser không bao giờ gặp toán tử equality, nó sẽ không bao giờ vào vòng lặp. Trong trường hợp đó, phương thức <code>equality()</code> thực chất chỉ gọi và trả về <code>comparison()</code>. Theo cách này, phương thức này sẽ khớp một toán tử equality <em>hoặc bất kỳ thứ gì có precedence cao hơn</em>.</p>
+<p>Chuyển sang quy tắc tiếp theo<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<div class="codehilite"><pre><span class="i">comparison</span>     → <span class="i">term</span> ( ( <span class="s">&quot;&gt;&quot;</span> | <span class="s">&quot;&gt;=&quot;</span> | <span class="s">&quot;&lt;&quot;</span> | <span class="s">&quot;&lt;=&quot;</span> ) <span class="i">term</span> )* ;
+</pre></div>
+<p>Dịch sang Java:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>equality</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">comparison</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">term</span>();
+
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">GREATER</span>, <span class="i">GREATER_EQUAL</span>, <span class="i">LESS</span>, <span class="i">LESS_EQUAL</span>)) {
+      <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">right</span> = <span class="i">term</span>();
+      <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>equality</em>()</div>
+
+<p>Quy tắc ngữ pháp này gần như <span name="handle">giống hệt</span> <code>equality</code> và code tương ứng cũng vậy. Điểm khác biệt duy nhất là loại token của các toán tử cần khớp, và phương thức ta gọi cho các toán hạng — giờ là <code>term()</code> thay vì <code>comparison()</code>. Hai quy tắc còn lại cho toán tử nhị phân cũng theo cùng một mẫu.</p>
+<p>Theo thứ tự precedence, trước tiên là cộng và trừ:</p>
+<aside name="handle">
+<p>Nếu muốn “chơi” một chút Java 8, bạn có thể tạo một helper method để parse một chuỗi toán tử nhị phân left-associative, nhận vào danh sách loại token và một method handle cho toán hạng, từ đó đơn giản hóa đoạn code lặp lại này.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>comparison</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">term</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">factor</span>();
+
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">MINUS</span>, <span class="i">PLUS</span>)) {
+      <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">right</span> = <span class="i">factor</span>();
+      <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>comparison</em>()</div>
+
+<p>Và cuối cùng là nhân và chia:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>term</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">factor</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">unary</span>();
+
+    <span class="k">while</span> (<span class="i">match</span>(<span class="i">SLASH</span>, <span class="i">STAR</span>)) {
+      <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">right</span> = <span class="i">unary</span>();
+      <span class="i">expr</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(<span class="i">expr</span>, <span class="i">operator</span>, <span class="i">right</span>);
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>term</em>()</div>
+
+<p>Vậy là xong các toán tử nhị phân, được parse với precedence và associativity chính xác. Ta đang dần leo lên bậc thang precedence và giờ đã tới toán tử unary.</p>
+<div class="codehilite"><pre><span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span>
+               | <span class="i">primary</span> ;
+</pre></div>
+<p>Code cho phần này hơi khác một chút.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>factor</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">unary</span>() {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">BANG</span>, <span class="i">MINUS</span>)) {
+      <span class="t">Token</span> <span class="i">operator</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">right</span> = <span class="i">unary</span>();
+      <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Unary</span>(<span class="i">operator</span>, <span class="i">right</span>);
+    }
+
+    <span class="k">return</span> <span class="i">primary</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>factor</em>()</div>
+
+<p>Một lần nữa, ta nhìn vào token <span name="current">hiện tại</span> để quyết định cách parse. Nếu nó là <code>!</code> hoặc <code>-</code>, chắc chắn ta đang có một biểu thức unary. Khi đó, ta lấy token này rồi đệ quy gọi lại <code>unary()</code> để parse toán hạng. Gói tất cả lại thành một node syntax tree unary expression là xong.</p>
+<aside name="current">
+<p>Việc parser nhìn trước các token sắp tới để quyết định cách parse khiến recursive descent thuộc nhóm <strong>predictive parser</strong>.</p>
+</aside>
+<p>Nếu không, nghĩa là ta đã tới mức precedence cao nhất — các biểu thức primary.</p>
+<div class="codehilite"><pre><span class="i">primary</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span>
+               | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
+</pre></div>
+<p>Hầu hết các trường hợp trong quy tắc này là terminal đơn, nên việc parse khá đơn giản.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>unary</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">primary</span>() {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">FALSE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">false</span>);
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">TRUE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">true</span>);
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">NIL</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="k">null</span>);
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">NUMBER</span>, <span class="i">STRING</span>)) {
+      <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="i">previous</span>().<span class="i">literal</span>);
+    }
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">LEFT_PAREN</span>)) {
+      <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">expression</span>();
+      <span class="i">consume</span>(<span class="i">RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after expression.&quot;</span>);
+      <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Grouping</span>(<span class="i">expr</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>unary</em>()</div>
+
+<p>Nhánh thú vị là phần xử lý dấu ngoặc. Sau khi khớp dấu <code>(</code> mở và parse biểu thức bên trong, ta <em>phải</em> tìm thấy token <code>)</code> đóng. Nếu không, đó là lỗi.</p>
+<h2><a href="#lỗi-cú-pháp-syntax-errors" id="lỗi-cú-pháp-syntax-errors"><small>6&#8202;.&#8202;3</small>Lỗi cú pháp (Syntax Errors)</a></h2>
+<p>Một parser thực sự có hai nhiệm vụ:</p>
+<ol>
+<li>
+<p>Với một chuỗi token hợp lệ, tạo ra syntax tree tương ứng.</p>
+</li>
+<li>
+<p>Với một chuỗi token <em>không hợp lệ</em>, phát hiện lỗi và thông báo cho người dùng về sai sót của họ.</p>
+</li>
+</ol>
+<p>Đừng đánh giá thấp tầm quan trọng của nhiệm vụ thứ hai! Trong các IDE và trình soạn thảo hiện đại, parser liên tục parse lại code — thường là khi người dùng vẫn đang gõ — để tô sáng cú pháp và hỗ trợ các tính năng như auto-complete. Điều đó có nghĩa là nó sẽ gặp code ở trạng thái chưa hoàn chỉnh, sai một nửa <em>liên tục</em>.</p>
+<p>Khi người dùng không nhận ra cú pháp đang sai, parser phải giúp họ quay lại đúng hướng. Cách parser báo lỗi là một phần quan trọng trong giao diện người dùng của ngôn ngữ. Xử lý lỗi cú pháp tốt là việc khó. Theo định nghĩa, code đang ở trạng thái không rõ ràng, nên không có cách nào chắc chắn biết được người dùng <em>định</em> viết gì. Parser không thể đọc được <span name="telepathy">tâm trí</span> của bạn.</p>
+<aside name="telepathy">
+<p>Ít nhất là chưa. Với tốc độ phát triển của machine learning hiện nay, ai mà biết tương lai sẽ ra sao?</p>
+</aside>
+<p>Có một vài yêu cầu bắt buộc khi parser gặp lỗi cú pháp. Một parser phải:</p>
+<ul>
+<li>
+<p><strong>Phát hiện và báo lỗi.</strong> Nếu nó không phát hiện <span name="error">lỗi</span> và chuyển cây cú pháp sai lệch đó sang cho interpreter, thì đủ loại “kinh dị” có thể xảy ra.</p>
+<aside name="error">
+<p>Nói một cách triết lý, nếu một lỗi không được phát hiện và interpreter vẫn chạy code, thì nó có <em>thực sự</em> là lỗi không?</p>
+</aside></li>
+<li>
+<p><strong>Tránh crash hoặc treo.</strong> Lỗi cú pháp là chuyện thường tình, và các công cụ ngôn ngữ phải đủ vững để đối mặt với chúng. Việc segfault hoặc mắc kẹt trong vòng lặp vô hạn là không chấp nhận được. Dù source có thể không phải là <em>code</em> hợp lệ, nó vẫn là <em>đầu vào hợp lệ cho parser</em> vì người dùng dùng parser để biết cú pháp nào được phép.</p>
+</li>
+</ul>
+<p>Đó là “vé vào cửa” nếu bạn muốn tham gia “cuộc chơi” parser, nhưng bạn thực sự nên nâng tiêu chuẩn lên hơn thế. Một parser tốt nên:</p>
+<ul>
+<li>
+<p><strong>Nhanh.</strong> Máy tính ngày nay nhanh hơn hàng nghìn lần so với khi công nghệ parser mới ra đời. Thời kỳ phải tối ưu parser để nó parse xong cả file source trong lúc bạn uống cà phê đã qua. Nhưng kỳ vọng của lập trình viên cũng tăng nhanh không kém, nếu không muốn nói là nhanh hơn. Họ mong editor của mình parse lại file chỉ trong vài mili-giây sau mỗi lần gõ phím.</p>
+</li>
+<li>
+<p><strong>Báo tất cả lỗi riêng biệt.</strong> Dừng lại sau lỗi đầu tiên thì dễ lập trình, nhưng sẽ gây khó chịu nếu mỗi lần họ sửa “lỗi duy nhất” trong file, lại xuất hiện một lỗi mới. Họ muốn thấy tất cả.</p>
+</li>
+<li>
+<p><strong>Giảm thiểu lỗi <em>dây chuyền</em>.</strong> Khi đã gặp một lỗi, parser thực sự không còn chắc chuyện gì đang diễn ra. Nó cố gắng tự đưa mình về đúng hướng và tiếp tục, nhưng nếu bị rối, nó có thể báo ra một loạt lỗi “ma” không phản ánh vấn đề thực sự nào khác trong code. Khi lỗi đầu tiên được sửa, những “bóng ma” này biến mất, vì chúng chỉ phản ánh sự rối loạn của parser. Lỗi dây chuyền gây khó chịu vì có thể khiến người dùng tưởng code của họ tệ hơn thực tế.</p>
+</li>
+</ul>
+<p>Hai điểm cuối này có phần mâu thuẫn. Ta muốn báo càng nhiều lỗi riêng biệt càng tốt, nhưng không muốn báo những lỗi chỉ là hệ quả của lỗi trước đó.</p>
+<p>Cách parser phản ứng với lỗi và tiếp tục tìm các lỗi sau được gọi là <strong>error recovery</strong>. Đây từng là một chủ đề nghiên cứu nóng vào thập niên 60. Khi đó, bạn sẽ đưa một chồng thẻ đục lỗ cho thư ký và quay lại ngày hôm sau để xem compiler có chạy thành công không. Với vòng lặp lặp lại chậm như vậy, bạn <em>thực sự</em> muốn tìm mọi lỗi trong code chỉ trong một lần chạy.</p>
+<p>Ngày nay, khi parser hoàn tất trước cả khi bạn gõ xong, vấn đề này ít nghiêm trọng hơn. Một cơ chế error recovery đơn giản, nhanh là đủ.</p>
+<h3><a href="#panic-mode-error-recovery" id="panic-mode-error-recovery"><small>6&#8202;.&#8202;3&#8202;.&#8202;1</small>Panic mode error recovery</a></h3>
+<aside name="panic">
+<p>Bạn biết là mình muốn bấm nó mà.</p><img src="image/parsing-expressions/panic.png" alt="Một nút 'PANIC' to và bóng loáng." />
+</aside>
+<p>Trong số các kỹ thuật recovery được nghĩ ra từ xưa, kỹ thuật trụ vững nhất theo thời gian được gọi — nghe hơi đáng sợ — là <span name="panic"><strong>panic mode</strong></span>. Ngay khi parser phát hiện lỗi, nó sẽ vào panic mode. Nó biết ít nhất một token không hợp lý với trạng thái hiện tại của nó trong giữa một đống production của ngữ pháp.</p>
+<p>Trước khi có thể parse tiếp, nó cần đưa trạng thái và chuỗi token sắp tới về đồng bộ sao cho token tiếp theo khớp với quy tắc đang parse. Quá trình này gọi là <strong>synchronization</strong>.</p>
+<p>Để làm vậy, ta chọn một quy tắc trong ngữ pháp làm điểm đồng bộ. Parser sẽ chỉnh lại trạng thái parse bằng cách nhảy ra khỏi bất kỳ production lồng nhau nào cho đến khi quay lại quy tắc đó. Sau đó, nó đồng bộ luồng token bằng cách bỏ qua các token cho đến khi gặp một token có thể xuất hiện tại điểm đó trong quy tắc.</p>
+<p>Bất kỳ lỗi cú pháp thực sự nào ẩn trong các token bị bỏ qua sẽ không được báo, nhưng điều đó cũng có nghĩa là các lỗi dây chuyền sai lệch do lỗi ban đầu gây ra cũng sẽ không bị <em>báo nhầm</em>, và đây là một sự đánh đổi hợp lý.</p>
+<p>Vị trí truyền thống trong ngữ pháp để đồng bộ là giữa các statement. Ta chưa có chúng ở đây, nên trong chương này sẽ chưa thực hiện đồng bộ, nhưng ta sẽ chuẩn bị sẵn cơ chế cho sau này.</p>
+<h3><a href="#v&agrave;o-panic-mode" id="v&agrave;o-panic-mode"><small>6&#8202;.&#8202;3&#8202;.&#8202;2</small>V&agrave;o panic mode</a></h3>
+<p>Trước khi rẽ sang phần error recovery này, ta đang viết code để parse một biểu thức trong ngoặc. Sau khi parse xong biểu thức, parser tìm dấu <code>)</code> đóng bằng cách gọi <code>consume()</code>. Và đây, cuối cùng, là phương thức đó:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>match</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Token</span> <span class="i">consume</span>(<span class="t">TokenType</span> <span class="i">type</span>, <span class="t">String</span> <span class="i">message</span>) {
+    <span class="k">if</span> (<span class="i">check</span>(<span class="i">type</span>)) <span class="k">return</span> <span class="i">advance</span>();
+
+    <span class="k">throw</span> <span class="i">error</span>(<span class="i">peek</span>(), <span class="i">message</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>match</em>()</div>
+
+<p>Nó giống <code>match()</code> ở chỗ kiểm tra xem token tiếp theo có đúng kiểu mong đợi không. Nếu có, nó tiêu thụ token đó và mọi thứ đều ổn. Nếu là token khác, tức là ta gặp lỗi. Ta báo lỗi bằng cách gọi:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>previous</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">ParseError</span> <span class="i">error</span>(<span class="t">Token</span> <span class="i">token</span>, <span class="t">String</span> <span class="i">message</span>) {
+    <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">token</span>, <span class="i">message</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">ParseError</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>previous</em>()</div>
+
+<p>Đầu tiên, hàm này hiển thị lỗi cho người dùng bằng cách gọi:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+add after <em>report</em>()</div>
+<pre>  <span class="k">static</span> <span class="t">void</span> <span class="i">error</span>(<span class="t">Token</span> <span class="i">token</span>, <span class="t">String</span> <span class="i">message</span>) {
+    <span class="k">if</span> (<span class="i">token</span>.<span class="i">type</span> == <span class="t">TokenType</span>.<span class="i">EOF</span>) {
+      <span class="i">report</span>(<span class="i">token</span>.<span class="i">line</span>, <span class="s">&quot; at end&quot;</span>, <span class="i">message</span>);
+    } <span class="k">else</span> {
+      <span class="i">report</span>(<span class="i">token</span>.<span class="i">line</span>, <span class="s">&quot; at &#39;&quot;</span> + <span class="i">token</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;&quot;</span>, <span class="i">message</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, add after <em>report</em>()</div>
+
+<p>Hàm này báo lỗi tại một token cụ thể. Nó hiển thị vị trí của token và chính token đó. Điều này sẽ hữu ích sau này vì ta dùng token xuyên suốt interpreter để theo dõi vị trí trong code.</p>
+<p>Sau khi báo lỗi, người dùng đã biết sai sót của mình, nhưng <em>parser</em> sẽ làm gì tiếp theo? Quay lại <code>error()</code>, ta tạo và trả về một ParseError, một instance của class mới này:</p>
+<div class="codehilite"><pre class="insert-before">class Parser {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+nest inside class <em>Parser</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="k">static</span> <span class="k">class</span> <span class="t">ParseError</span> <span class="k">extends</span> <span class="t">RuntimeException</span> {}
+
+</pre><pre class="insert-after">  private final List&lt;Token&gt; tokens;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, nest inside class <em>Parser</em></div>
+
+<p>Đây là một sentinel class đơn giản mà ta dùng để “tháo” parser ra. Phương thức <code>error()</code> <em>trả về</em> lỗi thay vì <em>ném</em> nó ra ngoài vì ta muốn để phương thức gọi bên trong parser quyết định có “tháo” hay không. Một số lỗi parse xảy ra ở những nơi parser khó mà rơi vào trạng thái rối, và ta không cần phải <span name="production">synchronize</span>. Ở những chỗ đó, ta chỉ cần báo lỗi và tiếp tục chạy.</p>
+<p>Ví dụ, Lox giới hạn số lượng đối số bạn có thể truyền cho một hàm. Nếu bạn truyền quá nhiều, parser cần báo lỗi đó, nhưng nó hoàn toàn có thể và nên tiếp tục parse các đối số thừa thay vì hoảng loạn và vào panic mode.</p>
+<aside name="production">
+<p>Một cách khác để xử lý các lỗi cú pháp thường gặp là dùng <strong>error productions</strong>. Bạn bổ sung vào ngữ pháp một quy tắc <em>khớp thành công</em> với cú pháp <em>sai</em>. Parser sẽ parse nó một cách an toàn nhưng sau đó báo lỗi thay vì tạo ra syntax tree.</p>
+<p>Ví dụ, một số ngôn ngữ có toán tử unary <code>+</code>, như <code>+123</code>, nhưng Lox thì không. Thay vì để parser bị rối khi gặp một <code>+</code> ở đầu biểu thức, ta có thể mở rộng quy tắc unary để cho phép nó.</p>
+<div class="codehilite"><pre><span class="i">unary</span> → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> | <span class="s">&quot;+&quot;</span> ) <span class="i">unary</span>
+      | <span class="i">primary</span> ;
+</pre></div>
+<p>Điều này cho phép parser tiêu thụ <code>+</code> mà không rơi vào panic mode hoặc để parser ở trạng thái kỳ quặc.</p>
+<p>Error productions hoạt động tốt vì bạn — tác giả parser — biết <em>cách</em> code bị sai và người dùng có khả năng đang cố làm gì. Điều đó nghĩa là bạn có thể đưa ra thông báo hữu ích hơn để giúp người dùng quay lại đúng hướng, như: “Biểu thức unary &lsquo;+&rsquo; không được hỗ trợ.” Các parser trưởng thành thường tích lũy các error production như hà bám, vì chúng giúp người dùng sửa các lỗi thường gặp.</p>
+</aside>
+<p>Trong trường hợp của ta, lỗi cú pháp đủ “xấu” để ta muốn panic và đồng bộ lại. Việc bỏ qua token thì khá dễ, nhưng làm sao để đồng bộ lại trạng thái của chính parser?</p>
+<h3><a href="#đồng-bộ-một-recursive-descent-parser" id="đồng-bộ-một-recursive-descent-parser"><small>6&#8202;.&#8202;3&#8202;.&#8202;3</small>Đồng bộ một recursive descent parser</a></h3>
+<p>Với recursive descent, trạng thái của parser — tức là nó đang ở giữa việc nhận diện quy tắc nào — không được lưu tường minh trong các field. Thay vào đó, ta dùng chính call stack của Java để theo dõi parser đang làm gì. Mỗi quy tắc đang parse dở là một call frame trên stack. Để đặt lại trạng thái đó, ta cần “dọn” các call frame này.</p>
+<p>Cách tự nhiên để làm điều đó trong Java là dùng exception. Khi muốn đồng bộ, ta <em>ném</em> đối tượng ParseError đó. Ở mức cao hơn, trong phương thức của quy tắc ngữ pháp mà ta muốn đồng bộ tới, ta sẽ bắt nó. Vì ta đồng bộ ở ranh giới giữa các statement, nên ta sẽ bắt exception ở đó. Sau khi exception được bắt, parser đã ở trạng thái đúng. Việc còn lại là đồng bộ các token.</p>
+<p>Ta muốn bỏ qua token cho đến khi ngay tại đầu của statement tiếp theo. Ranh giới này khá dễ nhận ra — đó là một trong những lý do chính ta chọn nó. <em>Sau</em> dấu chấm phẩy, ta <span name="semicolon">có lẽ</span> đã kết thúc một statement. Hầu hết các statement bắt đầu bằng một keyword — <code>for</code>, <code>if</code>, <code>return</code>, <code>var</code>, v.v. Khi token <em>tiếp theo</em> là một trong số đó, ta có khả năng sắp bắt đầu một statement.</p>
+<aside name="semicolon">
+<p>Tôi nói “có lẽ” vì ta có thể gặp dấu chấm phẩy phân tách các mệnh đề trong vòng lặp <code>for</code>. Việc đồng bộ của ta không hoàn hảo, nhưng không sao. Ta đã báo lỗi đầu tiên một cách chính xác, nên mọi thứ sau đó chỉ là “cố gắng hết sức”.</p>
+</aside>
+<p>Phương thức này đóng gói logic đó:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>error</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">synchronize</span>() {
+    <span class="i">advance</span>();
+
+    <span class="k">while</span> (!<span class="i">isAtEnd</span>()) {
+      <span class="k">if</span> (<span class="i">previous</span>().<span class="i">type</span> == <span class="i">SEMICOLON</span>) <span class="k">return</span>;
+
+      <span class="k">switch</span> (<span class="i">peek</span>().<span class="i">type</span>) {
+        <span class="k">case</span> <span class="i">CLASS</span>:
+        <span class="k">case</span> <span class="i">FUN</span>:
+        <span class="k">case</span> <span class="i">VAR</span>:
+        <span class="k">case</span> <span class="i">FOR</span>:
+        <span class="k">case</span> <span class="i">IF</span>:
+        <span class="k">case</span> <span class="i">WHILE</span>:
+        <span class="k">case</span> <span class="i">PRINT</span>:
+        <span class="k">case</span> <span class="i">RETURN</span>:
+          <span class="k">return</span>;
+      }
+
+      <span class="i">advance</span>();
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>error</em>()</div>
+
+<p>Nó bỏ qua token cho đến khi nghĩ rằng đã tìm thấy ranh giới statement. Sau khi bắt ParseError, ta sẽ gọi phương thức này và hy vọng sẽ đồng bộ lại. Khi hoạt động tốt, ta đã bỏ qua các token vốn có khả năng gây ra lỗi dây chuyền, và giờ ta có thể parse phần còn lại của file bắt đầu từ statement tiếp theo.</p>
+<p>Tiếc là ta chưa được thấy phương thức này hoạt động, vì ta chưa có statement. Ta sẽ gặp lại nó <a href="statements-and-state.html">trong vài chương nữa</a>. Hiện tại, nếu xảy ra lỗi, ta sẽ panic và “tháo” toàn bộ lên trên cùng và dừng parse. Vì ta chỉ parse được một biểu thức duy nhất, nên cũng không mất mát gì nhiều.</p>
+<h2><a href="#kết-nối-parser" id="kết-nối-parser"><small>6&#8202;.&#8202;4</small>Kết nối Parser</a></h2>
+<p>Giờ ta gần như đã xong phần parse biểu thức. Còn một chỗ nữa cần thêm chút xử lý lỗi. Khi parser đi xuống qua các phương thức parse cho từng quy tắc ngữ pháp, cuối cùng nó sẽ chạm tới <code>primary()</code>. Nếu không có trường hợp nào trong đó khớp, nghĩa là ta đang ở một token không thể bắt đầu một biểu thức. Ta cũng cần xử lý lỗi này.</p>
+<div class="codehilite"><pre class="insert-before">    if (match(LEFT_PAREN)) {
+      Expr expr = expression();
+      consume(RIGHT_PAREN, &quot;Expect ')' after expression.&quot;);
+      return new Expr.Grouping(expr);
+    }
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>primary</em>()</div>
+<pre class="insert">
+
+    <span class="k">throw</span> <span class="i">error</span>(<span class="i">peek</span>(), <span class="s">&quot;Expect expression.&quot;</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>primary</em>()</div>
+
+<p>Với điều đó, phần còn lại trong parser chỉ là định nghĩa một phương thức khởi đầu để bắt đầu quá trình. Phương thức đó, tất nhiên, là <code>parse()</code>.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>Parser</em>()</div>
+<pre>  <span class="t">Expr</span> <span class="i">parse</span>() {
+    <span class="k">try</span> {
+      <span class="k">return</span> <span class="i">expression</span>();
+    } <span class="k">catch</span> (<span class="t">ParseError</span> <span class="i">error</span>) {
+      <span class="k">return</span> <span class="k">null</span>;
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>Parser</em>()</div>
+
+<p>Ta sẽ quay lại phương thức này sau khi thêm statement vào ngôn ngữ. Hiện tại, nó parse một biểu thức duy nhất và trả về nó. Ta cũng có một chút code tạm thời để thoát khỏi panic mode. Việc khôi phục lỗi cú pháp là nhiệm vụ của parser, nên ta không muốn exception ParseError thoát ra ngoài vào phần còn lại của interpreter.</p>
+<p>Khi xảy ra lỗi cú pháp, phương thức này trả về <code>null</code>. Không sao cả. Parser hứa sẽ không crash hoặc treo khi gặp cú pháp không hợp lệ, nhưng nó không hứa sẽ trả về một <em>syntax tree dùng được</em> nếu có lỗi. Ngay khi parser báo lỗi, <code>hadError</code> sẽ được đặt, và các giai đoạn tiếp theo sẽ bị bỏ qua.</p>
+<p>Cuối cùng, ta có thể kết nối parser mới tinh này vào lớp Lox chính và thử nó. Ta vẫn chưa có interpreter, nên hiện tại, ta sẽ parse thành syntax tree và dùng lớp AstPrinter từ <a href="representing-code.html#a-not-very-pretty-printer">chương trước</a> để hiển thị nó.</p>
+<p>Xóa đoạn code cũ in ra các token đã scan và thay bằng đoạn này:</p>
+<div class="codehilite"><pre class="insert-before">    List&lt;Token&gt; tokens = scanner.scanTokens();
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>run</em>()<br>
+replace 5 lines</div>
+<pre class="insert">    <span class="t">Parser</span> <span class="i">parser</span> = <span class="k">new</span> <span class="t">Parser</span>(<span class="i">tokens</span>);
+    <span class="t">Expr</span> <span class="i">expression</span> = <span class="i">parser</span>.<span class="i">parse</span>();
+
+    <span class="c">// Stop if there was a syntax error.</span>
+    <span class="k">if</span> (<span class="i">hadError</span>) <span class="k">return</span>;
+
+    <span class="t">System</span>.<span class="i">out</span>.<span class="i">println</span>(<span class="k">new</span> <span class="t">AstPrinter</span>().<span class="i">print</span>(<span class="i">expression</span>));
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>run</em>(), replace 5 lines</div>
+
+<p>Chúc mừng, bạn đã vượt qua <span name="harder">ngưỡng cửa</span>! Đó thực sự là tất cả những gì cần để viết tay một parser. Ta sẽ mở rộng ngữ pháp trong các chương sau với phép gán, statement và các thứ khác, nhưng không thứ nào phức tạp hơn các toán tử nhị phân mà ta đã xử lý ở đây.</p>
+<aside name="harder">
+<p>Hoàn toàn có thể định nghĩa một ngữ pháp phức tạp hơn của Lox đến mức khó parse bằng recursive descent. Predictive parsing trở nên khó khi bạn cần nhìn trước một số lượng lớn token để xác định mình đang gặp gì.</p>
+<p>Trong thực tế, hầu hết các ngôn ngữ được thiết kế để tránh điều đó. Ngay cả trong những trường hợp không tránh được, bạn thường có thể “lách” qua mà không quá đau đầu. Nếu bạn có thể parse C++ bằng recursive descent — điều mà nhiều compiler C++ làm — thì bạn có thể parse bất cứ thứ gì.</p>
+</aside>
+<p>Chạy interpreter và gõ vài biểu thức. Thấy nó xử lý precedence và associativity chính xác chứ? Không tệ cho chưa tới 200 dòng code.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>6&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Trong C, một block là một dạng statement cho phép bạn gói một loạt statement vào chỗ mà chỉ một statement được mong đợi. <a href="https://en.wikipedia.org/wiki/Comma_operator">Toán tử dấu phẩy</a> là một cú pháp tương tự cho biểu thức. Một chuỗi biểu thức được phân tách bằng dấu phẩy có thể được đặt ở nơi chỉ mong đợi một biểu thức (ngoại trừ bên trong danh sách đối số của lời gọi hàm). Khi chạy, toán tử dấu phẩy sẽ tính toán toán hạng bên trái và bỏ kết quả. Sau đó nó tính toán và trả về toán hạng bên phải.</p>
+<p>Thêm hỗ trợ cho biểu thức dấu phẩy. Cho chúng cùng precedence và associativity như trong C. Viết ngữ pháp, rồi hiện thực code parsing cần thiết.</p>
+</li>
+<li>
+<p>Tương tự, thêm hỗ trợ cho toán tử điều kiện kiểu C hay còn gọi là toán tử “ternary” <code>?:</code>. Mức precedence nào được phép giữa <code>?</code> và <code>:</code>? Toàn bộ toán tử này là left-associative hay right-associative?</p>
+</li>
+<li>
+<p>Thêm error production để xử lý trường hợp mỗi toán tử nhị phân xuất hiện mà không có toán hạng bên trái. Nói cách khác, phát hiện toán tử nhị phân xuất hiện ở đầu một biểu thức. Báo đó là lỗi, nhưng cũng parse và bỏ qua toán hạng bên phải với precedence phù hợp.</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-logic-&-lịch-sử" id="ghi-chú-thiết-kế-logic-&-lịch-sử"><small>6&#8202;.&#8202;6</small>Ghi chú thiết kế: Logic &amp; Lịch sử</a></h2>
+<p>Giả sử ta quyết định thêm các toán tử bitwise <code>&amp;</code> và <code>|</code> vào Lox. Ta nên đặt chúng ở đâu trong bảng precedence? C — và hầu hết các ngôn ngữ đi theo bước chân của C — đặt chúng dưới <code>==</code>. Điều này được xem là một sai lầm vì nó khiến các thao tác phổ biến như kiểm tra cờ (flag) cần phải có ngoặc.</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">flags</span> &amp; <span class="a">FLAG_MASK</span> == <span class="a">SOME_FLAG</span>) { ... } <span class="c">// Sai.</span>
+<span class="k">if</span> ((<span class="i">flags</span> &amp; <span class="a">FLAG_MASK</span>) == <span class="a">SOME_FLAG</span>) { ... } <span class="c">// Đúng.</span>
+</pre></div>
+<p>Ta có nên sửa điều này cho Lox và đặt các toán tử bitwise cao hơn trong bảng precedence so với C không? Có hai chiến lược ta có thể áp dụng.</p>
+<p>Bạn hầu như không bao giờ muốn dùng kết quả của một biểu thức <code>==</code> làm toán hạng cho một toán tử bitwise. Bằng cách làm cho bitwise “ràng buộc chặt” hơn, người dùng sẽ ít phải thêm ngoặc hơn. Vậy nếu ta làm vậy, và người dùng giả định precedence được chọn một cách hợp lý để giảm ngoặc, họ sẽ có khả năng suy ra đúng.</p>
+<p>Sự nhất quán nội tại kiểu này giúp ngôn ngữ dễ học hơn vì có ít trường hợp ngoại lệ và tình huống đặc biệt mà người dùng phải vấp phải rồi sửa. Điều này tốt, vì trước khi người dùng có thể dùng ngôn ngữ của ta, họ phải “nạp” toàn bộ cú pháp và ngữ nghĩa đó vào đầu. Một ngôn ngữ đơn giản, hợp lý hơn <em>có lý</em>.</p>
+<p>Nhưng, với nhiều người dùng, còn có một lối tắt nhanh hơn để đưa ý tưởng của ngôn ngữ ta vào “bộ não ướt” của họ — <em>dùng những khái niệm họ đã biết</em>. Nhiều người mới đến với ngôn ngữ của ta sẽ xuất phát từ một hoặc nhiều ngôn ngữ khác. Nếu ngôn ngữ của ta dùng cùng một số cú pháp hoặc ngữ nghĩa với những ngôn ngữ đó, người dùng sẽ phải học (và <em>bỏ học</em>) ít hơn.</p>
+<p>Điều này đặc biệt hữu ích với cú pháp. Có thể giờ bạn không nhớ rõ, nhưng khi mới học ngôn ngữ lập trình đầu tiên, code có lẽ trông xa lạ và khó tiếp cận. Chỉ qua nỗ lực kiên trì bạn mới học được cách đọc và chấp nhận nó. Nếu bạn thiết kế một cú pháp mới hoàn toàn cho ngôn ngữ của mình, bạn đang buộc người dùng bắt đầu lại quá trình đó từ đầu.</p>
+<p>Tận dụng những gì người dùng đã biết là một trong những công cụ mạnh nhất bạn có thể dùng để giúp ngôn ngữ của mình được chấp nhận. Gần như không thể đánh giá quá cao giá trị của điều này. Nhưng nó cũng đặt bạn trước một vấn đề khó chịu: Điều gì xảy ra khi thứ mà người dùng nào cũng biết lại <em>hơi tệ</em>? Precedence của toán tử bitwise trong C là một sai lầm vô lý. Nhưng đó lại là một sai lầm <em>quen thuộc</em> mà hàng triệu người đã quen và chấp nhận.</p>
+<p>Bạn sẽ trung thành với logic nội tại của ngôn ngữ mình và bỏ qua lịch sử? Bạn sẽ bắt đầu từ con số 0 và các nguyên tắc cơ bản? Hay bạn sẽ dệt ngôn ngữ của mình vào tấm thảm phong phú của lịch sử lập trình và giúp người dùng có lợi thế bằng cách bắt đầu từ thứ họ đã biết?</p>
+<p>Không có câu trả lời hoàn hảo ở đây, chỉ có sự đánh đổi. Bạn và tôi rõ ràng thiên về việc thích những ngôn ngữ mới mẻ, nên xu hướng tự nhiên là “đốt sách sử” và bắt đầu câu chuyện của riêng mình.</p>
+<p>Trong thực tế, thường tốt hơn là tận dụng tối đa những gì người dùng đã biết. Đưa họ đến với ngôn ngữ của bạn là một bước nhảy lớn. Khoảng cách đó càng nhỏ, càng nhiều người sẵn sàng bước qua. Nhưng bạn cũng không thể <em>luôn</em> bám vào lịch sử, nếu không ngôn ngữ của bạn sẽ chẳng có gì mới mẻ và hấp dẫn để cho họ một <em>lý do</em> để nhảy sang.</p>
+</div>
+
+<footer>
+<a href="evaluating-expressions.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Evaluating Expressions&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

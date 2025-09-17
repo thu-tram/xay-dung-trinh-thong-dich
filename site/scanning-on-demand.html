@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Scanning on Demand &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Scanning on Demand<small>16</small></a></h3>
+
+<ul>
+    <li><a href="#khởi-động-interpreter"><small>16.1</small> Khởi động Interpreter</a></li>
+    <li><a href="#từng-token-một"><small>16.2</small> Từng token một</a></li>
+    <li><a href="#ngữ-pháp-từ-vựng-cho-lox"><small>16.3</small> Ngữ pháp từ vựng cho Lox</a></li>
+    <li><a href="#identifier-&amp;-keyword"><small>16.4</small> Identifier &amp; Keyword</a></li>
+    <li><a href="#thử-thách"><small>16.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-virtual-machine.html" title="A Virtual Machine" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="compiling-expressions.html" title="Compiling Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="a-virtual-machine.html" title="A Virtual Machine" class="prev">←</a>
+<a href="compiling-expressions.html" title="Compiling Expressions" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Scanning on Demand<small>16</small></a></h3>
+
+<ul>
+    <li><a href="#khởi-động-interpreter"><small>16.1</small> Khởi động Interpreter</a></li>
+    <li><a href="#từng-token-một"><small>16.2</small> Từng token một</a></li>
+    <li><a href="#ngữ-pháp-từ-vựng-cho-lox"><small>16.3</small> Ngữ pháp từ vựng cho Lox</a></li>
+    <li><a href="#identifier-&amp;-keyword"><small>16.4</small> Identifier &amp; Keyword</a></li>
+    <li><a href="#thử-thách"><small>16.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-virtual-machine.html" title="A Virtual Machine" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="compiling-expressions.html" title="Compiling Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">16</div>
+  <h1>Scanning on Demand</h1>
+
+<blockquote>
+<p>Văn chương là những sắp đặt đầy tính cá nhân theo hàng ngang chỉ với hai mươi sáu ký hiệu ngữ âm, mười chữ số Ả Rập, và khoảng tám dấu câu.  </p>
+<p><cite>Kurt Vonnegut, <em>Like Shaking Hands With God: A Conversation about Writing</em></cite></p>
+</blockquote>
+<p>Trình thông dịch thứ hai của chúng ta, <strong>clox</strong>, có ba giai đoạn — scanner, compiler, và virtual machine. Một cấu trúc dữ liệu nối giữa mỗi cặp giai đoạn. Token chảy từ scanner sang compiler, và các chunk bytecode từ compiler sang VM. Ta đã bắt đầu hiện thực từ gần cuối với <a href="chunks-of-bytecode.html">chunks</a> và <a href="a-virtual-machine.html">VM</a>. Giờ, ta sẽ quay lại từ đầu và xây dựng một scanner tạo ra token. Trong <a href="compiling-expressions.html">chương tiếp theo</a>, ta sẽ nối hai đầu này lại với nhau bằng bytecode compiler.</p><img src="image/scanning-on-demand/pipeline.png" alt="Source code &rarr; scanner &rarr; tokens &rarr; compiler &rarr; bytecode chunk &rarr; VM." />
+<p>Tôi thừa nhận, đây không phải là chương thú vị nhất trong sách. Với hai bản hiện thực của cùng một ngôn ngữ, chắc chắn sẽ có sự trùng lặp. Tôi cũng đã lén thêm vào một vài điểm khác biệt thú vị so với scanner của jlox. Đọc tiếp để xem chúng là gì.</p>
+<h2><a href="#khởi-động-interpreter" id="khởi-động-interpreter"><small>16&#8202;.&#8202;1</small>Khởi động Interpreter</a></h2>
+<p>Giờ ta đang xây dựng phần front-end, ta có thể cho clox chạy như một interpreter thực thụ. Không còn những chunk bytecode viết tay nữa. Đã đến lúc có một REPL và khả năng tải script. Hãy bỏ hầu hết code trong <code>main()</code> và thay bằng:</p>
+<div class="codehilite"><pre class="insert-before">int main(int argc, const char* argv[]) {
+  initVM();
+
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()<br>
+replace 26 lines</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">argc</span> == <span class="n">1</span>) {
+    <span class="i">repl</span>();
+  } <span class="k">else</span> <span class="k">if</span> (<span class="i">argc</span> == <span class="n">2</span>) {
+    <span class="i">runFile</span>(<span class="i">argv</span>[<span class="n">1</span>]);
+  } <span class="k">else</span> {
+    <span class="i">fprintf</span>(<span class="i">stderr</span>, <span class="s">&quot;Usage: clox [path]</span><span class="e">\n</span><span class="s">&quot;</span>);
+    <span class="i">exit</span>(<span class="n">64</span>);
+  }
+
+  <span class="i">freeVM</span>();
+</pre><pre class="insert-after">  return 0;
+}
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>(), replace 26 lines</div>
+
+<p>Nếu bạn chạy executable mà <span name="args">không truyền đối số</span>, bạn sẽ được đưa vào REPL. Một đối số dòng lệnh duy nhất sẽ được hiểu là đường dẫn tới script cần chạy.</p>
+<aside name="args">
+<p>Code kiểm tra một và hai đối số, không phải 0 và 1, vì đối số đầu tiên trong <code>argv</code> luôn là tên của executable đang chạy.</p>
+</aside>
+<p>Ta sẽ cần một vài system header, nên hãy khai báo hết ngay từ đầu.</p>
+<div class="codehilite"><div class="source-file"><em>main.c</em><br>
+add to top of file</div>
+<pre class="insert"><span class="a">#include &lt;stdio.h&gt;</span>
+<span class="a">#include &lt;stdlib.h&gt;</span>
+<span class="a">#include &lt;string.h&gt;</span>
+
+</pre><pre class="insert-after">#include &quot;common.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, add to top of file</div>
+
+<p>Tiếp theo, ta khởi động REPL.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;vm.h&quot;
+</pre><div class="source-file"><em>main.c</em></div>
+<pre class="insert">
+
+<span class="k">static</span> <span class="t">void</span> <span class="i">repl</span>() {
+  <span class="t">char</span> <span class="i">line</span>[<span class="n">1024</span>];
+  <span class="k">for</span> (;;) {
+    <span class="i">printf</span>(<span class="s">&quot;&gt; &quot;</span>);
+
+    <span class="k">if</span> (!<span class="i">fgets</span>(<span class="i">line</span>, <span class="k">sizeof</span>(<span class="i">line</span>), <span class="i">stdin</span>)) {
+      <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+      <span class="k">break</span>;
+    }
+
+    <span class="i">interpret</span>(<span class="i">line</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em></div>
+
+<p>Một REPL “xịn” sẽ xử lý tốt input trải dài nhiều dòng và không giới hạn độ dài dòng một cách cứng nhắc. REPL này thì… hơi đơn sơ, nhưng vẫn đủ cho mục đích của ta.</p>
+<p>Phần việc chính nằm trong <code>interpret()</code>. Ta sẽ nói tới nó sớm thôi, nhưng trước hết hãy xử lý việc tải script.</p>
+<div class="codehilite"><div class="source-file"><em>main.c</em><br>
+add after <em>repl</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">runFile</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">path</span>) {
+  <span class="t">char</span>* <span class="i">source</span> = <span class="i">readFile</span>(<span class="i">path</span>);
+  <span class="t">InterpretResult</span> <span class="i">result</span> = <span class="i">interpret</span>(<span class="i">source</span>);
+  <span class="i">free</span>(<span class="i">source</span>);<span name="owner"> </span>
+
+  <span class="k">if</span> (<span class="i">result</span> == <span class="a">INTERPRET_COMPILE_ERROR</span>) <span class="i">exit</span>(<span class="n">65</span>);
+  <span class="k">if</span> (<span class="i">result</span> == <span class="a">INTERPRET_RUNTIME_ERROR</span>) <span class="i">exit</span>(<span class="n">70</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, add after <em>repl</em>()</div>
+
+<p>Ta đọc file và execute chuỗi mã nguồn Lox thu được. Sau đó, dựa trên kết quả, ta đặt exit code cho phù hợp — vì ta là những người làm công cụ kỹ tính và quan tâm tới cả những chi tiết nhỏ như vậy.</p>
+<p>Ta cũng cần giải phóng chuỗi mã nguồn vì <code>readFile()</code> cấp phát động và chuyển quyền sở hữu cho hàm gọi nó. Hàm đó trông như sau:</p>
+<aside name="owner">
+<p>C không chỉ yêu cầu ta quản lý bộ nhớ một cách tường minh, mà còn <em>trong đầu</em>. Lập trình viên phải tự nhớ các quy tắc sở hữu và tự tay hiện thực chúng xuyên suốt chương trình. Java thì làm điều đó cho ta. C++ cho ta công cụ để mã hóa chính sách này trực tiếp để compiler kiểm tra giúp.</p>
+<p>Tôi thích sự đơn giản của C, nhưng ta phải trả giá — ngôn ngữ này đòi hỏi ta phải cẩn trọng hơn.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>main.c</em><br>
+add after <em>repl</em>()</div>
+<pre><span class="k">static</span> <span class="t">char</span>* <span class="i">readFile</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">path</span>) {
+  <span class="a">FILE</span>* <span class="i">file</span> = <span class="i">fopen</span>(<span class="i">path</span>, <span class="s">&quot;rb&quot;</span>);
+
+  <span class="i">fseek</span>(<span class="i">file</span>, <span class="n">0L</span>, <span class="a">SEEK_END</span>);
+  <span class="t">size_t</span> <span class="i">fileSize</span> = <span class="i">ftell</span>(<span class="i">file</span>);
+  <span class="i">rewind</span>(<span class="i">file</span>);
+
+  <span class="t">char</span>* <span class="i">buffer</span> = (<span class="t">char</span>*)<span class="i">malloc</span>(<span class="i">fileSize</span> + <span class="n">1</span>);
+  <span class="t">size_t</span> <span class="i">bytesRead</span> = <span class="i">fread</span>(<span class="i">buffer</span>, <span class="k">sizeof</span>(<span class="t">char</span>), <span class="i">fileSize</span>, <span class="i">file</span>);
+  <span class="i">buffer</span>[<span class="i">bytesRead</span>] = <span class="s">&#39;\0&#39;</span>;
+
+  <span class="i">fclose</span>(<span class="i">file</span>);
+  <span class="k">return</span> <span class="i">buffer</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, add after <em>repl</em>()</div>
+
+<p>Giống nhiều đoạn code C khác, nó tốn nhiều công sức hơn bạn tưởng, nhất là với một ngôn ngữ được thiết kế riêng cho hệ điều hành. Phần khó là ta muốn cấp phát một chuỗi đủ lớn để đọc toàn bộ file, nhưng lại không biết kích thước file cho tới khi đọc nó.</p>
+<p>Đoạn code này dùng mẹo kinh điển để giải quyết. Ta mở file, nhưng trước khi đọc, ta seek tới cuối file bằng <code>fseek()</code>. Sau đó gọi <code>ftell()</code> để biết ta đang cách đầu file bao nhiêu byte. Vì ta đã seek tới cuối, con số đó chính là kích thước file. Ta quay lại đầu file, cấp phát một chuỗi với kích thước <span name="one">đó</span>, và đọc toàn bộ file trong một lần.</p>
+<aside name="one">
+<p>À, kích thước đó <em>cộng thêm một</em>. Luôn phải nhớ chừa chỗ cho ký tự null.</p>
+</aside>
+<p>Xong rồi đúng không? Chưa hẳn. Những lời gọi hàm này, như hầu hết hàm trong thư viện chuẩn C, có thể thất bại. Nếu đây là Java, lỗi sẽ được ném ra dưới dạng exception và tự động unwind stack, nên ta <em>thực ra</em> không cần xử lý. Trong C, nếu không kiểm tra, chúng sẽ bị bỏ qua trong im lặng.</p>
+<p>Đây không hẳn là cuốn sách dạy lập trình C tốt, nhưng tôi không muốn cổ vũ thói quen xấu, nên hãy xử lý lỗi cho đàng hoàng. Nó tốt cho ta, như ăn rau hay dùng chỉ nha khoa vậy.</p>
+<p>May mắn là, nếu có lỗi, ta cũng không cần làm gì quá phức tạp. Nếu không đọc được script của người dùng, tất cả những gì ta có thể làm là báo cho họ và thoát interpreter một cách gọn gàng. Trước hết, có thể ta sẽ không mở được file.</p>
+<div class="codehilite"><pre class="insert-before">  FILE* file = fopen(path, &quot;rb&quot;);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>readFile</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">file</span> == <span class="a">NULL</span>) {
+    <span class="i">fprintf</span>(<span class="i">stderr</span>, <span class="s">&quot;Could not open file </span><span class="e">\&quot;</span><span class="s">%s</span><span class="e">\&quot;</span><span class="s">.</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">path</span>);
+    <span class="i">exit</span>(<span class="n">74</span>);
+  }
+</pre><pre class="insert-after">
+
+  fseek(file, 0L, SEEK_END);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>readFile</em>()</div>
+
+<p>Điều này xảy ra nếu file không tồn tại hoặc người dùng không có quyền truy cập. Khá phổ biến — mọi người gõ sai đường dẫn suốt.</p>
+<p>Lỗi này thì hiếm hơn:</p>
+<div class="codehilite"><pre class="insert-before">  char* buffer = (char*)malloc(fileSize + 1);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>readFile</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">buffer</span> == <span class="a">NULL</span>) {
+    <span class="i">fprintf</span>(<span class="i">stderr</span>, <span class="s">&quot;Not enough memory to read </span><span class="e">\&quot;</span><span class="s">%s</span><span class="e">\&quot;</span><span class="s">.</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">path</span>);
+    <span class="i">exit</span>(<span class="n">74</span>);
+  }
+
+</pre><pre class="insert-after">  size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>readFile</em>()</div>
+
+<p>Nếu ta thậm chí không thể cấp phát đủ bộ nhớ để đọc script Lox, thì có lẽ người dùng còn nhiều vấn đề lớn hơn để lo, nhưng ta vẫn nên báo cho họ biết.</p>
+<p>Cuối cùng, việc đọc chính nó cũng có thể thất bại.</p>
+<div class="codehilite"><pre class="insert-before">  size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>readFile</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">bytesRead</span> &lt; <span class="i">fileSize</span>) {
+    <span class="i">fprintf</span>(<span class="i">stderr</span>, <span class="s">&quot;Could not read file </span><span class="e">\&quot;</span><span class="s">%s</span><span class="e">\&quot;</span><span class="s">.</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">path</span>);
+    <span class="i">exit</span>(<span class="n">74</span>);
+  }
+
+</pre><pre class="insert-after">  buffer[bytesRead] = '\0';
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>readFile</em>()</div>
+
+<p>Điều này cũng hiếm. Thực ra, các lời gọi <span name="printf"><code>fseek()</code></span>, <code>ftell()</code>, và <code>rewind()</code> về lý thuyết cũng có thể thất bại, nhưng ta đừng sa đà quá sâu vào chi tiết nhé.</p>
+<aside name="printf">
+<p>Ngay cả <code>printf()</code> “kinh điển” cũng có thể thất bại. Ừ đấy. Bạn đã bao giờ xử lý <em>lỗi đó</em> chưa?</p>
+</aside>
+<h3><a href="#mở-đường-ống-biên-dịch" id="mở-đường-ống-biên-dịch"><small>16&#8202;.&#8202;1&#8202;.&#8202;1</small>Mở đường ống biên dịch</a></h3>
+<p>Giờ ta đã có một chuỗi mã nguồn Lox, vậy là sẵn sàng thiết lập một pipeline để scan, compile và execute nó. Mọi thứ được điều khiển bởi <code>interpret()</code>. Hiện tại, hàm này đang chạy chunk test viết tay cũ của ta. Hãy thay đổi nó thành một phiên bản gần hơn với hình hài cuối cùng.</p>
+<div class="codehilite"><pre class="insert-before">void freeVM();
+</pre><div class="source-file"><em>vm.h</em><br>
+function <em>interpret</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="t">InterpretResult</span> <span class="i">interpret</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>);
+</pre><pre class="insert-after">void push(Value value);
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, function <em>interpret</em>(), replace 1 line</div>
+
+<p>Trước đây ta truyền vào một <code>Chunk</code>, giờ ta truyền vào chuỗi mã nguồn. Đây là phần hiện thực mới:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+function <em>interpret</em>()<br>
+replace 4 lines</div>
+<pre class="insert"><span class="t">InterpretResult</span> <span class="i">interpret</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>) {
+  <span class="i">compile</span>(<span class="i">source</span>);
+  <span class="k">return</span> <span class="a">INTERPRET_OK</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, function <em>interpret</em>(), replace 4 lines</div>
+
+<p>Trong chương này, ta chưa xây dựng <em>compiler</em> thực sự, nhưng có thể bắt đầu phác thảo cấu trúc của nó. Nó nằm trong một module mới.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>vm.c</em></div>
+<pre class="insert"><span class="a">#include &quot;compiler.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;debug.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em></div>
+
+<p>Hiện tại, hàm duy nhất trong đó được khai báo như sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_compiler_h</span>
+<span class="a">#define clox_compiler_h</span>
+
+<span class="t">void</span> <span class="i">compile</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>);
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>compiler.h</em>, create new file</div>
+
+<p>signature hàm này sẽ thay đổi, nhưng tạm thời như vậy là đủ để bắt đầu.</p>
+<p>Giai đoạn đầu tiên của biên dịch là scanning — thứ ta đang làm trong chương này — nên hiện tại compiler chỉ mới thiết lập phần đó.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdio.h&gt;</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+<span class="a">#include &quot;compiler.h&quot;</span>
+<span class="a">#include &quot;scanner.h&quot;</span>
+
+<span class="t">void</span> <span class="i">compile</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>) {
+  <span class="i">initScanner</span>(<span class="i">source</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, create new file</div>
+
+<p>Tất nhiên, phần này sẽ được mở rộng trong các chương sau.</p>
+<h3><a href="#scanner-bắt-đầu-quét" id="scanner-bắt-đầu-quét"><small>16&#8202;.&#8202;1&#8202;.&#8202;2</small>Scanner bắt đầu quét</a></h3>
+<p>Vẫn còn một chút “giàn giáo” cần dựng trước khi ta có thể viết code hữu ích. Đầu tiên là một header mới:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_scanner_h</span>
+<span class="a">#define clox_scanner_h</span>
+
+<span class="t">void</span> <span class="i">initScanner</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>);
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>scanner.h</em>, create new file</div>
+
+<p>Và phần hiện thực tương ứng:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdio.h&gt;</span>
+<span class="a">#include &lt;string.h&gt;</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+<span class="a">#include &quot;scanner.h&quot;</span>
+
+<span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="k">const</span> <span class="t">char</span>* <span class="i">start</span>;
+  <span class="k">const</span> <span class="t">char</span>* <span class="i">current</span>;
+  <span class="t">int</span> <span class="i">line</span>;
+} <span class="t">Scanner</span>;
+
+<span class="t">Scanner</span> <span class="i">scanner</span>;
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, create new file</div>
+
+<p>Khi scanner xử lý mã nguồn của người dùng, nó theo dõi đã đi được bao xa. Giống như với VM, ta gói trạng thái đó trong một struct và tạo một biến module cấp cao nhất thuộc kiểu đó để không phải truyền nó qua lại giữa các hàm.</p>
+<p>Số lượng trường dữ liệu ít đến bất ngờ. Con trỏ <code>start</code> đánh dấu đầu của lexeme hiện tại đang được quét, và <code>current</code> trỏ tới ký tự hiện tại đang được xem xét.</p>
+<p><span name="fields"></span></p><img src="image/scanning-on-demand/fields.png" alt="Các trường start và current trỏ vào 'print bacon;'. Start trỏ vào 'b' và current trỏ vào 'o'." />
+<aside name="fields">
+<p>Ở đây, ta đang ở giữa quá trình quét identifier <code>bacon</code>. Ký tự hiện tại là <code>o</code> và ký tự vừa tiêu thụ trước đó là <code>c</code>.</p>
+</aside>
+<p>Ta có một trường <code>line</code> để theo dõi lexeme hiện tại nằm ở dòng nào nhằm phục vụ báo lỗi. Hết! Ta thậm chí không giữ con trỏ tới đầu chuỗi mã nguồn. Scanner chỉ đi qua code một lần và xong việc.</p>
+<p>Vì có trạng thái, ta cần khởi tạo nó.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after variable <em>scanner</em></div>
+<pre><span class="t">void</span> <span class="i">initScanner</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">source</span>) {
+  <span class="i">scanner</span>.<span class="i">start</span> = <span class="i">source</span>;
+  <span class="i">scanner</span>.<span class="i">current</span> = <span class="i">source</span>;
+  <span class="i">scanner</span>.<span class="i">line</span> = <span class="n">1</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after variable <em>scanner</em></div>
+
+<p>Ta bắt đầu ở ký tự đầu tiên của dòng đầu tiên, như một vận động viên đang khom người ở vạch xuất phát.</p>
+<h2><a href="#từng-token-một" id="từng-token-một"><small>16&#8202;.&#8202;2</small>Từng token một</a></h2>
+<p>Trong jlox, khi “súng lệnh” vang lên, scanner lao đi và quét toàn bộ chương trình, trả về một danh sách token. Điều này sẽ là một thử thách trong clox. Ta sẽ cần một kiểu mảng hoặc danh sách có thể mở rộng để lưu token. Ta sẽ phải quản lý việc cấp phát và giải phóng token, cũng như chính bộ sưu tập đó. Đó là khá nhiều code và nhiều vòng cấp phát/giải phóng bộ nhớ.</p>
+<p>Tại bất kỳ thời điểm nào, compiler chỉ cần một hoặc hai token — nhớ rằng ngữ pháp của ta chỉ yêu cầu lookahead một token — nên ta không cần giữ <em>tất cả</em> chúng cùng lúc. Giải pháp đơn giản nhất là không quét token cho tới khi compiler cần. Khi scanner cung cấp một token, nó trả về token đó theo giá trị. Không cần cấp phát động gì cả — chỉ cần truyền token qua lại trên C stack.</p>
+<p>Tiếc là ta chưa có compiler để yêu cầu scanner cung cấp token, nên scanner sẽ chỉ ngồi đó. Để “đá” nó chạy, ta sẽ viết một đoạn code tạm thời để điều khiển nó.</p>
+<div class="codehilite"><pre class="insert-before">  initScanner(source);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>compile</em>()</div>
+<pre class="insert">  <span class="t">int</span> <span class="i">line</span> = -<span class="n">1</span>;
+  <span class="k">for</span> (;;) {
+    <span class="t">Token</span> <span class="i">token</span> = <span class="i">scanToken</span>();
+    <span class="k">if</span> (<span class="i">token</span>.<span class="i">line</span> != <span class="i">line</span>) {
+      <span class="i">printf</span>(<span class="s">&quot;%4d &quot;</span>, <span class="i">token</span>.<span class="i">line</span>);
+      <span class="i">line</span> = <span class="i">token</span>.<span class="i">line</span>;
+    } <span class="k">else</span> {
+      <span class="i">printf</span>(<span class="s">&quot;   | &quot;</span>);
+    }
+    <span class="i">printf</span>(<span class="s">&quot;%2d &#39;%.*s&#39;</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">token</span>.<span class="i">type</span>, <span class="i">token</span>.<span class="i">length</span>, <span class="i">token</span>.<span class="i">start</span>);<span name="format"> </span>
+
+    <span class="k">if</span> (<span class="i">token</span>.<span class="i">type</span> == <span class="a">TOKEN_EOF</span>) <span class="k">break</span>;
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>compile</em>()</div>
+
+<aside name="format">
+<p>Cái <code>%.*s</code> trong chuỗi format là một tính năng hay ho. Thông thường, bạn đặt độ chính xác đầu ra — số ký tự cần hiển thị — bằng cách đặt một con số trong chuỗi format. Dùng <code>*</code> thay thế cho phép bạn truyền độ chính xác như một tham số. Vậy nên lời gọi <code>printf()</code> đó sẽ in ra <code>token.length</code> ký tự đầu tiên của chuỗi tại <code>token.start</code>. Ta cần giới hạn độ dài như vậy vì lexeme trỏ vào chuỗi nguồn gốc và không có ký tự kết thúc ở cuối.</p>
+</aside>
+<p>Vòng lặp này chạy vô hạn. Mỗi vòng, nó quét một token và in ra. Khi gặp token đặc biệt “end of file” hoặc lỗi, nó dừng. Ví dụ, nếu ta chạy interpreter với chương trình:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="n">1</span> + <span class="n">2</span>;
+</pre></div>
+<p>Nó sẽ in ra:</p>
+<div class="codehilite"><pre>   1 31 'print'
+   | 21 '1'
+   |  7 '+'
+   | 21 '2'
+   |  8 ';'
+   2 39 ''
+</pre></div>
+<p>Cột đầu tiên là số dòng, cột thứ hai là giá trị số của <span name="token">loại</span> token, và cuối cùng là lexeme. Lexeme rỗng cuối cùng ở dòng 2 là token EOF.</p>
+<aside name="token">
+<p>Ừ thì, chỉ số thô của loại token không thân thiện lắm với con người, nhưng đó là tất cả những gì C cho ta.</p>
+</aside>
+<p>Mục tiêu cho phần còn lại của chương là làm cho đoạn code này chạy được bằng cách hiện thực hàm then chốt này:</p>
+<div class="codehilite"><pre class="insert-before">void initScanner(const char* source);
+</pre><div class="source-file"><em>scanner.h</em><br>
+add after <em>initScanner</em>()</div>
+<pre class="insert"><span class="t">Token</span> <span class="i">scanToken</span>();
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>scanner.h</em>, add after <em>initScanner</em>()</div>
+
+<p>Mỗi lần gọi sẽ quét và trả về token tiếp theo trong mã nguồn. Một token trông như thế này:</p>
+<div class="codehilite"><pre class="insert-before">#define clox_scanner_h
+</pre><div class="source-file"><em>scanner.h</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">TokenType</span> <span class="i">type</span>;
+  <span class="k">const</span> <span class="t">char</span>* <span class="i">start</span>;
+  <span class="t">int</span> <span class="i">length</span>;
+  <span class="t">int</span> <span class="i">line</span>;
+} <span class="t">Token</span>;
+</pre><pre class="insert-after">
+
+void initScanner(const char* source);
+</pre></div>
+<div class="source-file-narrow"><em>scanner.h</em></div>
+
+<p>Nó khá giống với class <code>Token</code> của jlox. Ta có một enum xác định loại token — số, identifier, toán tử <code>+</code>, v.v. Enum này gần như giống hệt với jlox, nên hãy viết luôn toàn bộ.</p>
+<div class="codehilite"><pre class="insert-before">#ifndef clox_scanner_h
+#define clox_scanner_h
+</pre><div class="source-file"><em>scanner.h</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">enum</span> {
+  <span class="c">// Single-character tokens.</span>
+  <span class="a">TOKEN_LEFT_PAREN</span>, <span class="a">TOKEN_RIGHT_PAREN</span>,
+  <span class="a">TOKEN_LEFT_BRACE</span>, <span class="a">TOKEN_RIGHT_BRACE</span>,
+  <span class="a">TOKEN_COMMA</span>, <span class="a">TOKEN_DOT</span>, <span class="a">TOKEN_MINUS</span>, <span class="a">TOKEN_PLUS</span>,
+  <span class="a">TOKEN_SEMICOLON</span>, <span class="a">TOKEN_SLASH</span>, <span class="a">TOKEN_STAR</span>,
+  <span class="c">// One or two character tokens.</span>
+  <span class="a">TOKEN_BANG</span>, <span class="a">TOKEN_BANG_EQUAL</span>,
+  <span class="a">TOKEN_EQUAL</span>, <span class="a">TOKEN_EQUAL_EQUAL</span>,
+  <span class="a">TOKEN_GREATER</span>, <span class="a">TOKEN_GREATER_EQUAL</span>,
+  <span class="a">TOKEN_LESS</span>, <span class="a">TOKEN_LESS_EQUAL</span>,
+  <span class="c">// Literals.</span>
+  <span class="a">TOKEN_IDENTIFIER</span>, <span class="a">TOKEN_STRING</span>, <span class="a">TOKEN_NUMBER</span>,
+  <span class="c">// Keywords.</span>
+  <span class="a">TOKEN_AND</span>, <span class="a">TOKEN_CLASS</span>, <span class="a">TOKEN_ELSE</span>, <span class="a">TOKEN_FALSE</span>,
+  <span class="a">TOKEN_FOR</span>, <span class="a">TOKEN_FUN</span>, <span class="a">TOKEN_IF</span>, <span class="a">TOKEN_NIL</span>, <span class="a">TOKEN_OR</span>,
+  <span class="a">TOKEN_PRINT</span>, <span class="a">TOKEN_RETURN</span>, <span class="a">TOKEN_SUPER</span>, <span class="a">TOKEN_THIS</span>,
+  <span class="a">TOKEN_TRUE</span>, <span class="a">TOKEN_VAR</span>, <span class="a">TOKEN_WHILE</span>,
+
+  <span class="a">TOKEN_ERROR</span>, <span class="a">TOKEN_EOF</span>
+} <span class="t">TokenType</span>;
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>scanner.h</em></div>
+
+<p>Ngoài việc thêm tiền tố <code>TOKEN_</code> vào tất cả tên (vì C đưa tên enum vào namespace cấp cao nhất) thì điểm khác biệt duy nhất là loại <code>TOKEN_ERROR</code> bổ sung. Nó để làm gì?</p>
+<p>Chỉ có vài lỗi được phát hiện trong quá trình scanning: chuỗi không kết thúc và ký tự không nhận dạng được. Trong jlox, scanner tự báo các lỗi đó. Trong clox, scanner tạo ra một token “lỗi” giả cho lỗi đó và chuyển nó cho compiler. Bằng cách này, compiler biết đã có lỗi và có thể khởi động quá trình khôi phục lỗi trước khi báo cáo.</p>
+<p>Điểm mới trong kiểu <code>Token</code> của clox là cách nó biểu diễn lexeme. Trong jlox, mỗi <code>Token</code> lưu lexeme như một chuỗi Java riêng biệt. Nếu làm vậy trong clox, ta sẽ phải tìm cách quản lý bộ nhớ cho các chuỗi đó. Điều này đặc biệt khó vì ta truyền token theo giá trị — nhiều token có thể trỏ tới cùng một chuỗi lexeme. Quy tắc sở hữu sẽ trở nên rắc rối.</p>
+<p>Thay vào đó, ta dùng chính chuỗi mã nguồn gốc làm nơi lưu ký tự. Ta biểu diễn một lexeme bằng con trỏ tới ký tự đầu tiên và số lượng ký tự nó chứa. Điều này có nghĩa là ta không cần lo quản lý bộ nhớ cho lexeme và có thể thoải mái sao chép token. Miễn là chuỗi mã nguồn chính <span name="outlive">tồn tại lâu hơn</span> tất cả token, mọi thứ sẽ ổn.</p>
+<aside name="outlive">
+<p>Tôi không nói đùa đâu. Ta thực sự cần nghĩ và đảm bảo rằng chuỗi nguồn, được tạo ra ở module “main” xa tít kia, có vòng đời đủ dài. Đó là lý do <code>runFile()</code> không giải phóng chuỗi cho tới khi <code>interpret()</code> execute xong code và trả về.</p>
+</aside>
+<h3><a href="#quét-token" id="quét-token"><small>16&#8202;.&#8202;2&#8202;.&#8202;1</small>Quét token</a></h3>
+<p>Giờ ta đã sẵn sàng để quét một vài token. Ta sẽ tiến dần tới phần hiện thực hoàn chỉnh, bắt đầu với đoạn này:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>initScanner</em>()</div>
+<pre><span class="t">Token</span> <span class="i">scanToken</span>() {
+  <span class="i">scanner</span>.<span class="i">start</span> = <span class="i">scanner</span>.<span class="i">current</span>;
+
+  <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_EOF</span>);
+
+  <span class="k">return</span> <span class="i">errorToken</span>(<span class="s">&quot;Unexpected character.&quot;</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>initScanner</em>()</div>
+
+<p>Vì mỗi lần gọi hàm này sẽ quét trọn một token, nên khi vào hàm, ta biết mình đang ở đầu của một token mới. Do đó, ta đặt <code>scanner.start</code> trỏ tới ký tự hiện tại để ghi nhớ vị trí bắt đầu của lexeme sắp quét.</p>
+<p>Sau đó, ta kiểm tra xem đã tới cuối mã nguồn chưa. Nếu rồi, ta trả về token EOF và dừng lại. Đây là một giá trị “canh gác” (sentinel) báo cho compiler biết rằng không cần yêu cầu thêm token nữa.</p>
+<p>Nếu chưa tới cuối, ta sẽ làm vài… thứ… để quét token tiếp theo. Nhưng ta chưa viết đoạn code đó, sẽ làm ngay thôi. Nếu đoạn code đó không quét và trả về token thành công, thì khi tới cuối hàm, điều đó có nghĩa là ta đang ở một ký tự mà scanner không nhận dạng được, nên ta trả về một token lỗi cho nó.</p>
+<p>Hàm này dựa vào một vài helper, hầu hết đều quen thuộc từ jlox. Đầu tiên là:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>initScanner</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">isAtEnd</span>() {
+  <span class="k">return</span> *<span class="i">scanner</span>.<span class="i">current</span> == <span class="s">&#39;\0&#39;</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>initScanner</em>()</div>
+
+<p>Ta yêu cầu chuỗi nguồn phải là một chuỗi C null-terminated hợp lệ. Nếu ký tự hiện tại là byte null, tức là ta đã tới cuối.</p>
+<p>Để tạo một token, ta có hàm “giống constructor” này:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>isAtEnd</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">makeToken</span>(<span class="t">TokenType</span> <span class="i">type</span>) {
+  <span class="t">Token</span> <span class="i">token</span>;
+  <span class="i">token</span>.<span class="i">type</span> = <span class="i">type</span>;
+  <span class="i">token</span>.<span class="i">start</span> = <span class="i">scanner</span>.<span class="i">start</span>;
+  <span class="i">token</span>.<span class="i">length</span> = (<span class="t">int</span>)(<span class="i">scanner</span>.<span class="i">current</span> - <span class="i">scanner</span>.<span class="i">start</span>);
+  <span class="i">token</span>.<span class="i">line</span> = <span class="i">scanner</span>.<span class="i">line</span>;
+  <span class="k">return</span> <span class="i">token</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>isAtEnd</em>()</div>
+
+<p>Hàm này dùng con trỏ <code>start</code> và <code>current</code> của scanner để lấy lexeme của token. Nó đặt thêm một vài trường hiển nhiên khác rồi trả về token. Nó có một “chị em” để trả về token lỗi.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>makeToken</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">errorToken</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">message</span>) {
+  <span class="t">Token</span> <span class="i">token</span>;
+  <span class="i">token</span>.<span class="i">type</span> = <span class="a">TOKEN_ERROR</span>;
+  <span class="i">token</span>.<span class="i">start</span> = <span class="i">message</span>;
+  <span class="i">token</span>.<span class="i">length</span> = (<span class="t">int</span>)<span class="i">strlen</span>(<span class="i">message</span>);
+  <span class="i">token</span>.<span class="i">line</span> = <span class="i">scanner</span>.<span class="i">line</span>;
+  <span class="k">return</span> <span class="i">token</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>makeToken</em>()</div>
+
+<p><span name="axolotl"></span></p>
+<aside name="axolotl">
+<p>Phần này của chương hơi khô khan, nên đây là một bức tranh về một con kỳ giông Mexico (axolotl).</p><img src="image/scanning-on-demand/axolotl.png" alt="A drawing of an axolotl." />
+</aside>
+<p>Điểm khác biệt duy nhất là “lexeme” trỏ tới chuỗi thông báo lỗi thay vì trỏ vào mã nguồn của người dùng. Một lần nữa, ta cần đảm bảo thông báo lỗi tồn tại đủ lâu để compiler đọc được. Trên thực tế, ta chỉ gọi hàm này với các literal chuỗi C. Chúng là hằng số và tồn tại vĩnh viễn, nên không sao.</p>
+<p>Những gì ta có hiện giờ về cơ bản là một scanner hoạt động cho một ngôn ngữ với ngữ pháp từ vựng rỗng. Vì ngữ pháp không có production nào, mọi ký tự đều là lỗi. Đó không hẳn là một ngôn ngữ thú vị để lập trình, nên hãy bổ sung các quy tắc.</p>
+<h2><a href="#ngữ-pháp-từ-vựng-cho-lox" id="ngữ-pháp-từ-vựng-cho-lox"><small>16&#8202;.&#8202;3</small>Ngữ pháp từ vựng cho Lox</a></h2>
+<p>Những token đơn giản nhất chỉ gồm một ký tự. Ta nhận dạng chúng như sau:</p>
+<div class="codehilite"><pre class="insert-before">  if (isAtEnd()) return makeToken(TOKEN_EOF);
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">
+
+  <span class="t">char</span> <span class="i">c</span> = <span class="i">advance</span>();
+
+  <span class="k">switch</span> (<span class="i">c</span>) {
+    <span class="k">case</span> <span class="s">&#39;(&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_LEFT_PAREN</span>);
+    <span class="k">case</span> <span class="s">&#39;)&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_RIGHT_PAREN</span>);
+    <span class="k">case</span> <span class="s">&#39;{&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_LEFT_BRACE</span>);
+    <span class="k">case</span> <span class="s">&#39;}&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_RIGHT_BRACE</span>);
+    <span class="k">case</span> <span class="s">&#39;;&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_SEMICOLON</span>);
+    <span class="k">case</span> <span class="s">&#39;,&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_COMMA</span>);
+    <span class="k">case</span> <span class="s">&#39;.&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_DOT</span>);
+    <span class="k">case</span> <span class="s">&#39;-&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_MINUS</span>);
+    <span class="k">case</span> <span class="s">&#39;+&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_PLUS</span>);
+    <span class="k">case</span> <span class="s">&#39;/&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_SLASH</span>);
+    <span class="k">case</span> <span class="s">&#39;*&#39;</span>: <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_STAR</span>);
+  }
+</pre><pre class="insert-after">
+
+  return errorToken(&quot;Unexpected character.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Ta đọc ký tự tiếp theo từ mã nguồn, rồi dùng một switch đơn giản để xem nó có khớp với lexeme một ký tự nào của Lox không. Để đọc ký tự tiếp theo, ta dùng một helper mới, hàm này tiêu thụ ký tự hiện tại và trả về nó.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>isAtEnd</em>()</div>
+<pre><span class="k">static</span> <span class="t">char</span> <span class="i">advance</span>() {
+  <span class="i">scanner</span>.<span class="i">current</span>++;
+  <span class="k">return</span> <span class="i">scanner</span>.<span class="i">current</span>[-<span class="n">1</span>];
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>isAtEnd</em>()</div>
+
+<p>Tiếp theo là các token dấu câu hai ký tự như <code>!=</code> và <code>&gt;=</code>. Mỗi loại này cũng có một token một ký tự tương ứng. Điều đó có nghĩa là khi gặp một ký tự như <code>!</code>, ta chưa biết đó là token <code>!</code> hay <code>!=</code> cho tới khi nhìn thêm ký tự tiếp theo. Ta xử lý như sau:</p>
+<div class="codehilite"><pre class="insert-before">    case '*': return makeToken(TOKEN_STAR);
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="s">&#39;!&#39;</span>:
+      <span class="k">return</span> <span class="i">makeToken</span>(
+          <span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="a">TOKEN_BANG_EQUAL</span> : <span class="a">TOKEN_BANG</span>);
+    <span class="k">case</span> <span class="s">&#39;=&#39;</span>:
+      <span class="k">return</span> <span class="i">makeToken</span>(
+          <span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="a">TOKEN_EQUAL_EQUAL</span> : <span class="a">TOKEN_EQUAL</span>);
+    <span class="k">case</span> <span class="s">&#39;&lt;&#39;</span>:
+      <span class="k">return</span> <span class="i">makeToken</span>(
+          <span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="a">TOKEN_LESS_EQUAL</span> : <span class="a">TOKEN_LESS</span>);
+    <span class="k">case</span> <span class="s">&#39;&gt;&#39;</span>:
+      <span class="k">return</span> <span class="i">makeToken</span>(
+          <span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="a">TOKEN_GREATER_EQUAL</span> : <span class="a">TOKEN_GREATER</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Sau khi tiêu thụ ký tự đầu tiên, ta tìm dấu <code>=</code>. Nếu có, ta tiêu thụ nó và trả về token hai ký tự tương ứng. Nếu không, ta để nguyên ký tự hiện tại (để nó có thể là một phần của token <em>tiếp theo</em>) và trả về token một ký tự phù hợp.</p>
+<p>Logic để tiêu thụ có điều kiện ký tự thứ hai nằm ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>advance</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">match</span>(<span class="t">char</span> <span class="i">expected</span>) {
+  <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="k">false</span>;
+  <span class="k">if</span> (*<span class="i">scanner</span>.<span class="i">current</span> != <span class="i">expected</span>) <span class="k">return</span> <span class="k">false</span>;
+  <span class="i">scanner</span>.<span class="i">current</span>++;
+  <span class="k">return</span> <span class="k">true</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>advance</em>()</div>
+
+<p>Nếu ký tự hiện tại là ký tự mong muốn, ta advance và trả về <code>true</code>. Ngược lại, trả về <code>false</code> để báo là không khớp.</p>
+<p>Giờ scanner của ta đã hỗ trợ tất cả token dạng dấu câu. Trước khi tới các token dài hơn, hãy rẽ sang xử lý các ký tự không thuộc về bất kỳ token nào.</p>
+<h3><a href="#whitespace" id="whitespace"><small>16&#8202;.&#8202;3&#8202;.&#8202;1</small>Whitespace</a></h3>
+<p>Scanner của ta cần xử lý khoảng trắng, tab và xuống dòng, nhưng các ký tự này không trở thành một phần của lexeme token nào. Ta có thể kiểm tra chúng trong switch chính của <code>scanToken()</code>, nhưng sẽ hơi rắc rối để đảm bảo hàm vẫn tìm đúng token tiếp theo <em>sau</em> khoảng trắng khi được gọi. Ta sẽ phải bao toàn bộ thân hàm trong một vòng lặp hoặc gì đó tương tự.</p>
+<p>Thay vào đó, trước khi bắt đầu token, ta chuyển sang một hàm riêng.</p>
+<div class="codehilite"><pre class="insert-before">Token scanToken() {
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">  <span class="i">skipWhitespace</span>();
+</pre><pre class="insert-after">  scanner.start = scanner.current;
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Hàm này đưa scanner vượt qua mọi khoảng trắng ở đầu. Sau khi hàm này trả về, ta biết ký tự tiếp theo là một ký tự có ý nghĩa (hoặc ta đã ở cuối mã nguồn).</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>errorToken</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">skipWhitespace</span>() {
+  <span class="k">for</span> (;;) {
+    <span class="t">char</span> <span class="i">c</span> = <span class="i">peek</span>();
+    <span class="k">switch</span> (<span class="i">c</span>) {
+      <span class="k">case</span> <span class="s">&#39; &#39;</span>:
+      <span class="k">case</span> <span class="s">&#39;\r&#39;</span>:
+      <span class="k">case</span> <span class="s">&#39;\t&#39;</span>:
+        <span class="i">advance</span>();
+        <span class="k">break</span>;
+      <span class="k">default</span>:
+        <span class="k">return</span>;
+    }
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>errorToken</em>()</div>
+
+<p>Nó giống như một mini-scanner riêng. Nó lặp, tiêu thụ mọi ký tự khoảng trắng gặp phải. Ta cần cẩn thận để nó <em>không</em> tiêu thụ bất kỳ ký tự <em>không phải</em> khoảng trắng nào. Để hỗ trợ điều đó, ta dùng hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>advance</em>()</div>
+<pre><span class="k">static</span> <span class="t">char</span> <span class="i">peek</span>() {
+  <span class="k">return</span> *<span class="i">scanner</span>.<span class="i">current</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>advance</em>()</div>
+
+<p>Hàm này chỉ trả về ký tự hiện tại, nhưng không tiêu thụ nó. Đoạn code trước xử lý tất cả ký tự khoảng trắng ngoại trừ xuống dòng.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>skipWhitespace</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="s">&#39;\n&#39;</span>:
+        <span class="i">scanner</span>.<span class="i">line</span>++;
+        <span class="i">advance</span>();
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      default:
+        return;
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>skipWhitespace</em>()</div>
+
+<p>Khi tiêu thụ một ký tự xuống dòng, ta cũng tăng số dòng hiện tại.</p>
+<h3><a href="#comment" id="comment"><small>16&#8202;.&#8202;3&#8202;.&#8202;2</small>Comment</a></h3>
+<p>Comment về mặt kỹ thuật không phải là “whitespace” nếu bạn muốn chính xác về thuật ngữ, nhưng với Lox thì chúng cũng chẳng khác gì, nên ta cũng bỏ qua chúng.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>skipWhitespace</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="s">&#39;/&#39;</span>:
+        <span class="k">if</span> (<span class="i">peekNext</span>() == <span class="s">&#39;/&#39;</span>) {
+          <span class="c">// A comment goes until the end of the line.</span>
+          <span class="k">while</span> (<span class="i">peek</span>() != <span class="s">&#39;\n&#39;</span> &amp;&amp; !<span class="i">isAtEnd</span>()) <span class="i">advance</span>();
+        } <span class="k">else</span> {
+          <span class="k">return</span>;
+        }
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      default:
+        return;
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>skipWhitespace</em>()</div>
+
+<p>Comment trong Lox bắt đầu bằng <code>//</code>, nên giống như <code>!=</code> và các “bạn bè” của nó, ta cần lookahead thêm một ký tự. Tuy nhiên, với <code>!=</code>, ta vẫn muốn tiêu thụ <code>!</code> ngay cả khi không tìm thấy <code>=</code>. Comment thì khác. Nếu không tìm thấy dấu <code>/</code> thứ hai, thì <code>skipWhitespace()</code> cũng không được tiêu thụ dấu gạch chéo đầu tiên.</p>
+<p>Để xử lý điều đó, ta thêm:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>peek</em>()</div>
+<pre><span class="k">static</span> <span class="t">char</span> <span class="i">peekNext</span>() {
+  <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="s">&#39;\0&#39;</span>;
+  <span class="k">return</span> <span class="i">scanner</span>.<span class="i">current</span>[<span class="n">1</span>];
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>peek</em>()</div>
+
+<p>Hàm này giống <code>peek()</code> nhưng cho ký tự ngay sau ký tự hiện tại. Nếu ký tự hiện tại và ký tự tiếp theo đều là <code>/</code>, ta tiêu thụ chúng và sau đó tiêu thụ mọi ký tự khác cho tới khi gặp xuống dòng hoặc hết mã nguồn.</p>
+<p>Ta dùng <code>peek()</code> để kiểm tra xuống dòng nhưng không tiêu thụ nó. Bằng cách đó, ký tự xuống dòng sẽ là ký tự hiện tại ở vòng lặp ngoài tiếp theo trong <code>skipWhitespace()</code> và ta sẽ nhận ra nó để tăng <code>scanner.line</code>.</p>
+<h3><a href="#token-literal" id="token-literal"><small>16&#8202;.&#8202;3&#8202;.&#8202;3</small>Token literal</a></h3>
+<p>Token số và chuỗi là đặc biệt vì chúng có giá trị runtime đi kèm. Ta sẽ bắt đầu với chuỗi vì chúng dễ nhận diện — chúng luôn bắt đầu bằng dấu ngoặc kép.</p>
+<div class="codehilite"><pre class="insert-before">          match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="s">&#39;&quot;&#39;</span>: <span class="k">return</span> <span class="i">string</span>();
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Hàm này gọi tới một hàm mới.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>skipWhitespace</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">string</span>() {
+  <span class="k">while</span> (<span class="i">peek</span>() != <span class="s">&#39;&quot;&#39;</span> &amp;&amp; !<span class="i">isAtEnd</span>()) {
+    <span class="k">if</span> (<span class="i">peek</span>() == <span class="s">&#39;\n&#39;</span>) <span class="i">scanner</span>.<span class="i">line</span>++;
+    <span class="i">advance</span>();
+  }
+
+  <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="i">errorToken</span>(<span class="s">&quot;Unterminated string.&quot;</span>);
+
+  <span class="c">// The closing quote.</span>
+  <span class="i">advance</span>();
+  <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_STRING</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>skipWhitespace</em>()</div>
+
+<p>Tương tự như trong jlox, ta tiêu thụ các ký tự cho tới khi gặp dấu ngoặc kép đóng. Ta cũng theo dõi cả ký tự xuống dòng bên trong string literal. (Lox hỗ trợ chuỗi nhiều dòng.) Và như mọi khi, ta xử lý gọn gàng trường hợp hết mã nguồn trước khi tìm thấy dấu ngoặc kép kết thúc.</p>
+<p>Điểm thay đổi chính ở clox là thứ <em>không</em> xuất hiện. Lại liên quan tới quản lý bộ nhớ. Trong jlox, class <code>Token</code> có một trường kiểu <code>Object</code> để lưu giá trị runtime được chuyển đổi từ lexeme của token literal.</p>
+<p>Hiện thực điều đó trong C sẽ đòi hỏi khá nhiều công sức. Ta sẽ cần một kiểu <code>union</code> và một type tag để cho biết token chứa chuỗi hay giá trị double. Nếu là chuỗi, ta sẽ phải quản lý bộ nhớ cho mảng ký tự của chuỗi đó theo cách nào đó.</p>
+<p>Thay vì thêm sự phức tạp đó vào scanner, ta hoãn việc <span name="convert">chuyển đổi</span> lexeme literal sang giá trị runtime cho tới sau này. Trong clox, token chỉ lưu lexeme — chuỗi ký tự chính xác như nó xuất hiện trong mã nguồn của người dùng. Sau này trong compiler, ta sẽ chuyển đổi lexeme đó thành giá trị runtime ngay khi sẵn sàng lưu nó vào bảng hằng số của chunk.</p>
+<aside name="convert">
+<p>Việc chuyển đổi lexeme thành giá trị trong compiler có tạo ra một chút dư thừa. Công việc quét một số literal khá giống với việc chuyển đổi một dãy ký tự chữ số thành giá trị số. Nhưng mức dư thừa đó không nhiều, nó không nằm ở phần quan trọng về hiệu năng, và nó giúp scanner của ta đơn giản hơn.</p>
+</aside>
+<p>Tiếp theo là số. Thay vì thêm một case trong switch cho từng chữ số có thể bắt đầu một số, ta xử lý chúng ở đây:</p>
+<div class="codehilite"><pre class="insert-before">  char c = advance();
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">isDigit</span>(<span class="i">c</span>)) <span class="k">return</span> <span class="i">number</span>();
+</pre><pre class="insert-after">
+
+  switch (c) {
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Hàm này dùng tiện ích hiển nhiên sau:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>initScanner</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">isDigit</span>(<span class="t">char</span> <span class="i">c</span>) {
+  <span class="k">return</span> <span class="i">c</span> &gt;= <span class="s">&#39;0&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;9&#39;</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>initScanner</em>()</div>
+
+<p>Ta hoàn tất việc quét số bằng hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>skipWhitespace</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">number</span>() {
+  <span class="k">while</span> (<span class="i">isDigit</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+
+  <span class="c">// Look for a fractional part.</span>
+  <span class="k">if</span> (<span class="i">peek</span>() == <span class="s">&#39;.&#39;</span> &amp;&amp; <span class="i">isDigit</span>(<span class="i">peekNext</span>())) {
+    <span class="c">// Consume the &quot;.&quot;.</span>
+    <span class="i">advance</span>();
+
+    <span class="k">while</span> (<span class="i">isDigit</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+  }
+
+  <span class="k">return</span> <span class="i">makeToken</span>(<span class="a">TOKEN_NUMBER</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>skipWhitespace</em>()</div>
+
+<p>Nó gần như giống hệt phiên bản trong jlox, chỉ khác là, một lần nữa, ta chưa chuyển lexeme thành double.</p>
+<h2><a href="#identifier-&-keyword" id="identifier-&-keyword"><small>16&#8202;.&#8202;4</small>Identifier &amp; Keyword</a></h2>
+<p>Nhóm token cuối cùng là identifier, gồm cả do người dùng định nghĩa và từ khóa. Phần này sẽ thú vị — cách ta nhận diện keyword trong clox khá khác so với jlox, và liên quan tới một số cấu trúc dữ liệu quan trọng.</p>
+<p>Trước hết, ta phải quét lexeme. Tên bắt đầu bằng chữ cái hoặc dấu gạch dưới.</p>
+<div class="codehilite"><pre class="insert-before">  char c = advance();
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">isAlpha</span>(<span class="i">c</span>)) <span class="k">return</span> <span class="i">identifier</span>();
+</pre><pre class="insert-after">  if (isDigit(c)) return number();
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>scanToken</em>()</div>
+
+<p>Ta nhận diện chúng bằng hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>initScanner</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">isAlpha</span>(<span class="t">char</span> <span class="i">c</span>) {
+  <span class="k">return</span> (<span class="i">c</span> &gt;= <span class="s">&#39;a&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;z&#39;</span>) ||
+         (<span class="i">c</span> &gt;= <span class="s">&#39;A&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;Z&#39;</span>) ||
+          <span class="i">c</span> == <span class="s">&#39;_&#39;</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>initScanner</em>()</div>
+
+<p>Khi đã tìm thấy một identifier, ta quét phần còn lại của nó ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>skipWhitespace</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">identifier</span>() {
+  <span class="k">while</span> (<span class="i">isAlpha</span>(<span class="i">peek</span>()) || <span class="i">isDigit</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+  <span class="k">return</span> <span class="i">makeToken</span>(<span class="i">identifierType</span>());
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>skipWhitespace</em>()</div>
+
+<p>Sau ký tự đầu tiên, ta cho phép cả chữ số, và tiếp tục tiêu thụ các ký tự chữ và số cho tới khi hết. Sau đó, ta tạo ra một token với kiểu thích hợp. Việc xác định kiểu “thích hợp” đó là phần đặc biệt của chương này.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>skipWhitespace</em>()</div>
+<pre><span class="k">static</span> <span class="t">TokenType</span> <span class="i">identifierType</span>() {
+  <span class="k">return</span> <span class="a">TOKEN_IDENTIFIER</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>skipWhitespace</em>()</div>
+
+<p>Được rồi, có lẽ vẫn chưa thú vị lắm. Đây là những gì ta có nếu không có từ khóa nào cả. Vậy làm sao để nhận diện keyword? Trong jlox, ta nhét tất cả vào một <code>Map</code> của Java và tra cứu theo tên. Trong clox, ta chưa có bất kỳ cấu trúc bảng băm nào.</p>
+<p>Mà thật ra, một bảng băm cũng là quá mức cần thiết. Để tra một chuỗi trong <span name="hash">bảng băm</span>, ta cần duyệt qua chuỗi để tính hash code, tìm bucket tương ứng trong bảng băm, rồi so sánh từng ký tự với bất kỳ chuỗi nào tìm thấy ở đó.</p>
+<aside name="hash">
+<p>Đừng lo nếu bạn chưa quen với điều này. Khi tới phần <a href="hash-tables.html">tự xây dựng bảng băm từ đầu</a>, ta sẽ tìm hiểu tất tần tật một cách chi tiết.</p>
+</aside>
+<p>Giả sử ta vừa quét được identifier <code>"gorgonzola"</code>. Ta <em>cần</em> phải làm bao nhiêu việc để biết nó có phải là từ khóa (reserved word) hay không? Ừ thì, không có từ khóa Lox nào bắt đầu bằng chữ <code>"g"</code>, nên chỉ cần nhìn ký tự đầu tiên là đủ để khẳng định “không”. Cách này đơn giản hơn rất nhiều so với việc tra bảng băm.</p>
+<p>Thế còn <code>"cardigan"</code>? Trong Lox có một từ khóa bắt đầu bằng <code>"c"</code>: <code>"class"</code>. Nhưng ký tự thứ hai trong <code>"cardigan"</code>, là <code>"a"</code>, đã loại bỏ khả năng đó. Còn <code>"forest"</code> thì sao? Vì <code>"for"</code> là một từ khóa, ta phải đi sâu hơn vào chuỗi trước khi có thể khẳng định đây không phải từ khóa. Nhưng trong hầu hết các trường hợp, chỉ cần một hoặc hai ký tự là đủ để biết đây là tên do người dùng đặt. Ta nên nhận ra điều đó và “fail fast”.</p>
+<p>Dưới đây là hình minh họa cho logic rẽ nhánh khi kiểm tra ký tự:</p>
+<p><span name="down"></span></p><img src="image/scanning-on-demand/keywords.png" alt="A trie that contains all of Lox's keywords." />
+<aside name="down">
+<p>Đọc xuống từng chuỗi node và bạn sẽ thấy các từ khóa của Lox hiện ra.</p>
+</aside>
+<p>Ta bắt đầu ở node gốc. Nếu có node con có chữ cái trùng với ký tự đầu tiên trong lexeme, ta di chuyển tới node đó. Sau đó lặp lại với ký tự tiếp theo trong lexeme, và cứ thế. Nếu tại bất kỳ điểm nào, ký tự tiếp theo trong lexeme không khớp với node con nào, thì identifier đó chắc chắn không phải từ khóa và ta dừng lại. Nếu ta tới một ô viền đôi và đang ở ký tự cuối cùng của lexeme, thì ta đã tìm thấy một từ khóa.</p>
+<h3><a href="#trie-&-state-machine" id="trie-&-state-machine"><small>16&#8202;.&#8202;4&#8202;.&#8202;1</small>Trie &amp; state machine</a></h3>
+<p>Sơ đồ cây này là ví dụ của một thứ gọi là <span name="trie"><a href="https://en.wikipedia.org/wiki/Trie"><strong>trie</strong></a></span>. Một trie lưu trữ một tập hợp các chuỗi. Hầu hết các cấu trúc dữ liệu khác để lưu chuỗi đều chứa nguyên mảng ký tự và bọc chúng trong một cấu trúc lớn hơn để tìm kiếm nhanh hơn. Trie thì khác. Không đâu trong trie bạn sẽ tìm thấy cả một chuỗi hoàn chỉnh.</p>
+<aside name="trie">
+<p>“Trie” là một trong những cái tên gây bối rối nhất trong khoa học máy tính. Edward Fredkin lấy nó từ giữa chữ “retrieval”, nghĩa là nó <em>nên</em> được phát âm giống “tree”. Nhưng, ờ… đã có một cấu trúc dữ liệu rất quan trọng phát âm là “tree” <em>mà trie là một trường hợp đặc biệt của nó</em>, nên trừ khi bạn không bao giờ nói những thứ này thành tiếng, sẽ chẳng ai biết bạn đang nói về cái nào. Vì vậy, ngày nay nhiều người phát âm nó giống “try” để tránh nhức đầu.</p>
+</aside>
+<p>Thay vào đó, mỗi chuỗi mà trie “chứa” được biểu diễn như một <em>đường đi</em> qua cây các node ký tự, giống như cách ta duyệt ở trên. Các node khớp với ký tự cuối cùng của một chuỗi sẽ có một dấu đặc biệt — các ô viền đôi trong hình minh họa. Nhờ vậy, nếu trie của bạn chứa “banquet” và “ban”, bạn có thể biết nó <em>không</em> chứa “banque” — node <code>"e"</code> sẽ không có dấu đó, trong khi các node <code>"n"</code> và <code>"t"</code> thì có.</p>
+<p>Trie là một trường hợp đặc biệt của một cấu trúc dữ liệu còn cơ bản hơn: <a href="https://en.wikipedia.org/wiki/Deterministic_finite_automaton"><strong>deterministic finite automaton</strong></a> (<strong>DFA</strong>). Bạn cũng có thể biết chúng qua các tên khác: <strong>finite state machine</strong>, hoặc đơn giản là <strong>state machine</strong>. State machine rất tuyệt. Chúng hữu ích trong mọi thứ từ <a href="http://gameprogrammingpatterns.com/state.html">lập trình game</a> cho tới hiện thực các giao thức mạng.</p>
+<p>Trong một DFA, bạn có một tập hợp các <em>state</em> với các <em>transition</em> giữa chúng, tạo thành một đồ thị. Tại bất kỳ thời điểm nào, máy “đang ở” đúng một state. Nó chuyển sang state khác bằng cách đi theo các transition. Khi dùng DFA cho phân tích từ vựng, mỗi transition là một ký tự được so khớp từ chuỗi. Mỗi state biểu diễn một tập hợp các ký tự hợp lệ.</p>
+<p>Cây từ khóa của ta chính xác là một DFA nhận diện các từ khóa của Lox. Nhưng DFA mạnh hơn cây đơn giản vì chúng có thể là <em>đồ thị</em> bất kỳ. Các transition có thể tạo thành vòng lặp giữa các state. Điều đó cho phép nhận diện các chuỗi dài tùy ý. Ví dụ, đây là một DFA nhận diện literal số:</p>
+<p><span name="railroad"></span></p><img src="image/scanning-on-demand/numbers.png" alt="A syntax diagram that recognizes integer and floating point literals." />
+<aside name="railroad">
+<p>Kiểu sơ đồ này được gọi là <a href="https://en.wikipedia.org/wiki/Syntax_diagram"><strong>syntax diagram</strong></a> hoặc cái tên thú vị hơn là <strong>railroad diagram</strong>. Tên sau là vì nó trông giống như một bãi chuyển hướng tàu hỏa.</p>
+<p>Trước khi Backus-Naur Form ra đời, đây là một trong những cách phổ biến để ghi lại ngữ pháp của một ngôn ngữ. Ngày nay, ta chủ yếu dùng văn bản, nhưng vẫn có gì đó thú vị khi một đặc tả chính thức cho một <em>ngôn ngữ dạng văn bản</em> lại dựa vào một <em>hình ảnh</em>.</p>
+</aside>
+<p>Tôi đã gộp các node cho mười chữ số lại để dễ đọc hơn, nhưng quá trình cơ bản vẫn giống nhau — bạn đi theo đường dẫn, vào các node khi tiêu thụ ký tự tương ứng trong lexeme. Nếu muốn, ta có thể xây dựng một DFA khổng lồ duy nhất làm <em>toàn bộ</em> phân tích từ vựng cho Lox, một state machine duy nhất nhận diện và xuất ra tất cả token cần thiết.</p>
+<p>Tuy nhiên, việc tự tay <span name="regex">tạo</span> ra một mega-DFA như vậy sẽ rất khó khăn. Đó là lý do <a href="https://en.wikipedia.org/wiki/Lex_(software)">Lex</a> ra đời. Bạn đưa cho nó một mô tả văn bản đơn giản về ngữ pháp từ vựng của mình — một loạt regular expression — và nó sẽ tự động tạo ra một DFA cho bạn, đồng thời sinh ra một đống code C để hiện thực nó.</p>
+<aside name="regex">
+<p>Đây cũng là cách hầu hết các engine regular expression trong ngôn ngữ lập trình và trình soạn thảo văn bản hoạt động bên trong. Chúng lấy chuỗi regex của bạn và chuyển nó thành DFA, rồi dùng DFA đó để so khớp chuỗi.</p>
+<p>Nếu bạn muốn học thuật toán chuyển một regular expression thành DFA, <a href="https://en.wikipedia.org/wiki/Compilers:_Principles,_Techniques,_and_Tools">cuốn <em>dragon book</em></a> sẽ giúp bạn.</p>
+</aside>
+<p>Ta sẽ không đi theo hướng đó. Ta đã có một scanner viết tay hoạt động hoàn toàn ổn. Ta chỉ cần một trie nhỏ để nhận diện từ khóa. Vậy ta nên ánh xạ nó thành code như thế nào?</p>
+<p>Giải pháp <span name="v8">đơn giản</span> nhất là dùng một câu lệnh <code>switch</code> cho mỗi node, với các <code>case</code> cho từng nhánh. Ta sẽ bắt đầu từ node gốc và xử lý các từ khóa dễ trước.</p>
+<aside name="v8">
+<p>Đơn giản không có nghĩa là ngớ ngẩn. Cách tiếp cận này <a href="https://github.com/v8/v8/blob/e77eebfe3b747fb315bd3baad09bec0953e53e68/src/parsing/scanner.cc#L1643">về cơ bản cũng là những gì V8 làm</a>, và đó hiện là một trong những hiện thực ngôn ngữ tinh vi và nhanh nhất thế giới.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">static TokenType identifierType() {
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>identifierType</em>()</div>
+<pre class="insert">  <span class="k">switch</span> (<span class="i">scanner</span>.<span class="i">start</span>[<span class="n">0</span>]) {
+    <span class="k">case</span> <span class="s">&#39;a&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">2</span>, <span class="s">&quot;nd&quot;</span>, <span class="a">TOKEN_AND</span>);
+    <span class="k">case</span> <span class="s">&#39;c&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">4</span>, <span class="s">&quot;lass&quot;</span>, <span class="a">TOKEN_CLASS</span>);
+    <span class="k">case</span> <span class="s">&#39;e&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">3</span>, <span class="s">&quot;lse&quot;</span>, <span class="a">TOKEN_ELSE</span>);
+    <span class="k">case</span> <span class="s">&#39;i&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">1</span>, <span class="s">&quot;f&quot;</span>, <span class="a">TOKEN_IF</span>);
+    <span class="k">case</span> <span class="s">&#39;n&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">2</span>, <span class="s">&quot;il&quot;</span>, <span class="a">TOKEN_NIL</span>);
+    <span class="k">case</span> <span class="s">&#39;o&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">1</span>, <span class="s">&quot;r&quot;</span>, <span class="a">TOKEN_OR</span>);
+    <span class="k">case</span> <span class="s">&#39;p&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">4</span>, <span class="s">&quot;rint&quot;</span>, <span class="a">TOKEN_PRINT</span>);
+    <span class="k">case</span> <span class="s">&#39;r&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">5</span>, <span class="s">&quot;eturn&quot;</span>, <span class="a">TOKEN_RETURN</span>);
+    <span class="k">case</span> <span class="s">&#39;s&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">4</span>, <span class="s">&quot;uper&quot;</span>, <span class="a">TOKEN_SUPER</span>);
+    <span class="k">case</span> <span class="s">&#39;v&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">2</span>, <span class="s">&quot;ar&quot;</span>, <span class="a">TOKEN_VAR</span>);
+    <span class="k">case</span> <span class="s">&#39;w&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">1</span>, <span class="n">4</span>, <span class="s">&quot;hile&quot;</span>, <span class="a">TOKEN_WHILE</span>);
+  }
+
+</pre><pre class="insert-after">  return TOKEN_IDENTIFIER;
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>identifierType</em>()</div>
+
+<p>Đây là các chữ cái đầu tiên tương ứng với một từ khóa duy nhất. Nếu ta thấy <code>"s"</code>, từ khóa duy nhất mà identifier đó có thể là chính là <code>super</code>. Tuy nhiên, cũng có thể không phải, nên ta vẫn cần kiểm tra các chữ cái còn lại. Trong sơ đồ cây, đây về cơ bản là nhánh thẳng treo ra từ <code>"s"</code>.</p>
+<p>Ta sẽ không viết một <code>switch</code> cho từng node như vậy. Thay vào đó, ta có một hàm tiện ích để kiểm tra phần còn lại của lexeme ứng viên từ khóa.</p>
+<div class="codehilite"><div class="source-file"><em>scanner.c</em><br>
+add after <em>skipWhitespace</em>()</div>
+<pre><span class="k">static</span> <span class="t">TokenType</span> <span class="i">checkKeyword</span>(<span class="t">int</span> <span class="i">start</span>, <span class="t">int</span> <span class="i">length</span>,
+    <span class="k">const</span> <span class="t">char</span>* <span class="i">rest</span>, <span class="t">TokenType</span> <span class="i">type</span>) {
+  <span class="k">if</span> (<span class="i">scanner</span>.<span class="i">current</span> - <span class="i">scanner</span>.<span class="i">start</span> == <span class="i">start</span> + <span class="i">length</span> &amp;&amp;
+      <span class="i">memcmp</span>(<span class="i">scanner</span>.<span class="i">start</span> + <span class="i">start</span>, <span class="i">rest</span>, <span class="i">length</span>) == <span class="n">0</span>) {
+    <span class="k">return</span> <span class="i">type</span>;
+  }
+
+  <span class="k">return</span> <span class="a">TOKEN_IDENTIFIER</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, add after <em>skipWhitespace</em>()</div>
+
+<p>Ta dùng hàm này cho tất cả các đường không rẽ nhánh trong cây. Khi đã tìm được một tiền tố chỉ có thể là một từ khóa duy nhất, ta cần xác minh hai điều. Lexeme phải có độ dài chính xác bằng từ khóa. Nếu chữ cái đầu là <code>"s"</code>, lexeme vẫn có thể là <code>"sup"</code> hoặc <code>"superb"</code>. Và các ký tự còn lại phải khớp chính xác — <code>"supar"</code> là không được.</p>
+<p>Nếu ta có đúng số ký tự và chúng là những ký tự mong muốn, thì đó là từ khóa, và ta trả về loại token tương ứng. Ngược lại, nó phải là một identifier bình thường.</p>
+<p>Ta có một vài từ khóa mà cây lại rẽ nhánh sau chữ cái đầu tiên. Nếu lexeme bắt đầu bằng <code>"f"</code>, nó có thể là <code>false</code>, <code>for</code>, hoặc <code>fun</code>. Vậy nên ta thêm một <code>switch</code> khác cho các nhánh xuất phát từ node <code>"f"</code>.</p>
+<div class="codehilite"><pre class="insert-before">    case 'e': return checkKeyword(1, 3, &quot;lse&quot;, TOKEN_ELSE);
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>identifierType</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="s">&#39;f&#39;</span>:
+      <span class="k">if</span> (<span class="i">scanner</span>.<span class="i">current</span> - <span class="i">scanner</span>.<span class="i">start</span> &gt; <span class="n">1</span>) {
+        <span class="k">switch</span> (<span class="i">scanner</span>.<span class="i">start</span>[<span class="n">1</span>]) {
+          <span class="k">case</span> <span class="s">&#39;a&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">2</span>, <span class="n">3</span>, <span class="s">&quot;lse&quot;</span>, <span class="a">TOKEN_FALSE</span>);
+          <span class="k">case</span> <span class="s">&#39;o&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">2</span>, <span class="n">1</span>, <span class="s">&quot;r&quot;</span>, <span class="a">TOKEN_FOR</span>);
+          <span class="k">case</span> <span class="s">&#39;u&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">2</span>, <span class="n">1</span>, <span class="s">&quot;n&quot;</span>, <span class="a">TOKEN_FUN</span>);
+        }
+      }
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case 'i': return checkKeyword(1, 1, &quot;f&quot;, TOKEN_IF);
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>identifierType</em>()</div>
+
+<p>Trước khi <code>switch</code>, ta cần kiểm tra xem thậm chí có <em>tồn tại</em> chữ cái thứ hai hay không. <code>"f"</code> tự nó cũng là một identifier hợp lệ. Chữ cái khác rẽ nhánh là <code>"t"</code>.</p>
+<div class="codehilite"><pre class="insert-before">    case 's': return checkKeyword(1, 4, &quot;uper&quot;, TOKEN_SUPER);
+</pre><div class="source-file"><em>scanner.c</em><br>
+in <em>identifierType</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="s">&#39;t&#39;</span>:
+      <span class="k">if</span> (<span class="i">scanner</span>.<span class="i">current</span> - <span class="i">scanner</span>.<span class="i">start</span> &gt; <span class="n">1</span>) {
+        <span class="k">switch</span> (<span class="i">scanner</span>.<span class="i">start</span>[<span class="n">1</span>]) {
+          <span class="k">case</span> <span class="s">&#39;h&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">2</span>, <span class="n">2</span>, <span class="s">&quot;is&quot;</span>, <span class="a">TOKEN_THIS</span>);
+          <span class="k">case</span> <span class="s">&#39;r&#39;</span>: <span class="k">return</span> <span class="i">checkKeyword</span>(<span class="n">2</span>, <span class="n">2</span>, <span class="s">&quot;ue&quot;</span>, <span class="a">TOKEN_TRUE</span>);
+        }
+      }
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case 'v': return checkKeyword(1, 2, &quot;ar&quot;, TOKEN_VAR);
+</pre></div>
+<div class="source-file-narrow"><em>scanner.c</em>, in <em>identifierType</em>()</div>
+
+<p>Vậy là xong. Vài câu lệnh <code>switch</code> lồng nhau. Đoạn code này không chỉ <span name="short">ngắn</span>, mà còn rất, rất nhanh. Nó làm lượng công việc tối thiểu cần thiết để phát hiện từ khóa, và thoát ra ngay khi có thể xác định identifier đó không phải từ khóa.</p>
+<p>Và với điều đó, scanner của ta đã hoàn thiện.</p>
+<aside name="short">
+<p>Đôi khi ta mắc bẫy nghĩ rằng hiệu năng đến từ các cấu trúc dữ liệu phức tạp, nhiều lớp cache, và các tối ưu hóa cầu kỳ khác. Nhưng nhiều khi, tất cả những gì cần làm là giảm khối lượng công việc, và tôi thường thấy rằng viết code đơn giản nhất có thể là đủ để đạt được điều đó.</p>
+</aside>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>16&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Nhiều ngôn ngữ mới hỗ trợ <a href="https://en.wikipedia.org/wiki/String_interpolation"><strong>string interpolation</strong></a>. Bên trong một string literal, bạn có một số loại dấu phân cách đặc biệt — thường là <code>${</code> ở đầu và <code>}</code> ở cuối. Giữa các dấu phân cách đó, có thể xuất hiện bất kỳ biểu thức nào. Khi string literal được execute, biểu thức bên trong được đánh giá, chuyển thành chuỗi, rồi ghép với phần chuỗi bao quanh.</p>
+<p>Ví dụ, nếu Lox hỗ trợ string interpolation, thì đoạn này<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">drink</span> = <span class="s">&quot;Tea&quot;</span>;
+<span class="k">var</span> <span class="i">steep</span> = <span class="n">4</span>;
+<span class="k">var</span> <span class="i">cool</span> = <span class="n">2</span>;
+<span class="k">print</span> <span class="s">&quot;${drink} will be ready in ${steep + cool} minutes.&quot;</span>;
+</pre></div>
+<p><span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span>sẽ in ra:</p>
+<div class="codehilite"><pre>Tea will be ready in 6 minutes.
+</pre></div>
+<p>Bạn sẽ định nghĩa những loại token nào để hiện thực một scanner cho string interpolation? Chuỗi token nào sẽ được generated cho string literal ở trên?</p>
+<p>Bạn sẽ sinh ra những token nào cho:</p>
+<div class="codehilite"><pre>&quot;Nested ${&quot;interpolation?! Are you ${&quot;mad?!&quot;}&quot;}&quot;
+</pre></div>
+<p>Hãy thử xem các hiện thực ngôn ngữ khác có hỗ trợ interpolation để xem họ xử lý thế nào.</p>
+</li>
+<li>
+<p>Một số ngôn ngữ dùng dấu ngoặc nhọn <code>&lt; &gt;</code> cho generics và cũng có toán tử dịch phải <code>&gt;&gt;</code>. Điều này dẫn tới một vấn đề kinh điển trong các phiên bản C++ đầu tiên:</p>
+<div class="codehilite"><pre><span class="t">vector</span>&lt;<span class="t">vector</span>&lt;<span class="t">string</span>&gt;&gt; <span class="i">nestedVectors</span>;
+</pre></div>
+<p>Đoạn này sẽ gây lỗi biên dịch vì <code>&gt;&gt;</code> bị lexer coi là một token dịch phải duy nhất, không phải hai token <code>&gt;</code> riêng biệt. Người dùng buộc phải tránh điều này bằng cách chèn một dấu cách giữa hai dấu ngoặc đóng.</p>
+<p>Các phiên bản C++ sau này thông minh hơn và xử lý được đoạn code trên. Java và C# thì chưa bao giờ gặp vấn đề này. Các ngôn ngữ đó quy định và hiện thực điều này như thế nào?</p>
+</li>
+<li>
+<p>Nhiều ngôn ngữ, đặc biệt là ở giai đoạn phát triển sau, định nghĩa “contextual keyword”. Đây là những identifier đóng vai trò như từ khóa trong một số ngữ cảnh, nhưng có thể là identifier do người dùng định nghĩa trong ngữ cảnh khác.</p>
+<p>Ví dụ, <code>await</code> là một từ khóa bên trong một phương thức <code>async</code> trong C#, nhưng ở các phương thức khác, bạn có thể dùng <code>await</code> như một identifier của riêng mình.</p>
+<p>Hãy kể tên một vài contextual keyword từ các ngôn ngữ khác, và ngữ cảnh mà chúng có ý nghĩa. Ưu và nhược điểm của việc có contextual keyword là gì? Nếu cần, bạn sẽ hiện thực chúng trong front end của ngôn ngữ mình như thế nào?</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="compiling-expressions.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Compiling Expressions&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

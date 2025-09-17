@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Garbage Collection &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Garbage Collection<small>26</small></a></h3>
+
+<ul>
+    <li><a href="#reachability"><small>26.1</small> Reachability</a></li>
+    <li><a href="#mark-sweep-garbage-collection"><small>26.2</small> Mark-Sweep Garbage Collection</a></li>
+    <li><a href="#đánh-dấu-các-root"><small>26.3</small> Đánh dấu các Root</a></li>
+    <li><a href="#tracing-object-references"><small>26.4</small> Tracing Object References</a></li>
+    <li><a href="#quét-các-object-không-dùng"><small>26.5</small> Quét các object không dùng</a></li>
+    <li><a href="#khi-n&amp;agrave;o-thì-collect"><small>26.6</small> Khi n&amp;agrave;o thì Collect</a></li>
+    <li><a href="#lỗi-trong-garbage-collection"><small>26.7</small> Lỗi trong Garbage Collection</a></li>
+    <li><a href="#thử-thách"><small>26.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-generational-collectors"><small>26.9</small> Ghi chú thiết kế: Generational Collectors</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="closures.html" title="Closures" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="classes-and-instances.html" title="Classes and Instances" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="closures.html" title="Closures" class="prev">←</a>
+<a href="classes-and-instances.html" title="Classes and Instances" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Garbage Collection<small>26</small></a></h3>
+
+<ul>
+    <li><a href="#reachability"><small>26.1</small> Reachability</a></li>
+    <li><a href="#mark-sweep-garbage-collection"><small>26.2</small> Mark-Sweep Garbage Collection</a></li>
+    <li><a href="#đánh-dấu-các-root"><small>26.3</small> Đánh dấu các Root</a></li>
+    <li><a href="#tracing-object-references"><small>26.4</small> Tracing Object References</a></li>
+    <li><a href="#quét-các-object-không-dùng"><small>26.5</small> Quét các object không dùng</a></li>
+    <li><a href="#khi-n&amp;agrave;o-thì-collect"><small>26.6</small> Khi n&amp;agrave;o thì Collect</a></li>
+    <li><a href="#lỗi-trong-garbage-collection"><small>26.7</small> Lỗi trong Garbage Collection</a></li>
+    <li><a href="#thử-thách"><small>26.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-generational-collectors"><small>26.9</small> Ghi chú thiết kế: Generational Collectors</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="closures.html" title="Closures" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="classes-and-instances.html" title="Classes and Instances" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">26</div>
+  <h1>Garbage Collection</h1>
+
+<blockquote>
+<p>I wanna, I wanna,<br />
+I wanna, I wanna,<br />
+I wanna be trash.<br /></p>
+<p><cite>The Whip, &ldquo;Trash&rdquo;</cite></p>
+</blockquote>
+<p>Chúng ta gọi Lox là một ngôn ngữ “bậc cao” vì nó giúp lập trình viên không phải bận tâm đến những chi tiết không liên quan trực tiếp đến vấn đề họ đang giải quyết. Người dùng trở thành “nhà điều hành”, đưa ra các mục tiêu trừu tượng và để chiếc máy tính “thấp hèn” tự tìm cách thực hiện.</p>
+<p>Cấp phát bộ nhớ động là một ứng viên hoàn hảo để tự động hóa. Nó cần thiết cho một chương trình hoạt động, tẻ nhạt nếu làm thủ công, và vẫn dễ mắc lỗi. Những sai sót không tránh khỏi có thể gây hậu quả nghiêm trọng, dẫn đến crash, hỏng dữ liệu trong bộ nhớ, hoặc vi phạm bảo mật. Đây là loại công việc vừa rủi ro vừa nhàm chán mà máy móc làm tốt hơn con người.</p>
+<p>Đó là lý do Lox là một <strong>managed language</strong>, nghĩa là implementation của ngôn ngữ sẽ quản lý việc cấp phát và giải phóng bộ nhớ thay cho người dùng. Khi người dùng thực hiện một thao tác cần bộ nhớ động, VM sẽ tự động cấp phát. Lập trình viên không bao giờ phải lo việc giải phóng. Máy sẽ đảm bảo bất kỳ vùng nhớ nào chương trình đang dùng sẽ tồn tại chừng nào còn cần thiết.</p>
+<p>Lox tạo ra ảo giác rằng máy tính có bộ nhớ vô hạn. Người dùng có thể cấp phát, cấp phát, và cấp phát mà không bao giờ phải nghĩ xem tất cả những byte đó đến từ đâu. Tất nhiên, máy tính hiện tại <em>không</em> có bộ nhớ vô hạn. Vì vậy, cách mà các ngôn ngữ managed duy trì ảo giác này là âm thầm thu hồi lại những vùng nhớ mà chương trình không còn cần nữa. Thành phần làm việc này được gọi là <strong>garbage <span name="recycle">collector</span></strong>.</p>
+<aside name="recycle">
+<p>Thực ra, “tái chế” sẽ là một phép ẩn dụ hay hơn. GC không <em>vứt bỏ</em> bộ nhớ, mà thu hồi nó để tái sử dụng cho dữ liệu mới. Nhưng các ngôn ngữ managed ra đời trước cả Ngày Trái Đất, nên những người phát minh đã dùng phép so sánh mà họ biết.</p><img src="image/garbage-collection/recycle.png" class="above" alt="Một thùng tái chế đầy các bit dữ liệu." />
+</aside>
+<h2><a href="#reachability" id="reachability"><small>26&#8202;.&#8202;1</small>Reachability</a></h2>
+<p>Điều này dẫn đến một câu hỏi khó bất ngờ: làm sao VM biết được vùng nhớ nào <em>không</em> cần nữa? Bộ nhớ chỉ cần thiết nếu nó sẽ được đọc trong tương lai, nhưng trừ khi có cỗ máy thời gian, làm sao implementation biết được chương trình <em>sẽ</em> chạy đoạn code nào và dùng dữ liệu nào? Tiết lộ trước: VM không thể du hành thời gian. Thay vào đó, ngôn ngữ đưa ra một giả định <span name="conservative">bảo thủ</span>: nó coi một vùng nhớ vẫn còn được sử dụng nếu <em>có thể</em> sẽ được đọc trong tương lai.</p>
+<aside name="conservative">
+<p>Tôi dùng “bảo thủ” ở nghĩa chung. Có một khái niệm “conservative garbage collector” mang nghĩa cụ thể hơn. Tất cả GC đều “bảo thủ” ở chỗ chúng giữ vùng nhớ sống nếu nó <em>có thể</em> được truy cập, thay vì có một quả cầu tiên tri Magic 8-Ball để biết chính xác dữ liệu nào <em>sẽ</em> được truy cập.</p>
+<p><strong>Conservative GC</strong> là một loại collector đặc biệt, coi bất kỳ vùng nhớ nào là một con trỏ nếu giá trị trong đó trông giống một địa chỉ. Ngược lại, <strong>precise GC</strong> — loại mà chúng ta sẽ implement — biết chính xác từ nào trong bộ nhớ là con trỏ và từ nào lưu các loại giá trị khác như số hoặc chuỗi.</p>
+</aside>
+<p>Nghe có vẻ <em>quá</em> bảo thủ. Chẳng phải <em>bất kỳ</em> bit bộ nhớ nào cũng có thể được đọc sao? Thực ra là không, ít nhất là trong một ngôn ngữ an toàn bộ nhớ như Lox. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;first value&quot;</span>;
+<span class="i">a</span> = <span class="s">&quot;updated&quot;</span>;
+<span class="c">// GC here.</span>
+<span class="k">print</span> <span class="i">a</span>;
+</pre></div>
+<p>Giả sử ta chạy GC sau khi lệnh gán ở dòng thứ hai hoàn tất. Chuỗi <code>"first value"</code> vẫn nằm trong bộ nhớ, nhưng chương trình của người dùng không còn cách nào để truy cập nó. Khi <code>a</code> được gán lại, chương trình mất mọi tham chiếu tới chuỗi đó. Ta có thể giải phóng nó an toàn. Một giá trị được gọi là <strong>reachable</strong> nếu có cách nào đó để chương trình người dùng tham chiếu tới nó. Ngược lại, như chuỗi <code>"first value"</code> ở đây, nó là <strong>unreachable</strong>.</p>
+<p>Nhiều giá trị có thể được VM truy cập trực tiếp. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">global</span> = <span class="s">&quot;string&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">local</span> = <span class="s">&quot;another&quot;</span>;
+  <span class="k">print</span> <span class="i">global</span> + <span class="i">local</span>;
+}
+</pre></div>
+<p>Tạm dừng chương trình ngay sau khi hai chuỗi được nối nhưng trước khi câu lệnh <code>print</code> chạy. VM có thể tìm <code>"string"</code> bằng cách duyệt bảng biến global và tìm mục cho <code>global</code>. Nó có thể tìm <code>"another"</code> bằng cách duyệt value stack và lấy slot của biến local <code>local</code>. Nó thậm chí có thể tìm chuỗi tạm <code>"stringanother"</code> vì giá trị tạm này cũng đang nằm trên stack của VM tại thời điểm ta tạm dừng.</p>
+<p>Tất cả những giá trị này được gọi là <strong>root</strong>. Root là bất kỳ object nào mà VM có thể truy cập trực tiếp mà không cần thông qua tham chiếu trong object khác. Hầu hết root là biến global hoặc trên stack, nhưng như ta sẽ thấy, còn có vài nơi khác VM lưu tham chiếu tới object mà nó có thể tìm được.</p>
+<p>Các giá trị khác có thể được tìm thấy bằng cách đi qua một tham chiếu bên trong giá trị khác. <span name="class">Field</span> trên instance của class là trường hợp rõ ràng nhất, nhưng ta chưa có chúng. Ngay cả khi chưa có, VM của ta vẫn có các tham chiếu gián tiếp. Xem ví dụ:</p>
+<aside name="class">
+<p>Chúng ta sẽ sớm gặp lại <a href="classes-and-instances.html">trong phần này</a>!</p>
+</aside>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">makeClosure</span>() {
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;data&quot;</span>;
+
+  <span class="k">fun</span> <span class="i">f</span>() { <span class="k">print</span> <span class="i">a</span>; }
+  <span class="k">return</span> <span class="i">f</span>;
+}
+
+{
+  <span class="k">var</span> <span class="i">closure</span> = <span class="i">makeClosure</span>();
+  <span class="c">// GC here.</span>
+  <span class="i">closure</span>();
+}
+</pre></div>
+<p>Giả sử ta tạm dừng chương trình ở dòng được đánh dấu và chạy garbage collector. Khi collector xong và chương trình tiếp tục, nó sẽ gọi closure, và closure sẽ in ra <code>"data"</code>. Vậy collector cần <em>không</em> được giải phóng chuỗi đó. Nhưng đây là stack khi ta tạm dừng:</p><img src="image/garbage-collection/stack.png" alt="Stack, chỉ chứa script và closure." />
+<p>Chuỗi <code>"data"</code> không hề có trên đó. Nó đã được đưa ra khỏi stack và lưu trong closed upvalue mà closure sử dụng. Bản thân closure thì nằm trên stack. Nhưng để tới được chuỗi, ta cần lần theo closure và mảng upvalue của nó. Vì chương trình người dùng <em>có thể</em> làm vậy, tất cả các object có thể truy cập gián tiếp này cũng được coi là reachable.</p><img src="image/garbage-collection/reachable.png" class="wide" alt="Tất cả object được tham chiếu từ closure, và đường dẫn tới chuỗi 'data' từ stack." />
+<p>Điều này cho ta một định nghĩa quy nạp về reachability:</p>
+<ul>
+<li>
+<p>Tất cả root đều reachable.</p>
+</li>
+<li>
+<p>Bất kỳ object nào được tham chiếu từ một object reachable cũng là reachable.</p>
+</li>
+</ul>
+<p>Đây là những giá trị vẫn “sống” và cần được giữ lại trong bộ nhớ. Bất kỳ giá trị nào <em>không</em> thỏa định nghĩa này đều có thể bị collector thu hồi. Cặp quy tắc đệ quy này gợi ý một thuật toán đệ quy mà ta có thể dùng để giải phóng bộ nhớ không cần thiết:</p>
+<ol>
+<li>
+<p>Bắt đầu từ các root, duyệt qua các tham chiếu object để tìm toàn bộ tập hợp object reachable.</p>
+</li>
+<li>
+<p>Giải phóng tất cả object <em>không</em> nằm trong tập hợp đó.</p>
+</li>
+</ol>
+<p>Hiện nay có rất <span name="handbook">nhiều</span> thuật toán garbage collection khác nhau, nhưng tất cả đều tuân theo cấu trúc chung này. Một số có thể xen kẽ hoặc trộn các bước, nhưng hai thao tác cơ bản vẫn ở đó. Chúng khác nhau chủ yếu ở <em>cách</em> thực hiện từng bước.</p>
+<aside name="handbook">
+<p>Nếu bạn muốn tìm hiểu thêm về các thuật toán GC khác,<br />
+<a href="http://gchandbook.org/"><em>The Garbage Collection Handbook</em></a> (Jones và cộng sự) là tài liệu tham khảo kinh điển. Với một cuốn sách dày về một chủ đề vừa sâu vừa hẹp như vậy, nó lại khá thú vị để đọc. Hoặc có thể tôi có một khái niệm hơi khác về “thú vị”.</p>
+</aside>
+<h2><a href="#mark-sweep-garbage-collection" id="mark-sweep-garbage-collection"><small>26&#8202;.&#8202;2</small>Mark-Sweep Garbage Collection</a></h2>
+<p>Ngôn ngữ managed đầu tiên là Lisp, ngôn ngữ “bậc cao” thứ hai được phát minh, ngay sau Fortran. John McCarthy từng cân nhắc việc dùng quản lý bộ nhớ thủ công hoặc reference counting, nhưng <span name="procrastination">cuối cùng</span> đã chọn (và đặt tên) cho garbage collection — khi chương trình hết bộ nhớ, nó sẽ quay lại tìm những vùng nhớ không dùng nữa để thu hồi.</p>
+<aside name="procrastination">
+<p>Trong “History of Lisp” của John McCarthy, ông ghi chú: “Khi chúng tôi quyết định dùng garbage collection, việc implement thực tế có thể trì hoãn, vì lúc đó chỉ mới làm các ví dụ nhỏ.” Việc chúng ta trì hoãn thêm GC vào clox cũng là đi theo bước chân của những bậc tiền bối.</p>
+</aside>
+<p>Ông đã thiết kế thuật toán garbage collection đầu tiên và đơn giản nhất, gọi là <strong>mark-and-sweep</strong> hoặc <strong>mark-sweep</strong>. Mô tả của nó chỉ gói gọn trong ba đoạn ngắn trong bài báo đầu tiên về Lisp. Dù đã cũ và đơn giản, cùng một thuật toán nền tảng này vẫn là cơ sở cho nhiều bộ quản lý bộ nhớ hiện đại. Một số lĩnh vực của khoa học máy tính dường như là bất biến theo thời gian.</p>
+<p>Đúng như tên gọi, mark-sweep hoạt động qua hai giai đoạn:</p>
+<ul>
+<li>
+<p><strong>Marking:</strong> Bắt đầu từ các root và duyệt hoặc <span name="trace"><em>trace</em></span> qua tất cả object mà các root đó tham chiếu tới. Đây là một dạng duyệt đồ thị kinh điển qua tất cả object reachable. Mỗi lần thăm một object, ta sẽ <em>đánh dấu</em> nó theo một cách nào đó. (Các implementation khác nhau ở cách lưu dấu này.)</p>
+</li>
+<li>
+<p><strong>Sweeping:</strong> Khi giai đoạn mark hoàn tất, mọi object reachable trong heap đã được đánh dấu. Điều đó có nghĩa là bất kỳ object nào không được đánh dấu đều là unreachable và sẵn sàng để thu hồi. Ta sẽ duyệt qua tất cả object chưa được đánh dấu và giải phóng từng cái.</p>
+</li>
+</ul>
+<p>Nó trông như thế này:</p><img src="image/garbage-collection/mark-sweep.png" class="wide" alt="Bắt đầu từ một đồ thị object, trước tiên đánh dấu các object reachable, quét bỏ phần còn lại, và cuối cùng chỉ còn lại các object reachable." />
+<aside name="trace">
+<p><strong>Tracing garbage collector</strong> là bất kỳ thuật toán nào duyệt qua đồ thị các tham chiếu object. Điều này trái ngược với reference counting, vốn dùng chiến lược khác để theo dõi object reachable.</p>
+</aside>
+<p>Đó chính là thứ chúng ta sẽ implement. Mỗi khi quyết định đã đến lúc thu hồi một số byte, ta sẽ trace mọi thứ và đánh dấu tất cả object reachable, giải phóng những gì không được đánh dấu, rồi tiếp tục chạy chương trình của người dùng.</p>
+<h3><a href="#collecting-garbage" id="collecting-garbage"><small>26&#8202;.&#8202;2&#8202;.&#8202;1</small>Collecting garbage</a></h3>
+<p>Cả chương này xoay quanh việc implement một <span name="one">hàm</span> này:</p>
+<aside name="one">
+<p>Tất nhiên, chúng ta sẽ thêm một loạt hàm helper nữa.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+</pre><div class="source-file"><em>memory.h</em><br>
+add after <em>reallocate</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">collectGarbage</span>();
+</pre><pre class="insert-after">void freeObjects();
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em>, add after <em>reallocate</em>()</div>
+
+<p>Chúng ta sẽ tiến dần tới bản implement đầy đủ, bắt đầu từ phần khung rỗng này:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>freeObject</em>()</div>
+<pre><span class="t">void</span> <span class="i">collectGarbage</span>() {
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>freeObject</em>()</div>
+
+<p>Câu hỏi đầu tiên bạn có thể đặt ra là: Hàm này được gọi khi nào? Hóa ra đây là một câu hỏi tinh tế mà ta sẽ dành thời gian bàn ở phần sau của chương. Còn bây giờ, ta sẽ tạm bỏ qua và nhân tiện xây một công cụ chẩn đoán hữu ích.</p>
+<div class="codehilite"><pre class="insert-before">#define DEBUG_TRACE_EXECUTION
+</pre><div class="source-file"><em>common.h</em></div>
+<pre class="insert">
+
+<span class="a">#define DEBUG_STRESS_GC</span>
+</pre><pre class="insert-after">
+
+#define UINT8_COUNT (UINT8_MAX + 1)
+</pre></div>
+<div class="source-file-narrow"><em>common.h</em></div>
+
+<p>Ta sẽ thêm một chế độ “stress test” tùy chọn cho garbage collector. Khi flag này được bật, GC sẽ chạy thường xuyên nhất có thể. Điều này, tất nhiên, là thảm họa cho hiệu năng. Nhưng nó rất hữu ích để lộ ra các bug quản lý bộ nhớ chỉ xảy ra khi GC được kích hoạt đúng thời điểm. Nếu <em>mọi</em> thời điểm đều kích hoạt GC, bạn sẽ dễ tìm ra những bug đó.</p>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>reallocate</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">newSize</span> &gt; <span class="i">oldSize</span>) {
+<span class="a">#ifdef DEBUG_STRESS_GC</span>
+    <span class="i">collectGarbage</span>();
+<span class="a">#endif</span>
+  }
+
+</pre><pre class="insert-after">  if (newSize == 0) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>reallocate</em>()</div>
+
+<p>Mỗi khi ta gọi <code>reallocate()</code> để xin thêm bộ nhớ, ta sẽ buộc chạy một lần collect. Lệnh if ở đây là vì <code>reallocate()</code> cũng được gọi khi giải phóng hoặc thu nhỏ một allocation. Ta không muốn kích hoạt GC cho những trường hợp đó — đặc biệt vì bản thân GC cũng sẽ gọi <code>reallocate()</code> để giải phóng bộ nhớ.</p>
+<p>Collect ngay trước khi <span name="demand">allocation</span> là cách kinh điển để tích hợp GC vào VM. Bạn vốn đã gọi vào memory manager, nên đây là chỗ dễ dàng để móc thêm code. Hơn nữa, allocation là thời điểm duy nhất bạn thực sự <em>cần</em> một ít bộ nhớ trống để tái sử dụng. Nếu bạn <em>không</em> dùng allocation để kích hoạt GC, bạn sẽ phải đảm bảo mọi nơi trong code có thể lặp và cấp phát bộ nhớ cũng có cách kích hoạt collector. Nếu không, VM có thể rơi vào trạng thái “đói” bộ nhớ — cần thêm nhưng không bao giờ collect.</p>
+<aside name="demand">
+<p>Các collector tinh vi hơn có thể chạy trên một thread riêng hoặc được xen kẽ định kỳ trong quá trình execute chương trình — thường ở ranh giới function call hoặc khi xảy ra một backward jump.</p>
+</aside>
+<h3><a href="#debug-logging" id="debug-logging"><small>26&#8202;.&#8202;2&#8202;.&#8202;2</small>Debug logging</a></h3>
+<p>Nhân nói về chẩn đoán, hãy thêm một chút nữa. Một thách thức thực sự với garbage collector là chúng rất “mờ”. Từ trước đến giờ, ta vẫn chạy nhiều chương trình Lox ngon lành mà <em>không hề</em> có GC. Khi thêm GC vào, làm sao biết nó đang làm gì hữu ích? Liệu ta chỉ biết khi viết chương trình tiêu tốn hàng đống bộ nhớ? Làm sao debug chuyện đó?</p>
+<p>Một cách đơn giản để soi vào bên trong GC là thêm logging.</p>
+<div class="codehilite"><pre class="insert-before">#define DEBUG_STRESS_GC
+</pre><div class="source-file"><em>common.h</em></div>
+<pre class="insert"><span class="a">#define DEBUG_LOG_GC</span>
+</pre><pre class="insert-after">
+
+#define UINT8_COUNT (UINT8_MAX + 1)
+</pre></div>
+<div class="source-file-narrow"><em>common.h</em></div>
+
+<p>Khi bật flag này, clox sẽ in thông tin ra console mỗi khi nó làm gì đó với bộ nhớ động.</p>
+<p>Ta cần thêm vài include.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;vm.h&quot;
+</pre><div class="source-file"><em>memory.c</em></div>
+<pre class="insert">
+
+<span class="a">#ifdef DEBUG_LOG_GC</span>
+<span class="a">#include &lt;stdio.h&gt;</span>
+<span class="a">#include &quot;debug.h&quot;</span>
+<span class="a">#endif</span>
+</pre><pre class="insert-after">
+
+void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em></div>
+
+<p>Ta chưa có collector, nhưng có thể bắt đầu thêm logging ngay bây giờ. Ta sẽ muốn biết khi nào một lần collect bắt đầu.</p>
+<div class="codehilite"><pre class="insert-before">void collectGarbage() {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert"><span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;-- gc begin</span><span class="e">\n</span><span class="s">&quot;</span>);
+<span class="a">#endif</span>
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Cuối cùng, ta sẽ log thêm vài thao tác khác trong quá trình collect, nên cũng cần biết khi nào “buổi diễn” kết thúc.</p>
+<div class="codehilite"><pre class="insert-before">  printf(&quot;-- gc begin\n&quot;);
+#endif
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">
+
+<span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;-- gc end</span><span class="e">\n</span><span class="s">&quot;</span>);
+<span class="a">#endif</span>
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Ta chưa có code cho collector, nhưng đã có các hàm allocate và free, nên có thể gắn logging vào đó ngay.</p>
+<div class="codehilite"><pre class="insert-before">  vm.objects = object;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>allocateObject</em>()</div>
+<pre class="insert">
+
+<span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;%p allocate %zu for %d</span><span class="e">\n</span><span class="s">&quot;</span>, (<span class="t">void</span>*)<span class="i">object</span>, <span class="i">size</span>, <span class="i">type</span>);
+<span class="a">#endif</span>
+
+</pre><pre class="insert-after">  return object;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>allocateObject</em>()</div>
+
+<p>Và khi vòng đời của một object kết thúc:</p>
+<div class="codehilite"><pre class="insert-before">static void freeObject(Obj* object) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert"><span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;%p free type %d</span><span class="e">\n</span><span class="s">&quot;</span>, (<span class="t">void</span>*)<span class="i">object</span>, <span class="i">object</span>-&gt;<span class="i">type</span>);
+<span class="a">#endif</span>
+
+</pre><pre class="insert-after">  switch (object-&gt;type) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p>Với hai flag này, ta sẽ thấy được tiến trình khi làm nốt phần còn lại của chương.</p>
+<h2><a href="#đánh-dấu-các-root" id="đánh-dấu-các-root"><small>26&#8202;.&#8202;3</small>Đánh dấu các Root</a></h2>
+<p>Các object nằm rải rác khắp heap như những vì sao trên bầu trời đêm thăm thẳm.<br />
+Một reference từ object này sang object khác tạo thành một kết nối, và những “chòm sao” này chính là đồ thị mà giai đoạn <strong>mark</strong> sẽ duyệt qua. Việc đánh dấu bắt đầu từ các <strong>root</strong>.</p>
+<div class="codehilite"><pre class="insert-before">#ifdef DEBUG_LOG_GC
+  printf(&quot;-- gc begin\n&quot;);
+#endif
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">
+
+  <span class="i">markRoots</span>();
+</pre><pre class="insert-after">
+
+#ifdef DEBUG_LOG_GC
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Hầu hết các root là biến cục bộ hoặc biến tạm thời nằm ngay trong stack của VM,<br />
+nên chúng ta bắt đầu bằng cách duyệt qua stack đó.</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>freeObject</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">markRoots</span>() {
+  <span class="k">for</span> (<span class="t">Value</span>* <span class="i">slot</span> = <span class="i">vm</span>.<span class="i">stack</span>; <span class="i">slot</span> &lt; <span class="i">vm</span>.<span class="i">stackTop</span>; <span class="i">slot</span>++) {
+    <span class="i">markValue</span>(*<span class="i">slot</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>freeObject</em>()</div>
+
+<p>Để đánh dấu một giá trị Lox, ta dùng hàm mới này:</p>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+</pre><div class="source-file"><em>memory.h</em><br>
+add after <em>reallocate</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">markValue</span>(<span class="t">Value</span> <span class="i">value</span>);
+</pre><pre class="insert-after">void collectGarbage();
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em>, add after <em>reallocate</em>()</div>
+
+<p>Phần hiện thực của nó nằm ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>reallocate</em>()</div>
+<pre><span class="t">void</span> <span class="i">markValue</span>(<span class="t">Value</span> <span class="i">value</span>) {
+  <span class="k">if</span> (<span class="a">IS_OBJ</span>(<span class="i">value</span>)) <span class="i">markObject</span>(<span class="a">AS_OBJ</span>(<span class="i">value</span>));
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>reallocate</em>()</div>
+
+<p>Một số giá trị Lox — số, Boolean và <code>nil</code> — được lưu trực tiếp bên trong <code>Value</code> và không cần cấp phát trên heap.<br />
+Bộ <strong>garbage collector</strong> hoàn toàn không cần quan tâm đến chúng, nên việc đầu tiên ta làm là đảm bảo giá trị đó thực sự là một object trên heap.<br />
+Nếu đúng vậy, công việc chính sẽ diễn ra trong hàm này:</p>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+</pre><div class="source-file"><em>memory.h</em><br>
+add after <em>reallocate</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">markObject</span>(<span class="t">Obj</span>* <span class="i">object</span>);
+</pre><pre class="insert-after">void markValue(Value value);
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em>, add after <em>reallocate</em>()</div>
+
+<p>Hàm này được định nghĩa ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>reallocate</em>()</div>
+<pre><span class="t">void</span> <span class="i">markObject</span>(<span class="t">Obj</span>* <span class="i">object</span>) {
+  <span class="k">if</span> (<span class="i">object</span> == <span class="a">NULL</span>) <span class="k">return</span>;
+  <span class="i">object</span>-&gt;<span class="i">isMarked</span> = <span class="k">true</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>reallocate</em>()</div>
+
+<p>Việc kiểm tra <code>NULL</code> là không cần thiết khi gọi từ <code>markValue()</code>.<br />
+Một giá trị Lox thuộc loại Obj sẽ luôn có một con trỏ hợp lệ.<br />
+Nhưng sau này, chúng ta sẽ gọi hàm này trực tiếp từ những đoạn code khác, và ở một số nơi, object được trỏ tới có thể là tùy chọn (optional).</p>
+<p>Giả sử ta có một object hợp lệ, ta sẽ đánh dấu nó bằng cách bật một cờ (flag).<br />
+Trường dữ liệu mới này nằm trong struct header <code>Obj</code> mà tất cả object đều chia sẻ.</p>
+<div class="codehilite"><pre class="insert-before">  ObjType type;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>Obj</em></div>
+<pre class="insert">  <span class="t">bool</span> <span class="i">isMarked</span>;
+</pre><pre class="insert-after">  struct Obj* next;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>Obj</em></div>
+
+<p>Mỗi object mới khi được tạo ra đều bắt đầu ở trạng thái <strong>chưa được đánh dấu</strong>,<br />
+vì ta chưa xác định được nó có thể truy cập được (reachable) hay không.</p>
+<div class="codehilite"><pre class="insert-before">  object-&gt;type = type;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>allocateObject</em>()</div>
+<pre class="insert">  <span class="i">object</span>-&gt;<span class="i">isMarked</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">
+
+  object-&gt;next = vm.objects;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>allocateObject</em>()</div>
+
+<p>Trước khi đi xa hơn, hãy thêm một chút logging vào <code>markObject()</code>.</p>
+<div class="codehilite"><pre class="insert-before">void markObject(Obj* object) {
+  if (object == NULL) return;
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markObject</em>()</div>
+<pre class="insert"><span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;%p mark &quot;</span>, (<span class="t">void</span>*)<span class="i">object</span>);
+  <span class="i">printValue</span>(<span class="a">OBJ_VAL</span>(<span class="i">object</span>));
+  <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+<span class="a">#endif</span>
+
+</pre><pre class="insert-after">  object-&gt;isMarked = true;
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markObject</em>()</div>
+
+<p>Nhờ vậy, ta có thể thấy giai đoạn <strong>mark</strong> đang làm gì.<br />
+Việc đánh dấu stack sẽ xử lý các biến cục bộ và biến tạm thời.<br />
+Nguồn root chính còn lại là các biến toàn cục.</p>
+<div class="codehilite"><pre class="insert-before">    markValue(*slot);
+  }
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markRoots</em>()</div>
+<pre class="insert">
+
+  <span class="i">markTable</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markRoots</em>()</div>
+
+<p>Chúng được lưu trong một hash table thuộc sở hữu của VM,<br />
+nên ta sẽ khai báo thêm một hàm helper để đánh dấu tất cả object trong một bảng.</p>
+<div class="codehilite"><pre class="insert-before">ObjString* tableFindString(Table* table, const char* chars,
+                           int length, uint32_t hash);
+</pre><div class="source-file"><em>table.h</em><br>
+add after <em>tableFindString</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">markTable</span>(<span class="t">Table</span>* <span class="i">table</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>table.h</em>, add after <em>tableFindString</em>()</div>
+
+<p>Ta hiện thực hàm này trong module <code>"table"</code> tại đây:</p>
+<div class="codehilite"><div class="source-file"><em>table.c</em><br>
+add after <em>tableFindString</em>()</div>
+<pre><span class="t">void</span> <span class="i">markTable</span>(<span class="t">Table</span>* <span class="i">table</span>) {
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">table</span>-&gt;<span class="i">capacity</span>; <span class="i">i</span>++) {
+    <span class="t">Entry</span>* <span class="i">entry</span> = &amp;<span class="i">table</span>-&gt;<span class="i">entries</span>[<span class="i">i</span>];
+    <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">entry</span>-&gt;<span class="i">key</span>);
+    <span class="i">markValue</span>(<span class="i">entry</span>-&gt;<span class="i">value</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>table.c</em>, add after <em>tableFindString</em>()</div>
+
+<p>Rất đơn giản: ta duyệt qua mảng entry, với mỗi entry ta đánh dấu giá trị của nó.<br />
+Ta cũng đánh dấu cả key string của mỗi entry vì GC cũng quản lý các string này.</p>
+<h3><a href="#những-root-ít-hiển-nhiên-hơn" id="những-root-ít-hiển-nhiên-hơn"><small>26&#8202;.&#8202;3&#8202;.&#8202;1</small>Những root ít hiển nhiên hơn</a></h3>
+<p>Những phần trên bao quát các root mà ta thường nghĩ tới — các giá trị rõ ràng là có thể truy cập được vì chúng được lưu trong các biến mà chương trình của người dùng có thể thấy.<br />
+Nhưng VM cũng có một vài “ngóc ngách” riêng, nơi nó cất giữ các reference tới những giá trị mà nó truy cập trực tiếp.</p>
+<p>Hầu hết trạng thái của lời gọi hàm nằm trong value stack,<br />
+nhưng VM còn duy trì một stack riêng của các <code>CallFrame</code>.<br />
+Mỗi <code>CallFrame</code> chứa một con trỏ tới closure đang được gọi.<br />
+VM dùng các con trỏ này để truy cập hằng số và upvalue,<br />
+nên những closure này cũng cần được giữ lại.</p>
+<div class="codehilite"><pre class="insert-before">  }
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markRoots</em>()</div>
+<pre class="insert">
+
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">vm</span>.<span class="i">frameCount</span>; <span class="i">i</span>++) {
+    <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">vm</span>.<span class="i">frames</span>[<span class="i">i</span>].<span class="i">closure</span>);
+  }
+</pre><pre class="insert-after">
+
+  markTable(&amp;vm.globals);
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markRoots</em>()</div>
+
+<p>Nói đến upvalue, danh sách <strong>open upvalue</strong> cũng là một tập hợp giá trị khác mà VM có thể truy cập trực tiếp.</p>
+<div class="codehilite"><pre class="insert-before">  for (int i = 0; i &lt; vm.frameCount; i++) {
+    markObject((Obj*)vm.frames[i].closure);
+  }
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markRoots</em>()</div>
+<pre class="insert">
+
+  <span class="k">for</span> (<span class="t">ObjUpvalue</span>* <span class="i">upvalue</span> = <span class="i">vm</span>.<span class="i">openUpvalues</span>;
+       <span class="i">upvalue</span> != <span class="a">NULL</span>;
+       <span class="i">upvalue</span> = <span class="i">upvalue</span>-&gt;<span class="i">next</span>) {
+    <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">upvalue</span>);
+  }
+</pre><pre class="insert-after">
+
+  markTable(&amp;vm.globals);
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markRoots</em>()</div>
+
+<p>Hãy nhớ rằng quá trình collect có thể bắt đầu trong <em>bất kỳ</em> lần allocation nào. Những allocation này không chỉ xảy ra khi chương trình của người dùng đang chạy. Bản thân compiler cũng định kỳ lấy bộ nhớ từ heap cho literal và constant table. Nếu GC chạy khi ta đang ở giữa quá trình compile, thì bất kỳ giá trị nào mà compiler truy cập trực tiếp cũng cần được coi là root.</p>
+<p>Để giữ cho module compiler tách biệt rõ ràng với phần còn lại của VM, ta sẽ làm điều đó trong một hàm riêng.</p>
+<div class="codehilite"><pre class="insert-before">  markTable(&amp;vm.globals);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markRoots</em>()</div>
+<pre class="insert">  <span class="i">markCompilerRoots</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markRoots</em>()</div>
+
+<p>Hàm này được khai báo ở đây:</p>
+<div class="codehilite"><pre class="insert-before">ObjFunction* compile(const char* source);
+</pre><div class="source-file"><em>compiler.h</em><br>
+add after <em>compile</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">markCompilerRoots</span>();
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>compiler.h</em>, add after <em>compile</em>()</div>
+
+<p>Điều này có nghĩa là module &ldquo;memory&rdquo; cần include thêm.</p>
+<div class="codehilite"><pre class="insert-before">#include &lt;stdlib.h&gt;
+
+</pre><div class="source-file"><em>memory.c</em></div>
+<pre class="insert"><span class="a">#include &quot;compiler.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;memory.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em></div>
+
+<p>Và phần định nghĩa nằm trong module &ldquo;compiler&rdquo;.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>compile</em>()</div>
+<pre><span class="t">void</span> <span class="i">markCompilerRoots</span>() {
+  <span class="t">Compiler</span>* <span class="i">compiler</span> = <span class="i">current</span>;
+  <span class="k">while</span> (<span class="i">compiler</span> != <span class="a">NULL</span>) {
+    <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">compiler</span>-&gt;<span class="i">function</span>);
+    <span class="i">compiler</span> = <span class="i">compiler</span>-&gt;<span class="i">enclosing</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>compile</em>()</div>
+
+<p>May mắn là compiler không giữ lại quá nhiều giá trị. Object duy nhất nó dùng là ObjFunction mà nó đang compile. Vì function declaration có thể lồng nhau, compiler có một linked list các ObjFunction đó và ta sẽ duyệt toàn bộ danh sách.</p>
+<p>Vì module &ldquo;compiler&rdquo; gọi <code>markObject()</code>, nó cũng cần include thêm.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;compiler.h&quot;
+</pre><div class="source-file"><em>compiler.c</em></div>
+<pre class="insert"><span class="a">#include &quot;memory.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;scanner.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em></div>
+
+<p>Đó là tất cả các root. Sau khi chạy bước này, mọi object mà VM — cả runtime và compiler — có thể truy cập <em>mà không</em> cần đi qua object khác đều đã được set mark bit.</p>
+<h2><a href="#tracing-object-references" id="tracing-object-references"><small>26&#8202;.&#8202;4</small>Tracing Object References</a></h2>
+<p>Bước tiếp theo trong quá trình marking là lần theo đồ thị các tham chiếu giữa các object để tìm các giá trị reachable gián tiếp. Chúng ta chưa có instance với field, nên chưa có nhiều object chứa tham chiếu, nhưng vẫn có <span name="some">một vài</span>. Cụ thể, ObjClosure có danh sách ObjUpvalue mà nó đóng gói, cũng như tham chiếu tới ObjFunction gốc mà nó bao bọc. ObjFunction, đến lượt nó, có constant table chứa tham chiếu tới tất cả literal được tạo trong phần thân function. Chừng đó là đủ để tạo ra một mạng lưới object khá phức tạp cho collector duyệt qua.</p>
+<aside name="some">
+<p>Tôi đặt chương này vào đúng chỗ này trong sách <em>chính vì</em> giờ chúng ta đã có closure, thứ mang lại cho garbage collector những object thú vị để xử lý.</p>
+</aside>
+<p>Giờ là lúc implement việc duyệt này. Ta có thể duyệt breadth-first, depth-first, hoặc theo thứ tự khác. Vì ta chỉ cần tìm <em>tập hợp</em> tất cả object reachable, thứ tự duyệt <span name="dfs">hầu như</span> không quan trọng.</p>
+<aside name="dfs">
+<p>Tôi nói “hầu như” vì một số garbage collector sẽ di chuyển object theo thứ tự chúng được duyệt, nên thứ tự duyệt quyết định object nào nằm cạnh nhau trong bộ nhớ. Điều này ảnh hưởng đến hiệu năng vì CPU tận dụng tính cục bộ để quyết định vùng nhớ nào sẽ được nạp trước vào cache.</p>
+<p>Ngay cả khi thứ tự duyệt có quan trọng, cũng không rõ thứ tự nào là <em>tốt nhất</em>. Rất khó để xác định object nào sẽ được dùng trong tương lai, nên GC khó biết thứ tự nào sẽ giúp hiệu năng tốt hơn.</p>
+</aside>
+<h3><a href="#the-tricolor-abstraction" id="the-tricolor-abstraction"><small>26&#8202;.&#8202;4&#8202;.&#8202;1</small>The tricolor abstraction</a></h3>
+<p>Khi collector di chuyển qua đồ thị object, ta cần đảm bảo nó không bị mất dấu vị trí hoặc bị kẹt trong vòng lặp. Điều này đặc biệt quan trọng với các implementation nâng cao như incremental GC, vốn xen kẽ việc marking với việc chạy các phần của chương trình người dùng. Collector cần có khả năng tạm dừng và tiếp tục từ đúng chỗ nó dừng lại.</p>
+<p>Để giúp chúng ta — những con người “não mềm” — dễ hình dung quá trình phức tạp này, các hacker VM đã nghĩ ra một phép ẩn dụ gọi là <span name="color"></span><strong>tricolor abstraction</strong>. Mỗi object có một “màu” khái niệm để theo dõi trạng thái của nó và công việc còn lại cần làm.</p>
+<aside name="color">
+<p>Các thuật toán garbage collection nâng cao thường thêm các màu khác vào mô hình này. Tôi từng thấy nhiều sắc độ xám, thậm chí cả màu tím trong một số thiết kế. Bài báo về collector màu puce-chartreuse-fuchsia-malachite của tôi thì, tiếc là, không được chấp nhận đăng.</p>
+</aside>
+<ul>
+<li>
+<p><strong><img src="image/garbage-collection/white.png" alt="A white circle."
+class="dot" /> White:</strong> Ở đầu quá trình garbage collection, mọi object đều màu trắng. Màu này nghĩa là ta chưa hề chạm tới hoặc xử lý object đó.</p>
+</li>
+<li>
+<p><strong><img src="image/garbage-collection/gray.png" alt="A gray circle."
+class="dot" /> Gray:</strong> Trong quá trình marking, khi ta vừa chạm tới một object, ta đổi nó sang màu xám. Màu này nghĩa là ta biết bản thân object đó là reachable và không nên bị collect. Nhưng ta vẫn chưa lần <em>qua</em> nó để xem nó tham chiếu tới <em>các</em> object nào khác. Trong thuật toán đồ thị, đây là <em>worklist</em> — tập hợp các object ta biết nhưng chưa xử lý.</p>
+</li>
+<li>
+<p><strong><img src="image/garbage-collection/black.png" alt="A black circle."
+class="dot" /> Black:</strong> Khi ta lấy một object màu xám và đánh dấu tất cả object mà nó tham chiếu, ta sẽ đổi object màu xám đó thành màu đen. Màu này nghĩa là giai đoạn mark đã xử lý xong object đó.</p>
+</li>
+</ul>
+<p>Theo mô hình này, quá trình marking sẽ như sau:</p>
+<ol>
+<li>
+<p>Bắt đầu với tất cả object màu trắng.</p>
+</li>
+<li>
+<p>Tìm tất cả root và đánh dấu chúng thành màu xám.</p>
+</li>
+<li>
+<p>Lặp lại chừng nào vẫn còn object màu xám:</p>
+<ol>
+<li>
+<p>Chọn một object màu xám. Đổi bất kỳ object màu trắng nào mà nó tham chiếu thành màu xám.</p>
+</li>
+<li>
+<p>Đánh dấu object màu xám ban đầu thành màu đen.</p>
+</li>
+</ol>
+</li>
+</ol>
+<p>Tôi thấy việc hình dung sẽ giúp dễ hiểu hơn. Bạn có một mạng lưới object với các tham chiếu giữa chúng. Ban đầu, tất cả là những chấm trắng nhỏ. Ở bên ngoài có vài cạnh đi vào từ VM trỏ tới các root. Các root đó chuyển sang màu xám. Rồi mỗi “hàng xóm” của object màu xám lại chuyển sang màu xám, trong khi bản thân object đó chuyển sang màu đen. Hiệu ứng tổng thể là một “làn sóng” màu xám lan qua đồ thị, để lại một vùng các object màu đen reachable phía sau. Các object unreachable thì không bị làn sóng chạm tới và vẫn giữ màu trắng.</p><img src="image/garbage-collection/tricolor-trace.png" class="wide" alt="A gray wavefront working through a graph of nodes." />
+<p>Ở <span name="invariant">cuối</span> quá trình, bạn sẽ còn lại một “biển” các object màu đen đã được đánh dấu reachable, xen kẽ là những “hòn đảo” object màu trắng có thể được quét và giải phóng. Khi các object unreachable đã được giải phóng, những object còn lại — tất cả đều màu đen — sẽ được reset về màu trắng cho chu kỳ garbage collection tiếp theo.</p>
+<aside name="invariant">
+<p>Lưu ý rằng ở mọi bước của quá trình này, không có node màu đen nào trỏ tới node màu trắng. Thuộc tính này được gọi là <strong>tricolor invariant</strong>. Quá trình duyệt giữ nguyên invariant này để đảm bảo không có object reachable nào bị collect nhầm.</p>
+</aside>
+<h3><a href="#danh-sách-công-việc-cho-các-object-m&agrave;u-xám" id="danh-sách-công-việc-cho-các-object-m&agrave;u-xám"><small>26&#8202;.&#8202;4&#8202;.&#8202;2</small>Danh sách công việc cho các object m&agrave;u xám</a></h3>
+<p>Trong phần implement của chúng ta, các root đã được đánh dấu. Tất cả chúng đều màu xám. Bước tiếp theo là bắt đầu chọn chúng và duyệt qua các tham chiếu của chúng. Nhưng hiện tại ta không có cách dễ dàng nào để tìm chúng. Ta đã set một field trên object, nhưng chỉ vậy thôi. Ta không muốn phải duyệt toàn bộ danh sách object để tìm những object có field đó được set.</p>
+<p>Thay vào đó, ta sẽ tạo một worklist riêng để theo dõi tất cả object màu xám. Khi một object chuyển sang màu xám, ngoài việc set mark field, ta cũng sẽ thêm nó vào worklist.</p>
+<div class="codehilite"><pre class="insert-before">  object-&gt;isMarked = true;
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markObject</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">vm</span>.<span class="i">grayCapacity</span> &lt; <span class="i">vm</span>.<span class="i">grayCount</span> + <span class="n">1</span>) {
+    <span class="i">vm</span>.<span class="i">grayCapacity</span> = <span class="a">GROW_CAPACITY</span>(<span class="i">vm</span>.<span class="i">grayCapacity</span>);
+    <span class="i">vm</span>.<span class="i">grayStack</span> = (<span class="t">Obj</span>**)<span class="i">realloc</span>(<span class="i">vm</span>.<span class="i">grayStack</span>,
+                                  <span class="k">sizeof</span>(<span class="t">Obj</span>*) * <span class="i">vm</span>.<span class="i">grayCapacity</span>);
+  }
+
+  <span class="i">vm</span>.<span class="i">grayStack</span>[<span class="i">vm</span>.<span class="i">grayCount</span>++] = <span class="i">object</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markObject</em>()</div>
+
+<p>Ta có thể dùng bất kỳ cấu trúc dữ liệu nào cho phép thêm và lấy phần tử dễ dàng. Tôi chọn stack vì nó đơn giản nhất để implement bằng dynamic array trong C. Nó hoạt động gần giống các dynamic array khác mà ta đã xây trong Lox, <em>ngoại trừ</em> việc nó gọi hàm <code>realloc()</code> của <em>hệ thống</em> chứ không phải wrapper <code>reallocate()</code> của chúng ta. Bộ nhớ cho gray stack <em>không</em> được quản lý bởi garbage collector. Ta không muốn việc mở rộng gray stack trong lúc GC chạy lại khiến GC đệ quy khởi động một GC mới. Điều đó có thể “xé toạc” kết cấu không-thời gian.</p>
+<p>Ta sẽ tự quản lý bộ nhớ của nó một cách tường minh. VM sở hữu gray stack.</p>
+<div class="codehilite"><pre class="insert-before">  Obj* objects;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">int</span> <span class="i">grayCount</span>;
+  <span class="t">int</span> <span class="i">grayCapacity</span>;
+  <span class="t">Obj</span>** <span class="i">grayStack</span>;
+</pre><pre class="insert-after">} VM;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Ban đầu nó rỗng.</p>
+<div class="codehilite"><pre class="insert-before">  vm.objects = NULL;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">
+
+  <span class="i">vm</span>.<span class="i">grayCount</span> = <span class="n">0</span>;
+  <span class="i">vm</span>.<span class="i">grayCapacity</span> = <span class="n">0</span>;
+  <span class="i">vm</span>.<span class="i">grayStack</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">
+
+  initTable(&amp;vm.globals);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Và ta cần giải phóng nó khi VM tắt.</p>
+<div class="codehilite"><pre class="insert-before">    object = next;
+  }
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObjects</em>()</div>
+<pre class="insert">
+
+  <span class="i">free</span>(<span class="i">vm</span>.<span class="i">grayStack</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObjects</em>()</div>
+
+<p><span name="robust">Chúng ta</span> chịu hoàn toàn trách nhiệm với mảng này. Điều đó bao gồm cả việc xử lý khi allocation thất bại. Nếu ta không thể tạo hoặc mở rộng gray stack, thì ta không thể hoàn tất garbage collection. Đây là tin xấu cho VM, nhưng may mắn là hiếm khi xảy ra vì gray stack thường khá nhỏ. Sẽ tốt hơn nếu làm gì đó “êm” hơn, nhưng để code trong sách đơn giản, ta chỉ việc abort.</p>
+<aside name="robust">
+<p>Để robust hơn, ta có thể cấp phát một khối bộ nhớ “dự phòng” khi khởi động VM. Nếu allocation cho gray stack thất bại, ta giải phóng khối dự phòng này và thử lại. Điều đó có thể cho ta đủ khoảng trống trên heap để tạo gray stack, hoàn tất GC, và giải phóng thêm bộ nhớ.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">    vm.grayStack = (Obj**)realloc(vm.grayStack,
+                                  sizeof(Obj*) * vm.grayCapacity);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markObject</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">vm</span>.<span class="i">grayStack</span> == <span class="a">NULL</span>) <span class="i">exit</span>(<span class="n">1</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markObject</em>()</div>
+
+<h3><a href="#xử-lý-các-object-m&agrave;u-xám" id="xử-lý-các-object-m&agrave;u-xám"><small>26&#8202;.&#8202;4&#8202;.&#8202;3</small>Xử lý các object m&agrave;u xám</a></h3>
+<p>OK, giờ khi đã đánh dấu xong các root, ta vừa set một loạt field vừa lấp đầy worklist bằng các object cần xử lý. Đến lúc chuyển sang giai đoạn tiếp theo.</p>
+<div class="codehilite"><pre class="insert-before">  markRoots();
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">  <span class="i">traceReferences</span>();
+</pre><pre class="insert-after">
+
+#ifdef DEBUG_LOG_GC
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Đây là phần implement:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>markRoots</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">traceReferences</span>() {
+  <span class="k">while</span> (<span class="i">vm</span>.<span class="i">grayCount</span> &gt; <span class="n">0</span>) {
+    <span class="t">Obj</span>* <span class="i">object</span> = <span class="i">vm</span>.<span class="i">grayStack</span>[--<span class="i">vm</span>.<span class="i">grayCount</span>];
+    <span class="i">blackenObject</span>(<span class="i">object</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>markRoots</em>()</div>
+
+<p>Nó gần giống nhất với thuật toán dạng văn bản mà bạn có thể hình dung. Cho đến khi stack rỗng, ta liên tục lấy ra các object màu xám, duyệt qua các tham chiếu của chúng, rồi đánh dấu chúng thành màu đen. Việc duyệt tham chiếu của một object có thể phát hiện ra các object màu trắng mới, đánh dấu chúng thành màu xám và thêm vào stack. Vậy nên hàm này cứ đan xen giữa việc biến object trắng thành xám và xám thành đen, dần dần đẩy “làn sóng” tiến về phía trước.</p>
+<p>Đây là nơi ta duyệt tham chiếu của một object đơn lẻ:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>markValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">blackenObject</span>(<span class="t">Obj</span>* <span class="i">object</span>) {
+  <span class="k">switch</span> (<span class="i">object</span>-&gt;<span class="i">type</span>) {
+    <span class="k">case</span> <span class="a">OBJ_NATIVE</span>:
+    <span class="k">case</span> <span class="a">OBJ_STRING</span>:
+      <span class="k">break</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>markValue</em>()</div>
+
+<p>Mỗi loại object <span name="leaf">kind</span> có các field khác nhau có thể tham chiếu tới object khác, nên ta cần một đoạn code riêng cho từng loại. Ta bắt đầu với loại dễ — string và native function object không chứa tham chiếu ra ngoài nên không có gì để duyệt.</p>
+<aside name="leaf">
+<p>Một tối ưu hóa đơn giản ta có thể làm trong <code>markObject()</code> là bỏ qua việc thêm string và native function vào gray stack ngay từ đầu vì ta biết chúng không cần xử lý. Thay vào đó, chúng có thể chuyển thẳng từ trắng sang đen.</p>
+</aside>
+<p>Lưu ý rằng ta không set bất kỳ trạng thái nào trong chính object đã duyệt. Không có mã hóa trực tiếp nào cho “màu đen” trong trạng thái của object. Một object màu đen là bất kỳ object nào có field <code>isMarked</code> được <span name="field">set</span> và không còn nằm trong gray stack.</p>
+<aside name="field">
+<p>Bạn có thể tự hỏi tại sao ta lại cần field <code>isMarked</code>. Rồi sẽ rõ thôi, bạn của tôi.</p>
+</aside>
+<p>Giờ hãy bắt đầu thêm các loại object khác. Đơn giản nhất là upvalue.</p>
+<div class="codehilite"><pre class="insert-before">static void blackenObject(Obj* object) {
+  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_UPVALUE</span>:
+      <span class="i">markValue</span>(((<span class="t">ObjUpvalue</span>*)<span class="i">object</span>)-&gt;<span class="i">closed</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case OBJ_NATIVE:
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Khi một upvalue được đóng, nó chứa tham chiếu tới giá trị đã đóng. Vì giá trị này không còn trên stack, ta cần đảm bảo lần theo tham chiếu tới nó từ upvalue.</p>
+<p>Tiếp theo là function.</p>
+<div class="codehilite"><pre class="insert-before">  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_FUNCTION</span>: {
+      <span class="t">ObjFunction</span>* <span class="i">function</span> = (<span class="t">ObjFunction</span>*)<span class="i">object</span>;
+      <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">function</span>-&gt;<span class="i">name</span>);
+      <span class="i">markArray</span>(&amp;<span class="i">function</span>-&gt;<span class="i">chunk</span>.<span class="i">constants</span>);
+      <span class="k">break</span>;
+    }
+</pre><pre class="insert-after">    case OBJ_UPVALUE:
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Mỗi function có tham chiếu tới một ObjString chứa tên function. Quan trọng hơn, function có một constant table chứa đầy tham chiếu tới các object khác. Ta sẽ trace tất cả chúng bằng helper này:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>markValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">markArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>) {
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">array</span>-&gt;<span class="i">count</span>; <span class="i">i</span>++) {
+    <span class="i">markValue</span>(<span class="i">array</span>-&gt;<span class="i">values</span>[<span class="i">i</span>]);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>markValue</em>()</div>
+
+<p>Loại object cuối cùng mà ta có hiện tại — sẽ thêm nữa ở các chương sau — là closure.</p>
+<div class="codehilite"><pre class="insert-before">  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_CLOSURE</span>: {
+      <span class="t">ObjClosure</span>* <span class="i">closure</span> = (<span class="t">ObjClosure</span>*)<span class="i">object</span>;
+      <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">closure</span>-&gt;<span class="i">function</span>);
+      <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">closure</span>-&gt;<span class="i">upvalueCount</span>; <span class="i">i</span>++) {
+        <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">i</span>]);
+      }
+      <span class="k">break</span>;
+    }
+</pre><pre class="insert-after">    case OBJ_FUNCTION: {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Mỗi closure có tham chiếu tới function gốc mà nó bao bọc, cũng như một mảng con trỏ tới các upvalue mà nó capture. Ta trace tất cả chúng.</p>
+<p>Đó là cơ chế cơ bản để xử lý một object màu xám, nhưng còn hai chi tiết cần hoàn thiện. Đầu tiên là logging.</p>
+<div class="codehilite"><pre class="insert-before">static void blackenObject(Obj* object) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert"><span class="a">#ifdef DEBUG_LOG_GC</span>
+  <span class="i">printf</span>(<span class="s">&quot;%p blacken &quot;</span>, (<span class="t">void</span>*)<span class="i">object</span>);
+  <span class="i">printValue</span>(<span class="a">OBJ_VAL</span>(<span class="i">object</span>));
+  <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+<span class="a">#endif</span>
+
+</pre><pre class="insert-after">  switch (object-&gt;type) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Cách này giúp ta quan sát việc tracing lan tỏa qua đồ thị object. Nhân tiện, tôi nói là <em>đồ thị</em>. Các tham chiếu giữa object là có hướng, nhưng điều đó không có nghĩa là chúng <em>phi chu trình</em>! Hoàn toàn có thể tồn tại các vòng lặp object. Khi điều đó xảy ra, ta cần đảm bảo collector không bị kẹt trong vòng lặp vô hạn khi liên tục thêm lại cùng một chuỗi object vào gray stack.</p>
+<p>Cách xử lý rất đơn giản.</p>
+<div class="codehilite"><pre class="insert-before">  if (object == NULL) return;
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markObject</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">object</span>-&gt;<span class="i">isMarked</span>) <span class="k">return</span>;
+
+</pre><pre class="insert-after">#ifdef DEBUG_LOG_GC
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markObject</em>()</div>
+
+<p>Nếu object đã được đánh dấu, ta sẽ không đánh dấu lại và do đó không thêm nó vào gray stack. Điều này đảm bảo rằng một object đã màu xám sẽ không bị thêm trùng lặp, và một object màu đen sẽ không bị chuyển ngược lại thành xám. Nói cách khác, nó giữ cho “làn sóng” chỉ tiến qua các object màu trắng.</p>
+<h2><a href="#quét-các-object-không-dùng" id="quét-các-object-không-dùng"><small>26&#8202;.&#8202;5</small>Quét các object không dùng</a></h2>
+<p>Khi vòng lặp trong <code>traceReferences()</code> kết thúc, chúng ta đã xử lý hết mọi object có thể “chạm tới”. Gray stack trống rỗng, và mọi object trong heap hoặc là đen hoặc là trắng. Các object đen là reachable, và ta muốn giữ chúng lại. Bất cứ thứ gì còn trắng đều chưa hề bị trace chạm tới, tức là rác. Việc còn lại là thu hồi chúng.</p>
+<div class="codehilite"><pre class="insert-before">  traceReferences();
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">  <span class="i">sweep</span>();
+</pre><pre class="insert-after">
+
+#ifdef DEBUG_LOG_GC
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Toàn bộ logic nằm trong một hàm.</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>traceReferences</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">sweep</span>() {
+  <span class="t">Obj</span>* <span class="i">previous</span> = <span class="a">NULL</span>;
+  <span class="t">Obj</span>* <span class="i">object</span> = <span class="i">vm</span>.<span class="i">objects</span>;
+  <span class="k">while</span> (<span class="i">object</span> != <span class="a">NULL</span>) {
+    <span class="k">if</span> (<span class="i">object</span>-&gt;<span class="i">isMarked</span>) {
+      <span class="i">previous</span> = <span class="i">object</span>;
+      <span class="i">object</span> = <span class="i">object</span>-&gt;<span class="i">next</span>;
+    } <span class="k">else</span> {
+      <span class="t">Obj</span>* <span class="i">unreached</span> = <span class="i">object</span>;
+      <span class="i">object</span> = <span class="i">object</span>-&gt;<span class="i">next</span>;
+      <span class="k">if</span> (<span class="i">previous</span> != <span class="a">NULL</span>) {
+        <span class="i">previous</span>-&gt;<span class="i">next</span> = <span class="i">object</span>;
+      } <span class="k">else</span> {
+        <span class="i">vm</span>.<span class="i">objects</span> = <span class="i">object</span>;
+      }
+
+      <span class="i">freeObject</span>(<span class="i">unreached</span>);
+    }
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>traceReferences</em>()</div>
+
+<p>Tôi biết nhìn thì khá nhiều code và trò con trỏ, nhưng khi đi qua rồi thì không có gì phức tạp. Vòng lặp <code>while</code> bên ngoài duyệt linked list của toàn bộ object trong heap, kiểm tra mark bit của chúng. Nếu một object đã được đánh dấu (đen), ta để nguyên và đi tiếp. Nếu nó chưa được đánh dấu (trắng), ta bỏ liên kết nó khỏi danh sách và giải phóng bằng hàm <code>freeObject()</code> mà ta đã viết.</p><img src="image/garbage-collection/unlink.png" alt="A recycle bin full of bits." />
+<p>Phần lớn code còn lại xử lý thực tế là gỡ một node khỏi singly linked list khá lằng nhằng. Ta phải luôn nhớ node trước đó để có thể bỏ liên kết con trỏ next của nó, và phải xử lý trường hợp cạnh khi đang giải phóng node đầu tiên. Còn lại thì rất đơn giản — xóa mọi node trong linked list mà không có bit được set.</p>
+<p>Có một bổ sung nhỏ:</p>
+<div class="codehilite"><pre class="insert-before">    if (object-&gt;isMarked) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>sweep</em>()</div>
+<pre class="insert">      <span class="i">object</span>-&gt;<span class="i">isMarked</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">      previous = object;
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>sweep</em>()</div>
+
+<p>Sau khi <code>sweep()</code> hoàn tất, những object còn lại là các object đen “sống” với mark bit đang bật. Điều đó là đúng, nhưng khi chu kỳ collect <em>tiếp theo</em> bắt đầu, ta cần mọi object trở lại màu trắng. Vì vậy, bất cứ khi nào gặp một object đen, ta xóa bit ngay lúc này để sẵn sàng cho lần chạy tiếp theo.</p>
+<h3><a href="#weak-reference-&-string-pool" id="weak-reference-&-string-pool"><small>26&#8202;.&#8202;5&#8202;.&#8202;1</small>Weak reference &amp; string pool</a></h3>
+<p>Chúng ta gần như đã xong phần collect. Còn một góc nhỏ của VM có yêu cầu hơi khác thường về bộ nhớ. Nhớ rằng khi thêm string vào clox, ta đã intern tất cả chúng. Điều đó có nghĩa VM giữ một hash table chứa con trỏ tới mọi string trong heap. VM dùng điều này để loại trùng string.</p>
+<p>Trong giai đoạn mark, chúng ta cố tình <em>không</em> coi string table của VM là nguồn root. Nếu làm vậy, sẽ không <span name="intern">string</span> nào <em>bao giờ</em> được collect. String table sẽ phình to mãi và không bao giờ trả lại một byte nào cho hệ điều hành. Như vậy thì tệ.</p>
+<aside name="intern">
+<p>Đây có thể là vấn đề thực sự. Java không intern <em>tất cả</em> string, nhưng có intern string <em>literal</em>. Nó cũng cung cấp API để thêm string vào string table. Trong nhiều năm, dung lượng bảng đó là cố định, và string đã thêm thì không thể xóa. Nếu người dùng không cẩn thận với <code>String.intern()</code>, họ có thể hết bộ nhớ và crash.</p>
+<p>Ruby từng gặp vấn đề tương tự trong nhiều năm với symbol — các giá trị giống string đã intern — không được garbage collected. Cuối cùng cả hai đều cho phép GC thu gom các string này.</p>
+</aside>
+<p>Đồng thời, nếu ta <em>cho phép</em> GC giải phóng string, thì string table của VM sẽ còn lại các con trỏ “rơi rớt” trỏ tới vùng nhớ đã được giải phóng. Điều đó còn tệ hơn.</p>
+<p>String table là trường hợp đặc biệt và cần hỗ trợ đặc biệt. Cụ thể, nó cần một kiểu tham chiếu đặc biệt. Bảng này nên có thể tham chiếu tới một string, nhưng liên kết đó không được coi là root khi xác định reachability. Điều đó ngụ ý object được tham chiếu có thể bị giải phóng. Khi điều đó xảy ra, tham chiếu “rủ xuống” phải được dọn dẹp — kiểu như một con trỏ tự xóa một cách “ma thuật”. Tập hợp semantics này đủ phổ biến để có tên riêng: <a href="https://en.wikipedia.org/wiki/Weak_reference"><strong>weak reference</strong></a>.</p>
+<p>Chúng ta thực ra đã ngầm implement một nửa hành vi đặc thù của string table bằng việc <em>không</em> duyệt nó trong giai đoạn marking. Điều đó có nghĩa nó không ép string phải reachable. Phần còn lại là xóa mọi con trỏ rơi rớt tới các string đã bị giải phóng.</p>
+<p>Để xóa các tham chiếu tới string unreachable, ta cần biết string nào <em>là</em> unreachable. Ta chỉ biết điều đó sau khi giai đoạn mark hoàn tất. Nhưng ta không thể chờ tới sau khi sweep xong vì lúc đó các object — và mark bit của chúng — đã không còn để kiểm tra. Vậy nên thời điểm đúng là ngay giữa hai giai đoạn marking và sweeping.</p>
+<div class="codehilite"><pre class="insert-before">  traceReferences();
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">  <span class="i">tableRemoveWhite</span>(&amp;<span class="i">vm</span>.<span class="i">strings</span>);
+</pre><pre class="insert-after">  sweep();
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Logic để xóa các string sắp bị xóa nằm trong một hàm mới ở module &ldquo;table&rdquo;.</p>
+<div class="codehilite"><pre class="insert-before">ObjString* tableFindString(Table* table, const char* chars,
+                           int length, uint32_t hash);
+</pre><div class="source-file"><em>table.h</em><br>
+add after <em>tableFindString</em>()</div>
+<pre class="insert">
+
+<span class="t">void</span> <span class="i">tableRemoveWhite</span>(<span class="t">Table</span>* <span class="i">table</span>);
+</pre><pre class="insert-after">void markTable(Table* table);
+
+</pre></div>
+<div class="source-file-narrow"><em>table.h</em>, add after <em>tableFindString</em>()</div>
+
+<p>Phần implement ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>table.c</em><br>
+add after <em>tableFindString</em>()</div>
+<pre><span class="t">void</span> <span class="i">tableRemoveWhite</span>(<span class="t">Table</span>* <span class="i">table</span>) {
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">table</span>-&gt;<span class="i">capacity</span>; <span class="i">i</span>++) {
+    <span class="t">Entry</span>* <span class="i">entry</span> = &amp;<span class="i">table</span>-&gt;<span class="i">entries</span>[<span class="i">i</span>];
+    <span class="k">if</span> (<span class="i">entry</span>-&gt;<span class="i">key</span> != <span class="a">NULL</span> &amp;&amp; !<span class="i">entry</span>-&gt;<span class="i">key</span>-&gt;<span class="i">obj</span>.<span class="i">isMarked</span>) {
+      <span class="i">tableDelete</span>(<span class="i">table</span>, <span class="i">entry</span>-&gt;<span class="i">key</span>);
+    }
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>table.c</em>, add after <em>tableFindString</em>()</div>
+
+<p>Ta duyệt mọi entry trong bảng. Bảng intern string chỉ dùng key của mỗi entry — về cơ bản nó là một hash <em>set</em>, không phải hash <em>map</em>. Nếu mark bit của object string trong key chưa được set, thì đó là một object trắng, sắp bị quét bỏ. Ta xóa nó khỏi hash table trước, nhờ đó đảm bảo sẽ không còn con trỏ rơi rớt nào.</p>
+<h2><a href="#khi-n&agrave;o-thì-collect" id="khi-n&agrave;o-thì-collect"><small>26&#8202;.&#8202;6</small>Khi n&agrave;o thì Collect</a></h2>
+<p>Giờ chúng ta đã có một mark-sweep garbage collector hoạt động đầy đủ. Khi bật stress testing flag, nó sẽ được gọi liên tục, và khi bật cả logging, ta có thể quan sát nó làm việc và thấy rõ nó thực sự thu hồi bộ nhớ. Nhưng khi tắt stress testing flag, nó sẽ không bao giờ chạy. Đã đến lúc quyết định khi nào collector nên được gọi trong quá trình chạy chương trình bình thường.</p>
+<p>Theo như tôi thấy, câu hỏi này không được trả lời thỏa đáng trong các tài liệu. Khi garbage collector mới ra đời, máy tính chỉ có một lượng bộ nhớ nhỏ, cố định. Nhiều bài báo GC thời kỳ đầu giả định rằng bạn dành ra vài nghìn từ bộ nhớ — tức là phần lớn bộ nhớ — và gọi collector mỗi khi hết sạch. Đơn giản.</p>
+<p>Máy hiện đại có hàng gigabyte RAM vật lý, được ẩn sau lớp trừu tượng bộ nhớ ảo còn lớn hơn của hệ điều hành, và được chia sẻ cho hàng loạt chương trình khác đang tranh nhau phần bộ nhớ của mình. Hệ điều hành sẽ cho phép chương trình của bạn yêu cầu bao nhiêu cũng được, rồi hoán đổi (page) vào/ra từ đĩa khi RAM vật lý đầy. Bạn sẽ không bao giờ thực sự “hết” bộ nhớ, chỉ là chương trình sẽ chạy chậm dần.</p>
+<h3><a href="#latency-&-throughput" id="latency-&-throughput"><small>26&#8202;.&#8202;6&#8202;.&#8202;1</small>Latency &amp; throughput</a></h3>
+<p>Không còn hợp lý nếu chờ đến khi “bắt buộc” mới chạy GC, nên ta cần một chiến lược thời điểm tinh tế hơn. Để phân tích chính xác hơn, đã đến lúc giới thiệu hai con số cơ bản dùng để đo hiệu năng của một memory manager: <em>throughput</em> và <em>latency</em>.</p>
+<p>Mọi ngôn ngữ managed đều phải trả giá hiệu năng so với việc giải phóng bộ nhớ thủ công do lập trình viên viết. Thời gian thực sự để giải phóng bộ nhớ là như nhau, nhưng GC phải tốn chu kỳ CPU để xác định <em>vùng nhớ nào</em> cần giải phóng. Đó là thời gian <em>không</em> dành cho việc chạy code của người dùng và làm công việc hữu ích. Trong implement của chúng ta, đó chính là toàn bộ giai đoạn mark. Mục tiêu của một garbage collector tinh vi là giảm thiểu overhead này.</p>
+<p>Có hai chỉ số chính để hiểu rõ hơn chi phí đó:</p>
+<ul>
+<li>
+<p><strong>Throughput</strong> là tỷ lệ tổng thời gian chạy code người dùng so với thời gian làm việc GC. Giả sử bạn chạy một chương trình clox trong 10 giây và dành 1 giây trong <code>collectGarbage()</code>. Điều đó nghĩa là throughput là 90% — 90% thời gian chạy chương trình và 10% cho overhead GC.</p>
+<p>Throughput là thước đo cơ bản nhất vì nó phản ánh tổng chi phí overhead của collection. Mọi yếu tố khác giữ nguyên, bạn muốn tối đa hóa throughput. Trước chương này, clox không có GC nên đạt <span name="hundred">100%</span> throughput. Khó mà vượt qua được. Tất nhiên, điều đó phải trả giá bằng nguy cơ hết bộ nhớ và crash nếu chương trình người dùng chạy đủ lâu. Bạn có thể coi mục tiêu của GC là sửa “lỗi” đó trong khi hy sinh ít throughput nhất có thể.</p>
+</li>
+</ul>
+<aside name="hundred">
+<p>Thực ra không <em>hoàn toàn</em> 100%. Nó vẫn phải đưa các object được cấp phát vào linked list, nên cũng có chút overhead nhỏ để set các con trỏ đó.</p>
+</aside>
+<ul>
+<li>
+<p><strong>Latency</strong> là khoảng thời gian <em>liên tục</em> dài nhất mà chương trình người dùng bị dừng hoàn toàn để chạy garbage collection. Đây là thước đo mức độ “gián đoạn” của collector. Latency là một chỉ số hoàn toàn khác với throughput.</p>
+<p>Hãy so sánh hai lần chạy chương trình clox, mỗi lần đều mất 10 giây. Lần đầu, GC chạy một lần và mất trọn 1 giây trong <code>collectGarbage()</code> cho một đợt collect lớn. Lần thứ hai, GC được gọi 5 lần, mỗi lần 1/5 giây. Tổng thời gian collect vẫn là 1 giây, nên throughput ở cả hai trường hợp đều là 90%. Nhưng ở lần thứ hai, latency chỉ là 1/5 giây, thấp hơn 5 lần so với lần đầu.</p>
+</li>
+</ul>
+<p><span name="latency"></span></p><img src="image/garbage-collection/latency-throughput.png" alt="Một thanh biểu diễn thời gian execute với các phần cho chạy code người dùng và chạy GC. Phần GC lớn nhất là latency. Tổng kích thước các phần code người dùng là throughput." />
+<aside name="latency">
+<p>Thanh này biểu diễn quá trình execute chương trình, chia thành thời gian chạy code người dùng và thời gian chạy GC. Kích thước của phần thời gian chạy GC lớn nhất là latency. Tổng kích thước các phần code người dùng cộng lại là throughput.</p>
+</aside>
+<p>Nếu bạn thích ví von, hãy tưởng tượng chương trình của bạn là một tiệm bánh bán bánh mì mới nướng cho khách. Throughput là tổng số bánh mì nóng giòn bạn phục vụ được trong một ngày. Latency là thời gian mà vị khách xui nhất phải chờ trong hàng trước khi được phục vụ.</p>
+<p><span name="dishwasher">Chạy</span> garbage collector giống như tạm thời đóng cửa tiệm để rửa bát đĩa, phân loại đồ bẩn và đồ sạch, rồi rửa sạch đồ đã dùng. Trong ví dụ này, ta không có nhân viên rửa bát riêng, nên khi việc này diễn ra, không có bánh nào được nướng. Thợ làm bánh đang đi rửa bát.</p>
+<aside name="dishwasher">
+<p>Nếu mỗi người là một thread, thì tối ưu hiển nhiên là có thread riêng chạy garbage collection, tạo thành <strong>concurrent garbage collector</strong>. Nói cách khác, thuê vài người rửa bát trong khi người khác vẫn nướng bánh. Đây là cách các GC rất tinh vi hoạt động vì nó cho phép thợ làm bánh — các worker thread — tiếp tục chạy code người dùng với ít gián đoạn.</p>
+<p>Tuy nhiên, cần có sự phối hợp. Bạn không muốn người rửa bát giật cái bát khỏi tay thợ làm bánh! Sự phối hợp này thêm overhead và nhiều phức tạp. Concurrent collector nhanh, nhưng khó implement đúng.</p><img src="image/garbage-collection/baguette.png" class="above" alt="Un baguette." />
+</aside>
+<p>Bán ít bánh hơn mỗi ngày là điều tệ, và bắt một khách nào đó phải ngồi chờ trong khi bạn rửa hết đống bát đĩa cũng tệ. Mục tiêu là tối đa throughput và tối thiểu latency, nhưng không có bữa trưa miễn phí, ngay cả trong tiệm bánh. Garbage collector đưa ra những đánh đổi khác nhau giữa lượng throughput hy sinh và mức latency chấp nhận.</p>
+<p>Khả năng điều chỉnh những đánh đổi này là hữu ích vì các chương trình người dùng khác nhau có nhu cầu khác nhau. Một batch job chạy qua đêm để tạo báo cáo từ một terabyte dữ liệu chỉ cần hoàn thành càng nhiều việc càng nhanh càng tốt. Throughput là tối thượng. Trong khi đó, một ứng dụng chạy trên smartphone của người dùng cần luôn phản hồi ngay lập tức với thao tác để việc kéo thả trên màn hình cảm giác mượt <span name="butter">buttery</span>. Ứng dụng không thể “đóng băng” vài giây trong khi GC lục lọi heap.</p>
+<aside name="butter">
+<p>Rõ ràng là ví dụ tiệm bánh đang ám ảnh tôi.</p>
+</aside>
+<p>Là tác giả garbage collector, bạn kiểm soát một phần sự đánh đổi giữa throughput và latency bằng cách chọn thuật toán collect. Nhưng ngay cả trong một thuật toán duy nhất, ta vẫn có nhiều quyền kiểm soát <em>tần suất</em> collector chạy.</p>
+<p>Collector của chúng ta là <span name="incremental"><strong>stop-the-world GC</strong></span>, nghĩa là chương trình người dùng bị tạm dừng cho đến khi toàn bộ quá trình garbage collection hoàn tất. Nếu ta chờ lâu mới chạy collector, thì số lượng object chết sẽ tích tụ nhiều. Điều đó dẫn đến một lần dừng rất lâu khi collector chạy, và vì thế latency cao. Vậy nên, rõ ràng là ta muốn chạy collector thường xuyên hơn.</p>
+<aside name="incremental">
+<p>Ngược lại, <strong>incremental garbage collector</strong> có thể collect một chút, rồi chạy code người dùng, rồi collect thêm chút nữa, và cứ thế.</p>
+</aside>
+<p>Nhưng mỗi lần collector chạy, nó sẽ tốn thời gian để duyệt qua các live object. Việc này thực ra không <em>làm</em> được gì hữu ích (ngoài việc đảm bảo chúng không bị xóa nhầm). Thời gian duyệt live object là thời gian không giải phóng bộ nhớ, và cũng là thời gian không chạy code của người dùng. Nếu bạn chạy GC <em>quá</em> thường xuyên, chương trình của người dùng thậm chí không có đủ thời gian để tạo ra rác mới cho VM thu gom. VM sẽ dành toàn bộ thời gian để ám ảnh lặp đi lặp lại cùng một tập live object, và throughput sẽ giảm. Vậy nên, rõ ràng là ta muốn chạy collector thật <em>ít</em>.</p>
+<p>Thực tế, ta muốn một điểm ở giữa, và tần suất collector chạy là một trong những “núm vặn” chính để tinh chỉnh sự đánh đổi giữa latency và throughput.</p>
+<h3><a href="#self-adjusting-heap" id="self-adjusting-heap"><small>26&#8202;.&#8202;6&#8202;.&#8202;2</small>Self-adjusting heap</a></h3>
+<p>Ta muốn GC chạy đủ thường xuyên để giảm latency, nhưng cũng đủ thưa để giữ throughput ở mức tốt. Nhưng làm sao tìm được điểm cân bằng khi ta không biết chương trình của người dùng cần bao nhiêu bộ nhớ và tần suất cấp phát ra sao? Ta có thể đẩy vấn đề này cho người dùng và bắt họ tự chọn bằng cách cung cấp các tham số tinh chỉnh GC. Nhiều VM làm vậy. Nhưng nếu chính chúng ta — tác giả GC — còn không biết tinh chỉnh thế nào cho tốt, thì khả năng cao là đa số người dùng cũng không biết. Họ xứng đáng có một hành vi mặc định hợp lý.</p>
+<p>Thành thật mà nói, đây không phải lĩnh vực tôi giỏi. Tôi đã nói chuyện với nhiều “hacker” GC chuyên nghiệp — đây là thứ bạn có thể xây dựng cả sự nghiệp — và đọc nhiều tài liệu, nhưng tất cả câu trả lời tôi nhận được đều… mơ hồ. Chiến lược tôi chọn là một cách phổ biến, khá đơn giản, và (hy vọng là) đủ tốt cho hầu hết trường hợp.</p>
+<p>Ý tưởng là tần suất collector sẽ tự động điều chỉnh dựa trên kích thước live của heap. Ta theo dõi tổng số byte bộ nhớ managed mà VM đã cấp phát. Khi nó vượt quá một ngưỡng nào đó, ta kích hoạt GC. Sau đó, ta ghi nhận số byte bộ nhớ còn lại — tức là số byte <em>không</em> được giải phóng. Rồi ta điều chỉnh ngưỡng lên một giá trị lớn hơn con số đó.</p>
+<p>Kết quả là khi lượng live memory tăng, ta collect ít thường xuyên hơn để tránh hy sinh throughput do phải duyệt lại đống live object ngày càng lớn. Khi lượng live memory giảm, ta collect thường xuyên hơn để không mất quá nhiều latency vì chờ quá lâu.</p>
+<p>Việc implement cần thêm hai trường bookkeeping mới trong VM.</p>
+<div class="codehilite"><pre class="insert-before">  ObjUpvalue* openUpvalues;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">
+
+  <span class="t">size_t</span> <span class="i">bytesAllocated</span>;
+  <span class="t">size_t</span> <span class="i">nextGC</span>;
+</pre><pre class="insert-after">  Obj* objects;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Trường đầu tiên là tổng số byte bộ nhớ managed mà VM đã cấp phát. Trường thứ hai là ngưỡng kích hoạt lần collect tiếp theo. Ta khởi tạo chúng khi VM khởi động.</p>
+<div class="codehilite"><pre class="insert-before">  vm.objects = NULL;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">bytesAllocated</span> = <span class="n">0</span>;
+  <span class="i">vm</span>.<span class="i">nextGC</span> = <span class="n">1024</span> * <span class="n">1024</span>;
+</pre><pre class="insert-after">
+
+  vm.grayCount = 0;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Ngưỡng ban đầu ở đây là <span name="lab">tùy ý</span>. Nó giống như dung lượng khởi tạo mà ta chọn cho các dynamic array trước đây. Mục tiêu là không kích hoạt vài lần GC đầu <em>quá</em> nhanh nhưng cũng không để chờ quá lâu. Nếu ta có một số chương trình Lox thực tế, ta có thể profile để tinh chỉnh. Nhưng vì hiện tại chỉ có các chương trình “đồ chơi”, tôi chọn đại một con số.</p>
+<aside name="lab">
+<p>Một thách thức khi học về garbage collector là <em>rất</em> khó tìm ra best practice trong môi trường lab tách biệt. Bạn sẽ không thấy collector thực sự hoạt động thế nào trừ khi chạy nó trên những chương trình lớn, phức tạp, lộn xộn ngoài đời thực — đúng kiểu mà nó được thiết kế để xử lý. Giống như tinh chỉnh xe đua rally — bạn phải mang nó ra đường đua.</p>
+</aside>
+<p>Mỗi lần ta cấp phát hoặc giải phóng bộ nhớ, ta điều chỉnh bộ đếm theo delta đó.</p>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>reallocate</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">bytesAllocated</span> += <span class="i">newSize</span> - <span class="i">oldSize</span>;
+</pre><pre class="insert-after">  if (newSize &gt; oldSize) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>reallocate</em>()</div>
+
+<p>Khi tổng số vượt ngưỡng, ta chạy collector.</p>
+<div class="codehilite"><pre class="insert-before">    collectGarbage();
+#endif
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>reallocate</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">vm</span>.<span class="i">bytesAllocated</span> &gt; <span class="i">vm</span>.<span class="i">nextGC</span>) {
+      <span class="i">collectGarbage</span>();
+    }
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>reallocate</em>()</div>
+
+<p>Giờ thì cuối cùng, garbage collector của chúng ta thực sự làm việc khi người dùng chạy chương trình mà không bật hidden diagnostic flag. Giai đoạn sweep giải phóng object bằng cách gọi <code>reallocate()</code>, điều này làm giảm giá trị <code>bytesAllocated</code>, nên sau khi collect xong, ta biết còn lại bao nhiêu byte live. Ta điều chỉnh ngưỡng cho lần GC tiếp theo dựa trên con số đó.</p>
+<div class="codehilite"><pre class="insert-before">  sweep();
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">
+
+  <span class="i">vm</span>.<span class="i">nextGC</span> = <span class="i">vm</span>.<span class="i">bytesAllocated</span> * <span class="a">GC_HEAP_GROW_FACTOR</span>;
+</pre><pre class="insert-after">
+
+#ifdef DEBUG_LOG_GC
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Ngưỡng này là một bội số của kích thước heap. Bằng cách này, khi lượng bộ nhớ chương trình dùng tăng, ngưỡng sẽ lùi xa hơn để giới hạn tổng thời gian duyệt lại tập live lớn hơn. Giống như các con số khác trong chương này, hệ số nhân này về cơ bản là tùy ý.</p>
+<div class="codehilite"><pre class="insert-before">#endif
+</pre><div class="source-file"><em>memory.c</em></div>
+<pre class="insert">
+
+<span class="a">#define GC_HEAP_GROW_FACTOR 2</span>
+</pre><pre class="insert-after">
+
+void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em></div>
+
+<p>Bạn sẽ muốn tinh chỉnh nó trong implement của mình khi có một số chương trình thực tế để benchmark. Còn bây giờ, ít nhất ta có thể log một số thống kê hiện có. Ta ghi nhận kích thước heap trước khi collect.</p>
+<div class="codehilite"><pre class="insert-before">  printf(&quot;-- gc begin\n&quot;);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">  <span class="t">size_t</span> <span class="i">before</span> = <span class="i">vm</span>.<span class="i">bytesAllocated</span>;
+</pre><pre class="insert-after">#endif
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Và in kết quả ở cuối.</p>
+<div class="codehilite"><pre class="insert-before">  printf(&quot;-- gc end\n&quot;);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>collectGarbage</em>()</div>
+<pre class="insert">  <span class="i">printf</span>(<span class="s">&quot;   collected %zu bytes (from %zu to %zu) next at %zu</span><span class="e">\n</span><span class="s">&quot;</span>,
+         <span class="i">before</span> - <span class="i">vm</span>.<span class="i">bytesAllocated</span>, <span class="i">before</span>, <span class="i">vm</span>.<span class="i">bytesAllocated</span>,
+         <span class="i">vm</span>.<span class="i">nextGC</span>);
+</pre><pre class="insert-after">#endif
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>collectGarbage</em>()</div>
+
+<p>Bằng cách này, ta có thể thấy garbage collector đã làm được bao nhiêu việc trong lúc chạy.</p>
+<h2><a href="#lỗi-trong-garbage-collection" id="lỗi-trong-garbage-collection"><small>26&#8202;.&#8202;7</small>Lỗi trong Garbage Collection</a></h2>
+<p>Về lý thuyết, đến đây là chúng ta đã xong. Chúng ta có một GC. Nó chạy định kỳ, thu gom những gì có thể, và để lại phần còn lại. Nếu đây là một cuốn giáo trình thông thường, ta sẽ phủi bụi khỏi tay và tận hưởng ánh hào quang của tòa kiến trúc cẩm thạch hoàn hảo mà mình vừa tạo ra.</p>
+<p>Nhưng tôi muốn dạy bạn không chỉ lý thuyết về ngôn ngữ lập trình mà cả thực tế đôi khi đầy đau đớn. Tôi sẽ lật một khúc gỗ mục và cho bạn thấy những con bọ gớm ghiếc sống bên dưới, và lỗi trong garbage collector thực sự là một trong những loài “không xương” kinh khủng nhất.</p>
+<p>Nhiệm vụ của collector là giải phóng các object chết và giữ lại các object sống. Sai lầm có thể xảy ra dễ dàng ở cả hai hướng. Nếu VM không giải phóng các object không cần thiết, nó sẽ rò rỉ bộ nhớ từ từ. Nếu nó giải phóng một object vẫn đang được dùng, chương trình của người dùng có thể truy cập vào vùng nhớ không hợp lệ. Những lỗi này thường không gây crash ngay lập tức, khiến việc lần ngược lại để tìm nguyên nhân trở nên khó khăn.</p>
+<p>Điều này càng khó hơn vì ta không biết khi nào collector sẽ chạy. Bất kỳ lời gọi nào cuối cùng cũng dẫn đến việc cấp phát bộ nhớ đều là một điểm trong VM nơi collection có thể xảy ra. Nó giống như trò “ghế nhạc”. Bất cứ lúc nào, GC cũng có thể dừng nhạc. Mỗi object được cấp phát trên heap mà ta muốn giữ lại cần phải nhanh chóng “tìm được ghế” — được đánh dấu là root hoặc được lưu dưới dạng tham chiếu trong một object khác — trước khi giai đoạn sweep đến và đá nó ra khỏi cuộc chơi.</p>
+<p>Làm sao VM có thể dùng một object sau này — một object mà GC không thấy? Làm sao VM tìm được nó? Câu trả lời phổ biến nhất là thông qua một con trỏ được lưu trong biến local trên C stack. GC sẽ duyệt qua value stack và CallFrame stack của <em>VM</em>, nhưng C stack thì lại <span name="c">ẩn</span> với nó.</p>
+<aside name="c">
+<p>GC của chúng ta không thể tìm địa chỉ trong C stack, nhưng nhiều GC khác thì có thể. Conservative garbage collector sẽ quét toàn bộ bộ nhớ, bao gồm cả native stack. Loại nổi tiếng nhất là <a href="https://en.wikipedia.org/wiki/Boehm_garbage_collector"><strong>Boehm–Demers–Weiser garbage collector</strong></a>, thường được gọi ngắn gọn là “Boehm collector”. (Con đường ngắn nhất để nổi tiếng trong ngành khoa học máy tính là có họ đứng đầu bảng chữ cái để tên bạn xuất hiện đầu tiên trong danh sách sắp xếp theo tên.)</p>
+<p>Nhiều precise GC cũng duyệt C stack. Ngay cả những GC đó cũng phải cẩn thận với các con trỏ tới object sống chỉ tồn tại trong <em>thanh ghi CPU</em>.</p>
+</aside>
+<p>Trong các chương trước, chúng ta đã viết những đoạn code tưởng như vô nghĩa: đẩy một object lên value stack của VM, làm một chút việc, rồi lại pop nó xuống. Hầu hết thời gian, tôi nói rằng điều này là để phục vụ GC. Giờ bạn đã thấy lý do. Đoạn code giữa push và pop có thể cấp phát bộ nhớ và do đó kích hoạt GC. Ta phải đảm bảo object nằm trên value stack để giai đoạn mark của collector tìm thấy và giữ nó sống.</p>
+<p>Tôi đã viết toàn bộ implement của clox trước khi chia nó thành các chương và viết phần giải thích, nên tôi có nhiều thời gian để tìm ra những góc khuất này và loại bỏ hầu hết các lỗi. Phần code stress testing mà ta thêm vào đầu chương này và một bộ test khá tốt đã giúp ích rất nhiều.</p>
+<p>Nhưng tôi chỉ sửa <em>hầu hết</em> chúng. Tôi cố tình để lại vài lỗi vì muốn bạn cảm nhận được việc gặp những lỗi này “ngoài đời” như thế nào. Nếu bạn bật stress test flag và chạy vài chương trình Lox nhỏ, có thể bạn sẽ bắt gặp một vài lỗi. Hãy thử xem <em>bạn có thể tự sửa được cái nào không</em>.</p>
+<h3><a href="#thêm-v&agrave;o-constant-table" id="thêm-v&agrave;o-constant-table"><small>26&#8202;.&#8202;7&#8202;.&#8202;1</small>Thêm v&agrave;o constant table</a></h3>
+<p>Bạn rất có thể sẽ gặp lỗi đầu tiên này. Constant table mà mỗi chunk sở hữu là một dynamic array. Khi compiler thêm một constant mới vào bảng của function hiện tại, mảng này có thể cần mở rộng. Bản thân constant đó cũng có thể là một object được cấp phát trên heap như string hoặc function lồng nhau.</p>
+<p>Object mới được thêm vào constant table sẽ được truyền vào <code>addConstant()</code>. Tại thời điểm đó, object này chỉ tồn tại trong tham số của hàm trên C stack. Hàm này sẽ append object vào constant table. Nếu bảng không đủ dung lượng và cần mở rộng, nó sẽ gọi <code>reallocate()</code>. Điều này sẽ kích hoạt GC, và GC sẽ không đánh dấu object constant mới, dẫn đến việc quét và xóa nó ngay trước khi ta kịp thêm vào bảng. Crash.</p>
+<p>Cách sửa, như bạn đã thấy ở những chỗ khác, là push constant đó lên stack tạm thời.</p>
+<div class="codehilite"><pre class="insert-before">int addConstant(Chunk* chunk, Value value) {
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>addConstant</em>()</div>
+<pre class="insert">  <span class="i">push</span>(<span class="i">value</span>);
+</pre><pre class="insert-after">  writeValueArray(&amp;chunk-&gt;constants, value);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>addConstant</em>()</div>
+
+<p>Khi constant table đã chứa object, ta pop nó khỏi stack.</p>
+<div class="codehilite"><pre class="insert-before">  writeValueArray(&amp;chunk-&gt;constants, value);
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>addConstant</em>()</div>
+<pre class="insert">  <span class="i">pop</span>();
+</pre><pre class="insert-after">  return chunk-&gt;constants.count - 1;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>addConstant</em>()</div>
+
+<p>Khi GC đánh dấu root, nó sẽ duyệt chuỗi compiler và đánh dấu từng function của chúng, nên constant mới giờ đã reachable. Ta cần thêm include để gọi vào VM từ module &ldquo;chunk&rdquo;.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;memory.h&quot;
+</pre><div class="source-file"><em>chunk.c</em></div>
+<pre class="insert"><span class="a">#include &quot;vm.h&quot;</span>
+</pre><pre class="insert-after">
+
+void initChunk(Chunk* chunk) {
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em></div>
+
+<h3><a href="#interning-string" id="interning-string"><small>26&#8202;.&#8202;7&#8202;.&#8202;2</small>Interning string</a></h3>
+<p>Đây là một lỗi tương tự. Tất cả string trong clox đều được intern, nên mỗi khi tạo string mới, ta cũng thêm nó vào intern table. Bạn có thể đoán được chuyện gì xảy ra. Vì string này hoàn toàn mới, nó chưa reachable ở đâu cả. Và việc resize string pool có thể kích hoạt collection. Một lần nữa, ta sẽ stash string này lên stack trước.</p>
+<div class="codehilite"><pre class="insert-before">  string-&gt;chars = chars;
+  string-&gt;hash = hash;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>allocateString</em>()</div>
+<pre class="insert">
+
+  <span class="i">push</span>(<span class="a">OBJ_VAL</span>(<span class="i">string</span>));
+</pre><pre class="insert-after">  tableSet(&amp;vm.strings, string, NIL_VAL);
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>allocateString</em>()</div>
+
+<p>Rồi pop nó xuống khi nó đã an toàn trong bảng.</p>
+<div class="codehilite"><pre class="insert-before">  tableSet(&amp;vm.strings, string, NIL_VAL);
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>allocateString</em>()</div>
+<pre class="insert">  <span class="i">pop</span>();
+
+</pre><pre class="insert-after">  return string;
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>allocateString</em>()</div>
+
+<p>Điều này đảm bảo string an toàn trong khi bảng đang được resize. Khi đã vượt qua bước này, <code>allocateString()</code> sẽ trả nó về cho caller, và caller sẽ chịu trách nhiệm đảm bảo string vẫn reachable trước khi lần cấp phát heap tiếp theo diễn ra.</p>
+<h3><a href="#nối-chuỗi-concatenating-strings" id="nối-chuỗi-concatenating-strings"><small>26&#8202;.&#8202;7&#8202;.&#8202;3</small>Nối chuỗi (Concatenating strings)</a></h3>
+<p>Một ví dụ cuối cùng: Trong interpreter, lệnh <code>OP_ADD</code> có thể được dùng để nối hai chuỗi. Giống như với số, nó pop hai toán hạng khỏi stack, tính toán kết quả, rồi push giá trị mới đó trở lại stack. Với số thì điều này hoàn toàn an toàn.</p>
+<p>Nhưng nối hai chuỗi lại đòi hỏi phải cấp phát một mảng ký tự mới trên heap, và điều này có thể kích hoạt GC. Vì ở thời điểm đó ta đã pop các chuỗi toán hạng ra khỏi stack, chúng có thể bị bỏ sót trong giai đoạn mark và bị quét mất. Thay vì pop chúng ra khỏi stack ngay lập tức, ta sẽ peek chúng.</p>
+<div class="codehilite"><pre class="insert-before">static void concatenate() {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>concatenate</em>()<br>
+replace 2 lines</div>
+<pre class="insert">  <span class="t">ObjString</span>* <span class="i">b</span> = <span class="a">AS_STRING</span>(<span class="i">peek</span>(<span class="n">0</span>));
+  <span class="t">ObjString</span>* <span class="i">a</span> = <span class="a">AS_STRING</span>(<span class="i">peek</span>(<span class="n">1</span>));
+</pre><pre class="insert-after">
+
+  int length = a-&gt;length + b-&gt;length;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>concatenate</em>(), replace 2 lines</div>
+
+<p>Bằng cách này, chúng vẫn còn nằm trên stack khi ta tạo chuỗi kết quả. Khi xong, ta có thể pop chúng ra một cách an toàn và thay thế bằng kết quả.</p>
+<div class="codehilite"><pre class="insert-before">  ObjString* result = takeString(chars, length);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>concatenate</em>()</div>
+<pre class="insert">  <span class="i">pop</span>();
+  <span class="i">pop</span>();
+</pre><pre class="insert-after">  push(OBJ_VAL(result));
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>concatenate</em>()</div>
+
+<p>Những lỗi này khá dễ xử lý, nhất là vì tôi <em>chỉ cho</em> bạn chỗ cần sửa. Trong thực tế, <em>tìm ra</em> chúng mới là phần khó. Tất cả những gì bạn thấy là một object <em>đáng lẽ</em> phải tồn tại nhưng lại không. Nó không giống các lỗi khác, nơi bạn tìm đoạn code <em>gây ra</em> vấn đề. Ở đây, bạn tìm <em>sự thiếu vắng</em> của đoạn code vốn có nhiệm vụ <em>ngăn chặn</em> vấn đề, và đó là một cuộc tìm kiếm khó hơn nhiều.</p>
+<p>Nhưng ít nhất là bây giờ, bạn có thể yên tâm. Theo như tôi biết, chúng ta đã tìm ra tất cả lỗi liên quan đến collection trong clox, và giờ ta có một mark-sweep garbage collector hoạt động tốt, ổn định và tự điều chỉnh.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>26&#8202;.&#8202;8</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Struct header <code>Obj</code> ở đầu mỗi object giờ có ba trường: <code>type</code>, <code>isMarked</code>, và <code>next</code>. Chúng chiếm bao nhiêu bộ nhớ (trên máy của bạn)? Bạn có thể nghĩ ra cách nào gọn hơn không? Liệu có chi phí runtime khi làm vậy không?</p>
+</li>
+<li>
+<p>Khi giai đoạn sweep duyệt qua một object sống, nó sẽ xóa trường <code>isMarked</code> để chuẩn bị cho chu kỳ collection tiếp theo. Bạn có thể nghĩ ra cách nào hiệu quả hơn không?</p>
+</li>
+<li>
+<p>Mark-sweep chỉ là một trong nhiều thuật toán garbage collection hiện có. Hãy khám phá bằng cách thay thế hoặc bổ sung collector hiện tại bằng một loại khác. Một số ứng viên đáng cân nhắc: reference counting, thuật toán Cheney, hoặc thuật toán mark-compact của Lisp 2.</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-generational-collectors" id="ghi-chú-thiết-kế-generational-collectors"><small>26&#8202;.&#8202;9</small>Ghi chú thiết kế: Generational Collectors</a></h2>
+<p>Một collector sẽ mất throughput nếu tốn nhiều thời gian duyệt lại các object vẫn còn sống. Nhưng nếu tránh collect và để tích tụ một đống rác lớn, latency sẽ tăng. Giá như có cách nào để biết object nào có khả năng sống lâu và object nào thì không. Khi đó, GC có thể tránh duyệt lại các object sống lâu quá thường xuyên và dọn dẹp các object ngắn hạn thường xuyên hơn.</p>
+<p>Thực tế là có. Nhiều năm trước, các nhà nghiên cứu GC đã thu thập số liệu về vòng đời của object trong các chương trình thực tế. Họ theo dõi từng object khi nó được cấp phát, và khi nó không còn cần thiết nữa, rồi vẽ biểu đồ về thời gian sống của chúng.</p>
+<p>Họ phát hiện ra một điều gọi là <strong>generational hypothesis</strong>, hay một cách nói kém tế nhị hơn là <strong>infant mortality</strong>. Quan sát của họ là hầu hết object đều sống rất ngắn, nhưng một khi chúng sống qua một độ tuổi nhất định, chúng thường tồn tại khá lâu. Object <em>càng</em> sống lâu, khả năng nó <em>tiếp tục</em> sống càng cao. Quan sát này rất hữu ích vì nó cho phép phân loại object thành nhóm cần collect thường xuyên và nhóm không cần.</p>
+<p>Họ đã thiết kế một kỹ thuật gọi là <strong>generational garbage collection</strong>. Cách hoạt động như sau: Mỗi khi một object mới được cấp phát, nó sẽ vào một vùng đặc biệt, tương đối nhỏ của heap gọi là &ldquo;nursery&rdquo;. Vì object thường “chết trẻ”, garbage collector sẽ được gọi <span name="nursery">thường xuyên</span> chỉ trên các object trong vùng này.</p>
+<aside name="nursery">
+<p>Nursery thường được quản lý bằng copying collector, vốn nhanh hơn mark-sweep collector trong việc cấp phát và giải phóng object.</p>
+</aside>
+<p>Mỗi lần GC chạy trên nursery được gọi là một “generation”. Bất kỳ object nào không còn cần thiết sẽ bị giải phóng. Những object sống sót sẽ được coi là già thêm một thế hệ, và GC sẽ theo dõi điều này cho từng object. Nếu một object sống sót qua một số thế hệ nhất định — thường chỉ một lần collect — nó sẽ được <em>tenure</em>. Lúc này, nó được sao chép ra khỏi nursery sang một vùng heap lớn hơn dành cho các object sống lâu. Garbage collector cũng sẽ chạy trên vùng này, nhưng ít thường xuyên hơn vì khả năng cao là hầu hết các object ở đây vẫn còn sống.</p>
+<p>Generational collector là sự kết hợp tuyệt vời giữa dữ liệu thực nghiệm — quan sát rằng vòng đời object <em>không</em> phân bố đều — và thiết kế thuật toán thông minh tận dụng thực tế đó. Chúng cũng khá đơn giản về mặt khái niệm. Bạn có thể hình dung nó như hai GC được tinh chỉnh riêng biệt và một chính sách khá đơn giản để di chuyển object từ vùng này sang vùng khác.</p>
+</div>
+
+<footer>
+<a href="classes-and-instances.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Classes and Instances&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

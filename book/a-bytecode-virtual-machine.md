@@ -1,0 +1,5 @@
+Trình thông dịch Java của chúng ta, **jlox**, đã dạy cho chúng ta nhiều nguyên lý căn bản về programming languages, nhưng vẫn còn rất nhiều điều để học. Trước hết, nếu bạn chạy một chương trình Lox thú vị nào đó bằng jlox, bạn sẽ nhận ra nó chậm đến mức khó chịu. Cách nó thông dịch — đi qua AST trực tiếp — thì đủ tốt cho *một vài* trường hợp thực tế, nhưng vẫn còn thiếu sót rất nhiều để có thể dùng cho một general-purpose scripting language.
+
+Ngoài ra, chúng ta còn ngầm dựa vào các tính năng runtime có sẵn của chính JVM. Ta coi như hiển nhiên rằng những thứ như `instanceof` trong Java hoạt động *kiểu gì đó*. Và chúng ta chẳng bao giờ phải lo lắng đến memory management, vì garbage collector của JVM đã lo tất cả cho ta rồi.
+
+Khi chúng ta còn tập trung vào các khái niệm high-level, thì bỏ qua mấy chuyện đó cũng chẳng sao. Nhưng giờ khi đã quen thuộc với cách một interpreter vận hành, đã đến lúc ta đào sâu xuống các tầng thấp hơn và tự mình xây dựng một virtual machine hoàn toàn từ đầu, chỉ với C standard library...

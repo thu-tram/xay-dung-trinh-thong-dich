@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Types of Values &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Types of Values<small>18</small></a></h3>
+
+<ul>
+    <li><a href="#tagged-unions"><small>18.1</small> Tagged Unions</a></li>
+    <li><a href="#lox-values-&amp;-c-values"><small>18.2</small> Lox Values &amp; C Values</a></li>
+    <li><a href="#dynamically-typed-numbers"><small>18.3</small> Dynamically Typed Numbers</a></li>
+    <li><a href="#two-new-types"><small>18.4</small> Two New Types</a></li>
+    <li><a href="#thử-thách"><small>18.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="compiling-expressions.html" title="Compiling Expressions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="strings.html" title="Strings" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="compiling-expressions.html" title="Compiling Expressions" class="prev">←</a>
+<a href="strings.html" title="Strings" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Types of Values<small>18</small></a></h3>
+
+<ul>
+    <li><a href="#tagged-unions"><small>18.1</small> Tagged Unions</a></li>
+    <li><a href="#lox-values-&amp;-c-values"><small>18.2</small> Lox Values &amp; C Values</a></li>
+    <li><a href="#dynamically-typed-numbers"><small>18.3</small> Dynamically Typed Numbers</a></li>
+    <li><a href="#two-new-types"><small>18.4</small> Two New Types</a></li>
+    <li><a href="#thử-thách"><small>18.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="compiling-expressions.html" title="Compiling Expressions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="strings.html" title="Strings" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">18</div>
+  <h1>Types of Values</h1>
+
+<blockquote>
+<p>Khi bạn là một chú Gấu với Bộ Não Rất Nhỏ, và bạn Nghĩ Về Những Điều, đôi khi bạn nhận ra rằng một Điều trông rất “ra dáng Điều” bên trong bạn lại hoàn toàn khác khi nó ra ngoài và có người khác nhìn vào.</p>
+<p><cite>A. A. Milne, <em>Winnie-the-Pooh</em></cite></p>
+</blockquote>
+<p>Những chương vừa qua thật đồ sộ, chứa đầy các kỹ thuật phức tạp và hàng trang code. Trong chương này, chỉ có một khái niệm mới để học và một ít code đơn giản. Bạn xứng đáng được nghỉ ngơi đôi chút.</p>
+<p>Lox là ngôn ngữ <span name="unityped">dynamically</span> typed. Một biến duy nhất có thể chứa Boolean, số hoặc chuỗi ở những thời điểm khác nhau. Ít nhất, đó là ý tưởng. Hiện tại, trong clox, tất cả giá trị đều là số. Đến cuối chương này, nó sẽ hỗ trợ thêm Boolean và <code>nil</code>. Dù những thứ này không quá thú vị, chúng buộc chúng ta phải tìm ra cách để cách biểu diễn giá trị (value representation) có thể xử lý động nhiều kiểu dữ liệu khác nhau.</p>
+<aside name="unityped">
+<p>Có một loại thứ ba bên cạnh statically typed và dynamically typed: <strong>unityped</strong>. Trong mô hình này, tất cả biến đều có cùng một kiểu, thường là một số nguyên kích thước bằng thanh ghi máy. Unityped languages không phổ biến ngày nay, nhưng một số Forth và BCPL — ngôn ngữ truyền cảm hứng cho C — hoạt động theo cách này.</p>
+<p>Ngay lúc này, clox là unityped.</p>
+</aside>
+<h2><a href="#tagged-unions" id="tagged-unions"><small>18&#8202;.&#8202;1</small>Tagged Unions</a></h2>
+<p>Điều hay khi lập trình bằng C là chúng ta có thể xây dựng cấu trúc dữ liệu từ những bit thô. Điều dở là chúng ta <em>phải</em> làm vậy. C không cho bạn nhiều thứ “miễn phí” khi biên dịch và còn ít hơn khi chạy. Với C, vũ trụ chỉ là một mảng byte không phân biệt. Chúng ta phải tự quyết định dùng bao nhiêu byte và ý nghĩa của chúng.</p>
+<p>Để chọn cách biểu diễn giá trị, ta cần trả lời hai câu hỏi chính:</p>
+<ol>
+<li>
+<p><strong>Làm sao để biểu diễn kiểu của một giá trị?</strong> Nếu bạn thử nhân một số với <code>true</code>, ta cần phát hiện lỗi đó khi runtime và báo ra. Để làm được, ta phải biết kiểu của giá trị đó là gì.</p>
+</li>
+<li>
+<p><strong>Làm sao để lưu trữ bản thân giá trị?</strong> Ta không chỉ cần biết rằng số ba là một số, mà còn phải phân biệt nó với số bốn. Nghe hiển nhiên, đúng không? Nhưng ở mức này, tốt nhất là nói rõ ra.</p>
+</li>
+</ol>
+<p>Vì chúng ta không chỉ thiết kế ngôn ngữ mà còn tự xây dựng nó, khi trả lời hai câu hỏi này ta cũng phải nhớ đến mục tiêu muôn thuở của người cài đặt: làm sao cho <em>hiệu quả</em>.</p>
+<p>Các “hacker” ngôn ngữ qua nhiều năm đã nghĩ ra đủ cách thông minh để nhét thông tin trên vào ít bit nhất có thể. Trước mắt, ta sẽ bắt đầu với giải pháp cổ điển, đơn giản nhất: <strong>tagged union</strong>. Một giá trị gồm hai phần: một “tag” kiểu, và phần payload chứa giá trị thực. Để lưu kiểu của giá trị, ta định nghĩa một enum cho mỗi loại giá trị mà VM hỗ trợ.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">enum</span> {
+  <span class="a">VAL_BOOL</span>,
+  <span class="a">VAL_NIL</span>,<span name="user-types"> </span>
+  <span class="a">VAL_NUMBER</span>,
+} <span class="t">ValueType</span>;
+
+</pre><pre class="insert-after">typedef double Value;
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<aside name="user-types">
+<p>Các case ở đây bao gồm mỗi loại giá trị mà <em>VM hỗ trợ sẵn</em>. Khi ta thêm classes vào ngôn ngữ, mỗi class do người dùng định nghĩa sẽ không cần một mục riêng trong enum này. Với VM, mọi instance của một class đều cùng một kiểu: “instance”.</p>
+<p>Nói cách khác, đây là khái niệm “type” của VM, không phải của người dùng.</p>
+</aside>
+<p>Hiện tại, ta chỉ có vài case, nhưng danh sách này sẽ tăng khi ta thêm strings, functions và classes vào clox. Ngoài kiểu, ta cũng cần lưu dữ liệu của giá trị — <code>double</code> cho số, <code>true</code> hoặc <code>false</code> cho Boolean. Ta có thể định nghĩa một struct với các field cho mỗi kiểu có thể.</p><img src="image/types-of-values/struct.png" alt="Một struct với hai field nằm cạnh nhau trong bộ nhớ." />
+<p>Nhưng như vậy sẽ lãng phí bộ nhớ. Một giá trị không thể đồng thời vừa là số vừa là Boolean. Tại một thời điểm, chỉ một field được dùng. C cho phép tối ưu bằng cách định nghĩa <span name="sum">union</span>. Union trông giống struct nhưng tất cả field chồng lên nhau trong bộ nhớ.</p>
+<aside name="sum">
+<p>Nếu bạn quen với các ngôn ngữ họ ML, structs và unions trong C tương tự như sự khác nhau giữa product type và sum type, giữa tuple và algebraic data type.</p>
+</aside><img src="image/types-of-values/union.png" alt="Một union với hai field chồng lên nhau trong bộ nhớ." />
+<p>Kích thước của union bằng kích thước field lớn nhất. Vì các field dùng chung bit, bạn phải rất cẩn thận khi làm việc với chúng. Nếu bạn lưu dữ liệu bằng một field rồi truy cập nó bằng <span name="reinterpret">field khác</span>, bạn sẽ diễn giải lại ý nghĩa của các bit bên dưới.</p>
+<aside name="reinterpret">
+<p>Dùng union để diễn giải bit thành các kiểu khác nhau là tinh túy của C. Nó mở ra nhiều tối ưu hóa thông minh và cho phép bạn “xẻ nhỏ” từng byte bộ nhớ theo những cách mà các ngôn ngữ an toàn bộ nhớ không cho phép. Nhưng nó cũng cực kỳ nguy hiểm và sẽ “cắt đứt ngón tay” bạn nếu không cẩn thận.</p>
+</aside>
+<p>Đúng như tên gọi “tagged union”, cách biểu diễn giá trị mới của ta kết hợp hai phần này vào một struct duy nhất.</p>
+<div class="codehilite"><pre class="insert-before">} ValueType;
+
+</pre><div class="source-file"><em>value.h</em><br>
+add after enum <em>ValueType</em><br>
+replace 1 line</div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">ValueType</span> <span class="i">type</span>;
+  <span class="k">union</span> {
+    <span class="t">bool</span> <span class="i">boolean</span>;
+    <span class="t">double</span> <span class="i">number</span>;
+  } <span class="i">as</span>;<span name="as"> </span>
+} <span class="t">Value</span>;
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after enum <em>ValueType</em>, replace 1 line</div>
+
+<p>Có một field cho type tag, và một field thứ hai chứa union của tất cả các giá trị bên dưới. Trên máy 64-bit với trình biên dịch C thông thường, bố cục trông như sau:</p>
+<aside name="as">
+<p>Một “hacker” ngôn ngữ thông minh đã gợi ý tôi dùng “as” làm tên field của union vì khi lấy giá trị ra, nó đọc lên khá tự nhiên, gần giống như một phép cast.</p>
+</aside><img src="image/types-of-values/value.png" alt="Struct Value đầy đủ, với field type và as nằm cạnh nhau trong bộ nhớ." />
+<p>Bốn byte type tag nằm trước, rồi đến union. Hầu hết kiến trúc máy thích các giá trị được căn chỉnh theo kích thước của chúng. Vì field union chứa một double tám byte, trình biên dịch thêm bốn byte <span name="pad">padding</span> sau field type để giữ double ở vị trí bội số của tám byte gần nhất. Điều đó nghĩa là ta đang tốn tám byte cho type tag, trong khi nó chỉ cần biểu diễn số từ 0 đến 3. Ta có thể nhét enum vào kích thước nhỏ hơn, nhưng điều đó chỉ làm tăng padding.</p>
+<aside name="pad">
+<p>Ta có thể chuyển field tag <em>xuống sau</em> union, nhưng cũng không cải thiện được nhiều. Bất cứ khi nào ta tạo một mảng Values — nơi tiêu tốn nhiều bộ nhớ nhất cho Values — trình biên dịch C sẽ chèn padding tương tự <em>giữa</em> mỗi Value để giữ cho double được căn chỉnh.</p>
+</aside>
+<p>Vậy là mỗi Value chiếm 16 byte, có vẻ hơi lớn. Ta sẽ cải thiện <a href="optimization.html">sau này</a>. Trong lúc này, chúng vẫn đủ nhỏ để lưu trên stack của C và truyền theo giá trị. Ngữ nghĩa của Lox cho phép điều đó vì các kiểu mà ta hỗ trợ đến giờ đều là <strong>immutable</strong>. Nếu ta truyền một bản sao của Value chứa số ba vào một hàm, ta không cần lo người gọi sẽ thấy giá trị bị thay đổi. Bạn không thể “sửa” số ba. Nó sẽ luôn là ba.</p>
+<h2><a href="#lox-values-&-c-values" id="lox-values-&-c-values"><small>18&#8202;.&#8202;2</small>Lox Values &amp; C Values</a></h2>
+<p>Đó là cách biểu diễn giá trị mới của chúng ta, nhưng vẫn chưa xong. Hiện tại, phần còn lại của clox giả định rằng <code>Value</code> là một alias cho <code>double</code>. Chúng ta có code thực hiện ép kiểu C trực tiếp từ cái này sang cái kia. Giờ thì toàn bộ đoạn code đó đã hỏng. Thật buồn.</p>
+<p>Với cách biểu diễn mới, một <code>Value</code> có thể <em>chứa</em> một <code>double</code>, nhưng nó không <em>tương đương</em> với <code>double</code>. Cần có một bước chuyển đổi bắt buộc để đi từ cái này sang cái kia. Chúng ta cần rà soát code và chèn các bước chuyển đổi đó để clox chạy lại được.</p>
+<p>Chúng ta sẽ cài đặt các bước chuyển đổi này dưới dạng một vài macro, mỗi macro cho một kiểu và thao tác. Đầu tiên, để “nâng” một giá trị C gốc thành một <code>Value</code> của clox:</p>
+<div class="codehilite"><pre class="insert-before">} Value;
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>Value</em></div>
+<pre class="insert">
+
+<span class="a">#define BOOL_VAL(value)   ((Value){VAL_BOOL, {.boolean = value}})</span>
+<span class="a">#define NIL_VAL           ((Value){VAL_NIL, {.number = 0}})</span>
+<span class="a">#define NUMBER_VAL(value) ((Value){VAL_NUMBER, {.number = value}})</span>
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>Value</em></div>
+
+<p>Mỗi macro nhận một giá trị C thuộc kiểu phù hợp và tạo ra một <code>Value</code> có type tag đúng và chứa giá trị bên trong. Điều này “nâng” các giá trị kiểu tĩnh lên vũ trụ kiểu động của clox. Nhưng để <em>làm</em> được gì đó với một <code>Value</code>, chúng ta cần “mở” nó ra và lấy lại giá trị C bên trong.</p>
+<div class="codehilite"><pre class="insert-before">} Value;
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>Value</em></div>
+<pre class="insert">
+
+<span class="a">#define AS_BOOL(value)    ((value).as.boolean)</span>
+<span class="a">#define AS_NUMBER(value)  ((value).as.number)</span>
+</pre><pre class="insert-after">
+
+#define BOOL_VAL(value)   ((Value){VAL_BOOL, {.boolean = value}})
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>Value</em></div>
+
+<aside name="as-null">
+<p>Không có macro <code>AS_NIL</code> vì chỉ tồn tại một giá trị <code>nil</code>, nên một <code>Value</code> với kiểu <code>VAL_NIL</code> không mang thêm dữ liệu nào khác.</p>
+</aside>
+<p><span name="as-null">Các</span> macro này đi theo hướng ngược lại. Cho một <code>Value</code> thuộc kiểu đúng, chúng “mở” nó ra và trả về giá trị C thô tương ứng. Phần “kiểu đúng” rất quan trọng! Các macro này truy cập trực tiếp vào các field của union. Nếu ta làm gì đó như:</p>
+<div class="codehilite"><pre><span class="t">Value</span> <span class="i">value</span> = <span class="a">BOOL_VAL</span>(<span class="k">true</span>);
+<span class="t">double</span> <span class="i">number</span> = <span class="a">AS_NUMBER</span>(<span class="i">value</span>);
+</pre></div>
+<p>thì ta có thể mở ra một cánh cổng âm ỉ dẫn tới “Shadow Realm”. Không an toàn khi dùng bất kỳ macro <code>AS_</code> nào trừ khi ta biết chắc <code>Value</code> chứa kiểu phù hợp. Vì vậy, chúng ta định nghĩa thêm một vài macro cuối cùng để kiểm tra kiểu của <code>Value</code>.</p>
+<div class="codehilite"><pre class="insert-before">} Value;
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>Value</em></div>
+<pre class="insert">
+
+<span class="a">#define IS_BOOL(value)    ((value).type == VAL_BOOL)</span>
+<span class="a">#define IS_NIL(value)     ((value).type == VAL_NIL)</span>
+<span class="a">#define IS_NUMBER(value)  ((value).type == VAL_NUMBER)</span>
+</pre><pre class="insert-after">
+
+#define AS_BOOL(value)    ((value).as.boolean)
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>Value</em></div>
+
+<p><span name="universe">Các</span> macro này trả về <code>true</code> nếu <code>Value</code> có kiểu đó. Mỗi khi gọi một macro <code>AS_</code>, ta cần bảo vệ nó bằng cách gọi một trong các macro này trước. Với tám macro này, giờ ta có thể an toàn “chuyển phát” dữ liệu giữa thế giới động của Lox và thế giới tĩnh của C.</p>
+<aside name="universe"><img src="image/types-of-values/universe.png" alt="Bầu trời C trần tục với thiên đường Lox ở phía trên." />
+<p>Các macro <code>_VAL</code> nâng một giá trị C lên “thiên đường”. Các macro <code>AS_</code> đưa nó trở lại mặt đất.</p>
+</aside>
+<h2><a href="#dynamically-typed-numbers" id="dynamically-typed-numbers"><small>18&#8202;.&#8202;3</small>Dynamically Typed Numbers</a></h2>
+<p>Chúng ta đã có cách biểu diễn giá trị và công cụ để chuyển đổi qua lại. Việc còn lại để clox chạy lại là rà soát code và sửa mọi chỗ dữ liệu đi qua ranh giới đó. Đây là một trong những phần của cuốn sách không hẳn gây “nổ não”, nhưng tôi đã hứa sẽ cho bạn thấy từng dòng code, nên chúng ta sẽ làm thôi.</p>
+<p>Những giá trị đầu tiên chúng ta tạo ra là các hằng số được generated khi biên dịch number literal. Sau khi chuyển lexeme thành một <code>double</code> của C, ta chỉ cần bọc nó trong một <code>Value</code> trước khi lưu vào bảng hằng số.</p>
+<div class="codehilite"><pre class="insert-before">  double value = strtod(parser.previous.start, NULL);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>number</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="i">emitConstant</span>(<span class="a">NUMBER_VAL</span>(<span class="i">value</span>));
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>number</em>(), replace 1 line</div>
+
+<p>Bên phía runtime, ta có một hàm để in giá trị.</p>
+<div class="codehilite"><pre class="insert-before">void printValue(Value value) {
+</pre><div class="source-file"><em>value.c</em><br>
+in <em>printValue</em>()<br>
+replace 1 line</div>
+<pre class="insert"> <span class="i">printf</span>(<span class="s">&quot;%g&quot;</span>, <span class="a">AS_NUMBER</span>(<span class="i">value</span>));
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, in <em>printValue</em>(), replace 1 line</div>
+
+<p>Ngay trước khi gửi <code>Value</code> vào <code>printf()</code>, ta “mở” nó ra và lấy giá trị <code>double</code>. Chúng ta sẽ quay lại hàm này sau để thêm các kiểu khác, nhưng trước hết hãy làm cho code hiện tại chạy được.</p>
+<h3><a href="#unary-negation-&-runtime-errors" id="unary-negation-&-runtime-errors"><small>18&#8202;.&#8202;3&#8202;.&#8202;1</small>Unary negation &amp; runtime errors</a></h3>
+<p>Thao tác đơn giản tiếp theo là unary negation. Nó lấy một giá trị từ stack, đổi dấu và đẩy kết quả trở lại. Giờ khi ta có nhiều kiểu giá trị khác nhau, ta không thể giả định toán hạng luôn là số. Người dùng hoàn toàn có thể làm:</p>
+<div class="codehilite"><pre><span class="k">print</span> -<span class="k">false</span>; <span class="c">// Ờ thì...</span>
+</pre></div>
+<p>Ta cần xử lý trường hợp này một cách “êm đẹp”, nghĩa là đã đến lúc nói về <em>runtime errors</em>. Trước khi thực hiện một thao tác yêu cầu một kiểu nhất định, ta cần chắc chắn <code>Value</code> <em>là</em> kiểu đó.</p>
+<p>Với unary negation, phần kiểm tra trông như sau:</p>
+<div class="codehilite"><pre class="insert-before">      case OP_DIVIDE:   BINARY_OP(/); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 1 line</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_NEGATE</span>:
+        <span class="k">if</span> (!<span class="a">IS_NUMBER</span>(<span class="i">peek</span>(<span class="n">0</span>))) {
+          <span class="i">runtimeError</span>(<span class="s">&quot;Operand must be a number.&quot;</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="i">push</span>(<span class="a">NUMBER_VAL</span>(-<span class="a">AS_NUMBER</span>(<span class="i">pop</span>())));
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 1 line</div>
+
+<p>Đầu tiên, ta kiểm tra xem <code>Value</code> trên đỉnh stack có phải là số không. Nếu không, ta báo lỗi runtime và <span name="halt">dừng</span> interpreter. Nếu có, ta tiếp tục. Chỉ sau khi xác thực xong, ta mới “mở” toán hạng, đổi dấu, bọc kết quả và đẩy nó lên stack.</p>
+<aside name="halt">
+<p>Cách xử lý lỗi của Lox khá<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span><em>tối giản</em>. Mọi lỗi đều là lỗi nghiêm trọng và lập tức dừng interpreter. Không có cách nào để code của người dùng phục hồi sau lỗi. Nếu Lox là một ngôn ngữ thực sự, đây sẽ là một trong những điều đầu tiên tôi cải thiện.</p>
+</aside>
+<p>Để truy cập <code>Value</code>, ta dùng một hàm nhỏ mới.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>pop</em>()</div>
+<pre><span class="k">static</span> <span class="t">Value</span> <span class="i">peek</span>(<span class="t">int</span> <span class="i">distance</span>) {
+  <span class="k">return</span> <span class="i">vm</span>.<span class="i">stackTop</span>[-<span class="n">1</span> - <span class="i">distance</span>];
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>pop</em>()</div>
+
+<p>Hàm này trả về một <code>Value</code> từ stack nhưng không <span name="peek">pop</span> nó. Tham số <code>distance</code> cho biết khoảng cách từ đỉnh stack xuống: 0 là đỉnh, 1 là một ô bên dưới, v.v.</p>
+<aside name="peek">
+<p>Tại sao không pop toán hạng rồi mới kiểm tra? Ta có thể làm vậy. Ở các chương sau, việc giữ toán hạng trên stack sẽ quan trọng để đảm bảo garbage collector có thể tìm thấy chúng nếu việc thu gom xảy ra giữa chừng thao tác. Tôi cũng làm vậy ở đây, chủ yếu do thói quen.</p>
+</aside>
+<p>Chúng ta báo lỗi runtime bằng một hàm mới mà ta sẽ dùng rất nhiều trong phần còn lại của cuốn sách.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>resetStack</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">runtimeError</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">format</span>, ...) {
+  <span class="t">va_list</span> <span class="i">args</span>;
+  <span class="i">va_start</span>(<span class="i">args</span>, <span class="i">format</span>);
+  <span class="i">vfprintf</span>(<span class="i">stderr</span>, <span class="i">format</span>, <span class="i">args</span>);
+  <span class="i">va_end</span>(<span class="i">args</span>);
+  <span class="i">fputs</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">stderr</span>);
+
+  <span class="t">size_t</span> <span class="i">instruction</span> = <span class="i">vm</span>.<span class="i">ip</span> - <span class="i">vm</span>.<span class="i">chunk</span>-&gt;<span class="i">code</span> - <span class="n">1</span>;
+  <span class="t">int</span> <span class="i">line</span> = <span class="i">vm</span>.<span class="i">chunk</span>-&gt;<span class="i">lines</span>[<span class="i">instruction</span>];
+  <span class="i">fprintf</span>(<span class="i">stderr</span>, <span class="s">&quot;[line %d] in script</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">line</span>);
+  <span class="i">resetStack</span>();
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>resetStack</em>()</div>
+
+<p>Chắc chắn bạn đã từng <em>gọi</em> hàm variadic — những hàm nhận số lượng tham số thay đổi — trong C rồi: <code>printf()</code> là một ví dụ. Nhưng có thể bạn chưa từng <em>tự định nghĩa</em> hàm như vậy. Cuốn sách này không phải là <span name="tutorial">tutorial</span> về C, nên tôi sẽ lướt qua: về cơ bản, phần <code>...</code> và <code>va_list</code> cho phép ta truyền một số lượng đối số tùy ý vào <code>runtimeError()</code>. Hàm này chuyển tiếp chúng tới <code>vfprintf()</code>, phiên bản của <code>printf()</code> nhận một <code>va_list</code> rõ ràng.</p>
+<aside name="tutorial">
+<p>Nếu bạn đang tìm một tutorial về C, tôi rất thích <em><a href="https://www.cs.princeton.edu/~bwk/cbook.html">The C Programming Language</a></em>, thường được gọi là “K&amp;R” theo tên tác giả. Nó không hoàn toàn cập nhật, nhưng chất lượng viết thì tuyệt vời.</p>
+</aside>
+<p>Người gọi có thể truyền một format string vào <code>runtimeError()</code> kèm theo một số đối số, giống như khi gọi <code>printf()</code> trực tiếp. <code>runtimeError()</code> sẽ định dạng và in các đối số đó. Chúng ta sẽ chưa tận dụng điều này trong chương này, nhưng các chương sau sẽ tạo ra thông báo lỗi runtime có định dạng, chứa thêm dữ liệu khác.</p>
+<p>Sau khi hiển thị thông báo lỗi (hy vọng là hữu ích), ta cho người dùng biết <span name="stack">dòng</span> code nào của họ đang được execute khi lỗi xảy ra. Vì ta đã bỏ lại các token trong compiler, ta tra cứu dòng trong thông tin debug được biên dịch vào chunk. Nếu compiler làm đúng việc, dòng đó sẽ khớp với dòng code nguồn mà bytecode được biên dịch từ đó.</p>
+<p>Ta tra mảng dòng debug của chunk bằng chỉ số lệnh bytecode hiện tại <em>trừ đi một</em>. Đó là vì interpreter di chuyển qua mỗi lệnh trước khi execute nó. Vậy nên, tại thời điểm gọi <code>runtimeError()</code>, lệnh gây lỗi là lệnh trước đó.</p>
+<aside name="stack">
+<p>Chỉ hiển thị dòng ngay khi lỗi xảy ra thì không cung cấp nhiều ngữ cảnh. Tốt hơn là có một stack trace đầy đủ. Nhưng hiện tại chúng ta chưa có hàm để gọi, nên cũng chưa có call stack để trace.</p>
+</aside>
+<p>Để sử dụng <code>va_list</code> và các macro làm việc với nó, chúng ta cần đưa vào một standard header.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add to top of file</div>
+<pre class="insert"><span class="a">#include &lt;stdarg.h&gt;</span>
+</pre><pre class="insert-after">#include &lt;stdio.h&gt;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add to top of file</div>
+
+<p>Với điều này, VM của chúng ta không chỉ làm đúng khi đổi dấu số (như trước khi ta “làm hỏng” nó), mà còn xử lý gọn gàng các nỗ lực đổi dấu những kiểu khác (mà hiện tại ta chưa có, nhưng rồi sẽ có).</p>
+<h3><a href="#binary-arithmetic-operators" id="binary-arithmetic-operators"><small>18&#8202;.&#8202;3&#8202;.&#8202;2</small>Binary arithmetic operators</a></h3>
+<p>Giờ ta đã có cơ chế báo lỗi runtime, nên việc sửa các toán tử nhị phân sẽ dễ hơn, dù chúng phức tạp hơn. Hiện tại, ta hỗ trợ bốn toán tử nhị phân: <code>+</code>, <code>-</code>, <code>*</code>, và <code>/</code>. Điểm khác biệt duy nhất giữa chúng là toán tử C bên dưới mà chúng dùng. Để giảm bớt code lặp giữa bốn toán tử này, ta gói phần chung vào một macro tiền xử lý lớn, nhận toán tử làm tham số.</p>
+<p>Macro đó từng có vẻ hơi “thừa” <a href="a-virtual-machine.html#binary-operators">vài chương trước</a>, nhưng hôm nay ta sẽ thấy lợi ích của nó. Nó cho phép ta thêm kiểm tra kiểu và chuyển đổi cần thiết chỉ ở một chỗ.</p>
+<div class="codehilite"><pre class="insert-before">#define READ_CONSTANT() (vm.chunk-&gt;constants.values[READ_BYTE()])
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 6 lines</div>
+<pre class="insert"><span class="a">#define BINARY_OP(valueType, op) \</span>
+<span class="a">    do { \</span>
+<span class="a">      if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \</span>
+<span class="a">        runtimeError(&quot;Operands must be numbers.&quot;); \</span>
+<span class="a">        return INTERPRET_RUNTIME_ERROR; \</span>
+<span class="a">      } \</span>
+<span class="a">      double b = AS_NUMBER(pop()); \</span>
+<span class="a">      double a = AS_NUMBER(pop()); \</span>
+<span class="a">      push(valueType(a op b)); \</span>
+<span class="a">    } while (false)</span>
+</pre><pre class="insert-after">
+
+  for (;;) {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 6 lines</div>
+
+<p>Vâng, tôi biết đây là một macro “quái vật”. Bình thường tôi sẽ không coi đó là thực hành C tốt, nhưng cứ tạm dùng. Các thay đổi tương tự như với unary negate. Đầu tiên, ta kiểm tra cả hai toán hạng đều là số. Nếu một trong hai không phải, ta báo lỗi runtime và “giật cần” ghế phóng.</p>
+<p>Nếu toán hạng hợp lệ, ta pop cả hai và “mở” chúng ra. Sau đó áp dụng toán tử đã cho, bọc kết quả lại và push lên stack. Lưu ý rằng ta không bọc kết quả trực tiếp bằng <code>NUMBER_VAL()</code>. Thay vào đó, macro bọc được truyền vào như một <span name="macro">tham số</span>. Với các toán tử số học hiện tại, kết quả là số, nên ta truyền vào macro <code>NUMBER_VAL</code>.</p>
+<aside name="macro">
+<p>Bạn có biết là có thể truyền macro như tham số cho macro khác không? Giờ thì bạn biết rồi đấy!</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 4 lines</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_ADD</span>:      <span class="a">BINARY_OP</span>(<span class="a">NUMBER_VAL</span>, +); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_SUBTRACT</span>: <span class="a">BINARY_OP</span>(<span class="a">NUMBER_VAL</span>, -); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_MULTIPLY</span>: <span class="a">BINARY_OP</span>(<span class="a">NUMBER_VAL</span>, *); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_DIVIDE</span>:   <span class="a">BINARY_OP</span>(<span class="a">NUMBER_VAL</span>, /); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_NEGATE:
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 4 lines</div>
+
+<p>Chẳng bao lâu nữa, tôi sẽ cho bạn thấy lý do tại sao ta lại truyền macro bọc dưới dạng tham số.</p>
+<h2><a href="#two-new-types" id="two-new-types"><small>18&#8202;.&#8202;4</small>Two New Types</a></h2>
+<p>Toàn bộ code clox hiện tại đã chạy lại được. Cuối cùng, đã đến lúc thêm một số kiểu mới. Chúng ta đang có một máy tính số học chạy được, giờ lại thực hiện hàng loạt kiểm tra kiểu runtime “thừa thãi” nhưng an toàn. Ta có thể biểu diễn các kiểu khác bên trong, nhưng chưa có cách nào để chương trình của người dùng tạo ra một <code>Value</code> thuộc các kiểu đó.</p>
+<p>Cho đến bây giờ. Ta sẽ bắt đầu bằng cách thêm hỗ trợ ở compiler cho ba literal mới: <code>true</code>, <code>false</code>, và <code>nil</code>. Chúng đều khá đơn giản, nên ta sẽ làm cả ba trong một lượt.</p>
+<p>Với number literal, ta phải xử lý việc có hàng tỷ giá trị số có thể. Ta giải quyết bằng cách lưu giá trị literal vào bảng hằng số của chunk và phát sinh một lệnh bytecode chỉ việc nạp hằng đó. Ta có thể làm tương tự với các kiểu mới này: lưu <code>true</code> vào bảng hằng số, rồi dùng <code>OP_CONSTANT</code> để đọc ra.</p>
+<p>Nhưng vì thực tế (heh) chỉ có đúng ba giá trị cần quan tâm, nên việc tốn một lệnh hai byte và một mục trong bảng hằng số cho chúng là quá phí — và <span name="small">chậm!</span>. Thay vào đó, ta sẽ định nghĩa ba lệnh riêng để push từng literal này lên stack.</p>
+<aside name="small" class="bottom">
+<p>Tôi không đùa đâu, việc có lệnh riêng cho một số giá trị hằng nhất định thực sự nhanh hơn. Một bytecode VM dành phần lớn thời gian execute để đọc và giải mã lệnh. Càng ít và đơn giản lệnh cho một hành vi, tốc độ càng cao. Các lệnh ngắn dành riêng cho thao tác phổ biến là một tối ưu kinh điển.</p>
+<p>Ví dụ, tập lệnh bytecode của Java có các lệnh riêng để nạp 0.0, 1.0, 2.0, và các số nguyên từ -1 đến 5. (Tối ưu này giờ gần như chỉ còn tính lịch sử vì hầu hết JVM trưởng thành đều JIT-compile bytecode thành machine code trước khi chạy.)</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  OP_CONSTANT,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_NIL</span>,
+  <span class="a">OP_TRUE</span>,
+  <span class="a">OP_FALSE</span>,
+</pre><pre class="insert-after">  OP_ADD,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Scanner của ta đã coi <code>true</code>, <code>false</code>, và <code>nil</code> là keyword, nên ta có thể bỏ qua bước đó và sang parser. Với Pratt parser dựa trên bảng, ta chỉ cần gán hàm parser vào các hàng tương ứng với các token type keyword đó. Ta sẽ dùng cùng một hàm cho cả ba. Đây:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_FALSE</span>]         = {<span class="i">literal</span>,  <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Đây:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_TRUE</span>]          = {<span class="i">literal</span>,  <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Và đây:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_NIL</span>]           = {<span class="i">literal</span>,  <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Khi parser gặp <code>false</code>, <code>nil</code>, hoặc <code>true</code> ở vị trí prefix, nó gọi hàm parser mới này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>binary</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">literal</span>() {
+  <span class="k">switch</span> (<span class="i">parser</span>.<span class="i">previous</span>.<span class="i">type</span>) {
+    <span class="k">case</span> <span class="a">TOKEN_FALSE</span>: <span class="i">emitByte</span>(<span class="a">OP_FALSE</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_NIL</span>: <span class="i">emitByte</span>(<span class="a">OP_NIL</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_TRUE</span>: <span class="i">emitByte</span>(<span class="a">OP_TRUE</span>); <span class="k">break</span>;
+    <span class="k">default</span>: <span class="k">return</span>; <span class="c">// Unreachable.</span>
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>binary</em>()</div>
+
+<p>Vì <code>parsePrecedence()</code> đã đọc token keyword, ta chỉ cần xuất lệnh phù hợp. Ta <span name="switch">xác định</span> lệnh dựa trên loại token đã parse. Front end của ta giờ có thể biên dịch Boolean và nil literal thành bytecode. Tiếp tục xuống pipeline execute, ta đến interpreter.</p>
+<aside name="switch">
+<p>Ta có thể dùng các hàm parser riêng cho từng literal và tránh phải dùng switch, nhưng tôi thấy như vậy hơi dài dòng. Chủ yếu là vấn đề sở thích cá nhân.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">      case OP_CONSTANT: {
+        Value constant = READ_CONSTANT();
+        push(constant);
+        break;
+      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_NIL</span>: <span class="i">push</span>(<span class="a">NIL_VAL</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_TRUE</span>: <span class="i">push</span>(<span class="a">BOOL_VAL</span>(<span class="k">true</span>)); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_FALSE</span>: <span class="i">push</span>(<span class="a">BOOL_VAL</span>(<span class="k">false</span>)); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_ADD:      BINARY_OP(NUMBER_VAL, +); break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Phần này khá rõ ràng. Mỗi lệnh tạo ra giá trị tương ứng và push nó lên stack. Ta cũng không nên quên disassembler.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CONSTANT:
+      return constantInstruction(&quot;OP_CONSTANT&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_NIL</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_NIL&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_TRUE</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_TRUE&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_FALSE</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_FALSE&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_ADD:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Với phần này, ta có thể chạy chương trình “động trời” sau:</p>
+<div class="codehilite"><pre><span class="k">true</span>
+</pre></div>
+<p>Ngoại trừ việc khi interpreter cố in kết quả, nó sẽ “nổ tung”. Ta cần mở rộng <code>printValue()</code> để xử lý các kiểu mới:</p>
+<div class="codehilite"><pre class="insert-before">void printValue(Value value) {
+</pre><div class="source-file"><em>value.c</em><br>
+in <em>printValue</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">switch</span> (<span class="i">value</span>.<span class="i">type</span>) {
+    <span class="k">case</span> <span class="a">VAL_BOOL</span>:
+      <span class="i">printf</span>(<span class="a">AS_BOOL</span>(<span class="i">value</span>) ? <span class="s">&quot;true&quot;</span> : <span class="s">&quot;false&quot;</span>);
+      <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">VAL_NIL</span>: <span class="i">printf</span>(<span class="s">&quot;nil&quot;</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">VAL_NUMBER</span>: <span class="i">printf</span>(<span class="s">&quot;%g&quot;</span>, <span class="a">AS_NUMBER</span>(<span class="i">value</span>)); <span class="k">break</span>;
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, in <em>printValue</em>(), replace 1 line</div>
+
+<p>Xong! Giờ ta đã có một số kiểu mới. Chúng vẫn chưa hữu ích lắm. Ngoài các literal, bạn chưa thể <em>làm</em> gì với chúng. Sẽ còn một thời gian nữa trước khi <code>nil</code> thực sự được dùng, nhưng ta có thể bắt đầu cho Boolean “ra trận” trong các toán tử logic.</p>
+<h3><a href="#logical-not-&-falsiness" id="logical-not-&-falsiness"><small>18&#8202;.&#8202;4&#8202;.&#8202;1</small>Logical not &amp; falsiness</a></h3>
+<p>Toán tử logic đơn giản nhất là người bạn cũ đầy cảm thán — unary not.</p>
+<div class="codehilite"><pre><span class="k">print</span> !<span class="k">true</span>; <span class="c">// &quot;false&quot;</span>
+</pre></div>
+<p>Thao tác mới này sẽ có một instruction mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_DIVIDE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_NOT</span>,
+</pre><pre class="insert-after">  OP_NEGATE,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Chúng ta có thể tái sử dụng hàm parser <code>unary()</code> đã viết cho unary negation để biên dịch một biểu thức not. Chỉ cần gán nó vào bảng phân tích cú pháp.</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_BANG</span>]          = {<span class="i">unary</span>,    <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Vì tôi đã biết trước sẽ làm điều này, hàm <code>unary()</code> vốn đã có một switch trên token type để xác định instruction bytecode cần xuất ra. Ta chỉ việc thêm một case mới.</p>
+<div class="codehilite"><pre class="insert-before">  switch (operatorType) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>unary</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">TOKEN_BANG</span>: <span class="i">emitByte</span>(<span class="a">OP_NOT</span>); <span class="k">break</span>;
+</pre><pre class="insert-after">    case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+    default: return; // Unreachable.
+  }
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>unary</em>()</div>
+
+<p>Vậy là xong phần front end. Giờ sang VM để “gọi hồn” instruction này.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_NOT</span>:
+        <span class="i">push</span>(<span class="a">BOOL_VAL</span>(<span class="i">isFalsey</span>(<span class="i">pop</span>())));
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_NEGATE:
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Giống như toán tử unary trước, nó pop một toán hạng, thực hiện phép toán và push kết quả. Và, như trước, ta phải lưu ý đến dynamic typing. Lấy phủ định logic của <code>true</code> thì dễ, nhưng chẳng có gì ngăn một lập trình viên “nghịch ngợm” viết như sau:</p>
+<div class="codehilite"><pre><span class="k">print</span> !<span class="k">nil</span>;
+</pre></div>
+<p>Với unary minus, ta coi là lỗi nếu đổi dấu thứ không phải là <span name="negate">số</span>. Nhưng Lox, giống hầu hết các ngôn ngữ scripting, dễ dãi hơn với <code>!</code> và các ngữ cảnh khác nơi Boolean được mong đợi. Quy tắc xử lý các kiểu khác được gọi là “falsiness”, và ta cài đặt nó ở đây:</p>
+<aside name="negate">
+<p>Giờ thì tôi không thể không tự hỏi sẽ thế nào nếu “đổi dấu” các kiểu giá trị khác. <code>nil</code> có lẽ là phủ định của chính nó, kiểu như một pseudo-zero kỳ quặc. Còn phủ định một chuỗi thì… đảo ngược nó chăng?</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>peek</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">isFalsey</span>(<span class="t">Value</span> <span class="i">value</span>) {
+  <span class="k">return</span> <span class="a">IS_NIL</span>(<span class="i">value</span>) || (<span class="a">IS_BOOL</span>(<span class="i">value</span>) &amp;&amp; !<span class="a">AS_BOOL</span>(<span class="i">value</span>));
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>peek</em>()</div>
+
+<p>Lox theo Ruby ở chỗ <code>nil</code> và <code>false</code> là falsey, còn mọi giá trị khác thì coi như <code>true</code>. Ta đã có một instruction mới để sinh ra, nên cũng cần có cách <em>bỏ sinh</em> nó trong disassembler.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_DIVIDE:
+      return simpleInstruction(&quot;OP_DIVIDE&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_NOT</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_NOT&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_NEGATE:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<h3><a href="#equality-&-comparison-operators" id="equality-&-comparison-operators"><small>18&#8202;.&#8202;4&#8202;.&#8202;2</small>Equality &amp; comparison operators</a></h3>
+<p>Không tệ lắm. Hãy giữ đà này và xử lý luôn các toán tử so sánh và bằng nhau: <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, và <code>&gt;=</code>. Như vậy là bao quát hết các toán tử trả về Boolean trừ <code>and</code> và <code>or</code>. Vì chúng cần short-circuit (tức là làm một chút control flow) nên ta chưa sẵn sàng cho chúng.</p>
+<p>Đây là các instruction mới cho những toán tử đó:</p>
+<div class="codehilite"><pre class="insert-before">  OP_FALSE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_EQUAL</span>,
+  <span class="a">OP_GREATER</span>,
+  <span class="a">OP_LESS</span>,
+</pre><pre class="insert-after">  OP_ADD,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Khoan, chỉ có ba thôi à? Thế <code>!=</code>, <code>&lt;=</code>, và <code>&gt;=</code> đâu? Ta cũng có thể tạo instruction cho chúng. Thực tế, VM sẽ chạy nhanh hơn nếu làm vậy, nên nếu mục tiêu là hiệu năng thì <em>nên</em> làm.</p>
+<p>Nhưng mục tiêu chính của tôi là dạy bạn về bytecode compiler. Tôi muốn bạn bắt đầu “ngấm” ý tưởng rằng bytecode instruction không cần bám sát code nguồn của người dùng. VM hoàn toàn tự do dùng bất kỳ tập lệnh và chuỗi lệnh nào miễn là hành vi với người dùng là đúng.</p>
+<p>Biểu thức <code>a != b</code> có cùng ngữ nghĩa với <code>!(a == b)</code>, nên compiler có thể biên dịch cái trước như cái sau. Thay vì một instruction <code>OP_NOT_EQUAL</code> riêng, nó có thể xuất <code>OP_EQUAL</code> rồi <code>OP_NOT</code>. Tương tự, <code>a &lt;= b</code> <span name="same">giống</span> <code>!(a &gt; b)</code> và <code>a &gt;= b</code> là <code>!(a &lt; b)</code>. Vậy ta chỉ cần ba instruction mới.</p>
+<aside name="same" class="bottom">
+<p><em>Có</em> phải <code>a &lt;= b</code> luôn giống <code>!(a &gt; b)</code> không? Theo <a href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a>, mọi toán tử so sánh trả về false khi một toán hạng là NaN. Nghĩa là <code>NaN &lt;= 1</code> là false và <code>NaN &gt; 1</code> cũng false. Nhưng cách “desugar” của ta giả định cái sau luôn là phủ định của cái trước.</p>
+<p>Trong phạm vi cuốn sách này, ta sẽ không sa đà vào chi tiết đó, nhưng trong các bản cài đặt ngôn ngữ thực tế, những chi tiết này sẽ quan trọng.</p>
+</aside>
+<p>Bên parser, ta có sáu toán tử mới để gán vào bảng parse. Ta dùng lại hàm parser <code>binary()</code> từ trước. Đây là hàng cho <code>!=</code>:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_BANG_EQUAL</span>]    = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_EQUALITY</span>},
+</pre><pre class="insert-after">  [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Năm toán tử còn lại nằm thấp hơn một chút trong bảng.</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 5 lines</div>
+<pre class="insert">  [<span class="a">TOKEN_EQUAL_EQUAL</span>]   = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_EQUALITY</span>},
+  [<span class="a">TOKEN_GREATER</span>]       = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_COMPARISON</span>},
+  [<span class="a">TOKEN_GREATER_EQUAL</span>] = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_COMPARISON</span>},
+  [<span class="a">TOKEN_LESS</span>]          = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_COMPARISON</span>},
+  [<span class="a">TOKEN_LESS_EQUAL</span>]    = {<span class="a">NULL</span>,     <span class="i">binary</span>, <span class="a">PREC_COMPARISON</span>},
+</pre><pre class="insert-after">  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 5 lines</div>
+
+<p>Bên trong <code>binary()</code> ta đã có một switch để sinh bytecode phù hợp cho từng token type. Ta thêm case cho sáu toán tử mới.</p>
+<div class="codehilite"><pre class="insert-before">  switch (operatorType) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>binary</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">TOKEN_BANG_EQUAL</span>:    <span class="i">emitBytes</span>(<span class="a">OP_EQUAL</span>, <span class="a">OP_NOT</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_EQUAL_EQUAL</span>:   <span class="i">emitByte</span>(<span class="a">OP_EQUAL</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_GREATER</span>:       <span class="i">emitByte</span>(<span class="a">OP_GREATER</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_GREATER_EQUAL</span>: <span class="i">emitBytes</span>(<span class="a">OP_LESS</span>, <span class="a">OP_NOT</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_LESS</span>:          <span class="i">emitByte</span>(<span class="a">OP_LESS</span>); <span class="k">break</span>;
+    <span class="k">case</span> <span class="a">TOKEN_LESS_EQUAL</span>:    <span class="i">emitBytes</span>(<span class="a">OP_GREATER</span>, <span class="a">OP_NOT</span>); <span class="k">break</span>;
+</pre><pre class="insert-after">    case TOKEN_PLUS:          emitByte(OP_ADD); break;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>binary</em>()</div>
+
+<p>Các toán tử <code>==</code>, <code>&lt;</code>, và <code>&gt;</code> xuất một instruction duy nhất. Các toán tử còn lại xuất một cặp instruction: một để tính toán phép so sánh ngược, rồi <code>OP_NOT</code> để đảo kết quả. Sáu toán tử với giá của ba instruction!</p>
+<p>Điều đó nghĩa là bên VM, công việc của ta đơn giản hơn. Equality là phép tổng quát nhất.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_FALSE: push(BOOL_VAL(false)); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_EQUAL</span>: {
+        <span class="t">Value</span> <span class="i">b</span> = <span class="i">pop</span>();
+        <span class="t">Value</span> <span class="i">a</span> = <span class="i">pop</span>();
+        <span class="i">push</span>(<span class="a">BOOL_VAL</span>(<span class="i">valuesEqual</span>(<span class="i">a</span>, <span class="i">b</span>)));
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_ADD:      BINARY_OP(NUMBER_VAL, +); break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Bạn có thể so sánh <code>==</code> trên bất kỳ cặp object nào, kể cả khác kiểu. Có đủ độ phức tạp để đáng tách logic này sang một hàm riêng. Hàm này luôn trả về một <code>bool</code> của C, nên ta có thể bọc kết quả trong <code>BOOL_VAL</code> một cách an toàn. Hàm này liên quan đến <code>Value</code>, nên nó nằm trong module “value”.</p>
+<div class="codehilite"><pre class="insert-before">} ValueArray;
+
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>ValueArray</em></div>
+<pre class="insert"><span class="t">bool</span> <span class="i">valuesEqual</span>(<span class="t">Value</span> <span class="i">a</span>, <span class="t">Value</span> <span class="i">b</span>);
+</pre><pre class="insert-after">void initValueArray(ValueArray* array);
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>ValueArray</em></div>
+
+<p>Và đây là phần cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>value.c</em><br>
+add after <em>printValue</em>()</div>
+<pre><span class="t">bool</span> <span class="i">valuesEqual</span>(<span class="t">Value</span> <span class="i">a</span>, <span class="t">Value</span> <span class="i">b</span>) {
+  <span class="k">if</span> (<span class="i">a</span>.<span class="i">type</span> != <span class="i">b</span>.<span class="i">type</span>) <span class="k">return</span> <span class="k">false</span>;
+  <span class="k">switch</span> (<span class="i">a</span>.<span class="i">type</span>) {
+    <span class="k">case</span> <span class="a">VAL_BOOL</span>:   <span class="k">return</span> <span class="a">AS_BOOL</span>(<span class="i">a</span>) == <span class="a">AS_BOOL</span>(<span class="i">b</span>);
+    <span class="k">case</span> <span class="a">VAL_NIL</span>:    <span class="k">return</span> <span class="k">true</span>;
+    <span class="k">case</span> <span class="a">VAL_NUMBER</span>: <span class="k">return</span> <span class="a">AS_NUMBER</span>(<span class="i">a</span>) == <span class="a">AS_NUMBER</span>(<span class="i">b</span>);
+    <span class="k">default</span>:         <span class="k">return</span> <span class="k">false</span>; <span class="c">// Unreachable.</span>
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, add after <em>printValue</em>()</div>
+
+<p>Đầu tiên, ta kiểm tra kiểu. Nếu các <code>Value</code> có <span name="equal">kiểu khác nhau</span>, chắc chắn chúng không bằng nhau. Ngược lại, ta “mở” hai <code>Value</code> và so sánh trực tiếp.</p>
+<aside name="equal">
+<p>Một số ngôn ngữ có “implicit conversions” (chuyển đổi ngầm định) cho phép các giá trị khác kiểu được coi là bằng nhau nếu một giá trị có thể được chuyển đổi sang kiểu của giá trị kia. Ví dụ, số 0 được coi là tương đương với chuỗi <code>"0"</code> trong JavaScript. Sự “lỏng lẻo” này đã gây ra đủ nhiều rắc rối để JS phải bổ sung một toán tử “strict equality” riêng, <code>===</code>.</p>
+<p>PHP coi hai chuỗi <code>"1"</code> và <code>"01"</code> là tương đương vì cả hai đều có thể được chuyển đổi thành các số tương đương, dù lý do sâu xa hơn là vì PHP được thiết kế bởi một vị thần cổ xưa kiểu Lovecraft để hủy hoại tâm trí con người.</p>
+<p>Hầu hết các ngôn ngữ dynamic typing có tách biệt kiểu số nguyên và số thực dấu chấm động đều coi các giá trị khác kiểu số là bằng nhau nếu giá trị số của chúng giống nhau (ví dụ, 1.0 bằng 1), dù ngay cả sự tiện lợi tưởng chừng vô hại này cũng có thể “cắn” những ai bất cẩn.</p>
+</aside>
+<p>Với mỗi kiểu giá trị, chúng ta có một case riêng để xử lý so sánh bản thân giá trị đó. Với việc các case này khá giống nhau, bạn có thể thắc mắc tại sao ta không đơn giản <code>memcmp()</code> hai struct <code>Value</code> cho xong. Vấn đề là do padding và các field union có kích thước khác nhau, một <code>Value</code> chứa cả những bit không dùng. C không đảm bảo nội dung của những bit này, nên hoàn toàn có thể xảy ra trường hợp hai <code>Value</code> bằng nhau nhưng khác nhau ở phần bộ nhớ không dùng đến.</p><img src="image/types-of-values/memcmp.png" alt="Biểu diễn bộ nhớ của hai giá trị bằng nhau nhưng khác nhau ở các byte không dùng." />
+<p>(Bạn sẽ không tin tôi đã phải chịu bao nhiêu đau đớn trước khi biết sự thật này đâu.)</p>
+<p>Dù sao thì, khi ta thêm nhiều kiểu hơn vào clox, hàm này sẽ có thêm các case mới. Hiện tại, ba kiểu này là đủ. Các toán tử so sánh khác thì dễ hơn vì chúng chỉ hoạt động trên số.</p>
+<div class="codehilite"><pre class="insert-before">        push(BOOL_VAL(valuesEqual(a, b)));
+        break;
+      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_GREATER</span>:  <span class="a">BINARY_OP</span>(<span class="a">BOOL_VAL</span>, &gt;); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_LESS</span>:     <span class="a">BINARY_OP</span>(<span class="a">BOOL_VAL</span>, &lt;); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_ADD:      BINARY_OP(NUMBER_VAL, +); break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Chúng ta đã mở rộng macro <code>BINARY_OP</code> để xử lý các toán tử trả về kiểu không phải số. Giờ là lúc dùng nó. Ta truyền vào <code>BOOL_VAL</code> vì kiểu giá trị kết quả là Boolean. Ngoài ra, nó không khác gì cộng hay trừ.</p>
+<p>Như thường lệ, phần “coda” cho bản aria hôm nay là disassemble các instruction mới.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_FALSE:
+      return simpleInstruction(&quot;OP_FALSE&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_EQUAL</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_EQUAL&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_GREATER</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_GREATER&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_LESS</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_LESS&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_ADD:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Vậy là chiếc “máy tính số học” của chúng ta đã trở thành một thứ gần giống bộ đánh giá biểu thức tổng quát hơn. Khởi động clox và gõ:</p>
+<div class="codehilite"><pre>!(<span class="n">5</span> - <span class="n">4</span> &gt; <span class="n">3</span> * <span class="n">2</span> == !<span class="k">nil</span>)
+</pre></div>
+<p>Được rồi, tôi thừa nhận đây có thể không phải là biểu thức <em>hữu ích</em> nhất, nhưng chúng ta đang tiến bộ. Giờ chỉ còn thiếu một kiểu built-in với literal riêng: strings. Chúng phức tạp hơn nhiều vì string có thể thay đổi kích thước. Sự khác biệt nhỏ này lại kéo theo những hệ quả đủ lớn để chúng tôi dành hẳn <a href="strings.html">một chương riêng</a> cho strings.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>18&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Chúng ta có thể giảm số lượng toán tử nhị phân xuống nữa so với hiện tại. Bạn có thể loại bỏ thêm những instruction nào, và compiler sẽ xử lý thế nào khi thiếu chúng?</p>
+</li>
+<li>
+<p>Ngược lại, ta có thể cải thiện tốc độ của bytecode VM bằng cách thêm nhiều instruction chuyên biệt hơn, tương ứng với các thao tác cấp cao. Bạn sẽ định nghĩa những instruction nào để tăng tốc cho loại code người dùng mà chúng ta đã hỗ trợ trong chương này?</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="strings.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Strings&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

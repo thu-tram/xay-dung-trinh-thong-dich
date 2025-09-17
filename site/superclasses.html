@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Superclasses &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Superclasses<small>29</small></a></h3>
+
+<ul>
+    <li><a href="#kế-thừa-method"><small>29.1</small> Kế thừa Method</a></li>
+    <li><a href="#lưu-trữ-superclass"><small>29.4</small> Lưu trữ Superclass</a></li>
+    <li><a href="#lời-gọi-`super`"><small>29.3</small> Lời gọi `super`</a></li>
+    <li><a href="#một-máy-ảo-ho&amp;agrave;n-chỉnh"><small>29.5</small> Một máy ảo ho&amp;agrave;n chỉnh</a></li>
+    <li><a href="#thử-thách"><small>29.6</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="methods-and-initializers.html" title="Methods and Initializers" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="optimization.html" title="Optimization" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="methods-and-initializers.html" title="Methods and Initializers" class="prev">←</a>
+<a href="optimization.html" title="Optimization" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Superclasses<small>29</small></a></h3>
+
+<ul>
+    <li><a href="#kế-thừa-method"><small>29.1</small> Kế thừa Method</a></li>
+    <li><a href="#lưu-trữ-superclass"><small>29.4</small> Lưu trữ Superclass</a></li>
+    <li><a href="#lời-gọi-`super`"><small>29.3</small> Lời gọi `super`</a></li>
+    <li><a href="#một-máy-ảo-ho&amp;agrave;n-chỉnh"><small>29.5</small> Một máy ảo ho&amp;agrave;n chỉnh</a></li>
+    <li><a href="#thử-thách"><small>29.6</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="methods-and-initializers.html" title="Methods and Initializers" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="optimization.html" title="Optimization" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">29</div>
+  <h1>Superclasses</h1>
+
+<blockquote>
+<p>Bạn có thể chọn bạn bè nhưng chắc chắn không thể chọn gia đình mình, và họ vẫn là máu mủ của bạn dù bạn có thừa nhận hay không, và trông bạn sẽ thật ngớ ngẩn nếu giả vờ như không biết họ.</p>
+<p><cite>Harper Lee, <em>Giết Con Chim Nhại</em></cite></p>
+</blockquote>
+<p>Đây là chương cuối cùng mà ta thêm chức năng mới cho VM. Ta đã nhét gần như toàn bộ ngôn ngữ Lox vào đây rồi. Việc còn lại chỉ là kế thừa method và gọi method của superclass. Sau chương này, ta còn <a href="optimization.html">một chương nữa</a>, nhưng nó không giới thiệu hành vi mới nào. Nó <span name="faster">chỉ</span> làm cho những thứ hiện có chạy nhanh hơn. Hoàn thành chương này, bạn sẽ có một bản hiện thực Lox hoàn chỉnh.</p>
+<aside name="faster">
+<p>Từ “chỉ” ở đây không có nghĩa là việc tăng tốc không quan trọng! Xét cho cùng, toàn bộ mục đích của chiếc máy ảo thứ hai này là để có hiệu năng tốt hơn jlox. Bạn thậm chí có thể nói rằng <em>tất cả</em> mười lăm chương vừa qua đều là “tối ưu hóa”.</p>
+</aside>
+<p>Một số nội dung trong chương này sẽ khiến bạn nhớ đến jlox. Cách ta xử lý lời gọi <code>super</code> gần như giống hệt, chỉ là nhìn qua cơ chế lưu trữ trạng thái trên stack phức tạp hơn của clox. Nhưng lần này, ta có một cách hoàn toàn khác, nhanh hơn nhiều, để xử lý lời gọi method được kế thừa.</p>
+<h2><a href="#kế-thừa-method" id="kế-thừa-method"><small>29&#8202;.&#8202;1</small>Kế thừa Method</a></h2>
+<p>Ta sẽ bắt đầu với kế thừa method vì nó đơn giản hơn. Nhắc lại một chút, cú pháp kế thừa trong Lox trông như sau:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Dunk in the fryer.&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">Cruller</span> &lt; <span class="t">Doughnut</span> {
+  <span class="i">finish</span>() {
+    <span class="k">print</span> <span class="s">&quot;Glaze with icing.&quot;</span>;
+  }
+}
+</pre></div>
+<p>Ở đây, class <code>Cruller</code> kế thừa từ <code>Doughnut</code> và vì thế, các instance của <code>Cruller</code> cũng kế thừa method <code>cook()</code>. Tôi không biết tại sao mình lại phải giải thích dài dòng thế này. Bạn biết cách kế thừa hoạt động rồi. Bắt đầu compile cú pháp mới thôi.</p>
+<div class="codehilite"><pre class="insert-before">  currentClass = &amp;classCompiler;
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_LESS</span>)) {
+    <span class="i">consume</span>(<span class="a">TOKEN_IDENTIFIER</span>, <span class="s">&quot;Expect superclass name.&quot;</span>);
+    <span class="i">variable</span>(<span class="k">false</span>);
+    <span class="i">namedVariable</span>(<span class="i">className</span>, <span class="k">false</span>);
+    <span class="i">emitByte</span>(<span class="a">OP_INHERIT</span>);
+  }
+
+</pre><pre class="insert-after">  namedVariable(className, false);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Sau khi compile tên class, nếu token tiếp theo là <code>&lt;</code>, tức là ta đã gặp mệnh đề superclass. Ta đọc token identifier của superclass, rồi gọi <code>variable()</code>. Hàm này nhận token vừa đọc, coi nó như một biến, và sinh code để load giá trị của biến đó. Nói cách khác, nó tìm superclass theo tên và đẩy nó lên stack.</p>
+<p>Sau đó, ta gọi <code>namedVariable()</code> để load subclass đang kế thừa lên stack, rồi theo sau là lệnh <code>OP_INHERIT</code>. Lệnh này kết nối superclass với subclass mới. Ở chương trước, ta đã định nghĩa lệnh <code>OP_METHOD</code> để thay đổi một class object hiện có bằng cách thêm method vào method table của nó. Lệnh <code>OP_INHERIT</code> cũng tương tự — nó nhận một class hiện có và áp dụng hiệu ứng kế thừa cho nó.</p>
+<p>Trong ví dụ trước, khi compiler xử lý đoạn cú pháp:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Cruller</span> &lt; <span class="t">Doughnut</span> {
+</pre></div>
+<p>Kết quả là bytecode như sau:</p><img src="image/superclasses/inherit-stack.png" alt="Chuỗi lệnh bytecode cho class Cruller kế thừa từ Doughnut." />
+<p>Trước khi hiện thực lệnh <code>OP_INHERIT</code> mới, ta cần phát hiện một trường hợp đặc biệt.</p>
+<div class="codehilite"><pre class="insert-before">    variable(false);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">identifiersEqual</span>(&amp;<span class="i">className</span>, &amp;<span class="i">parser</span>.<span class="i">previous</span>)) {
+      <span class="i">error</span>(<span class="s">&quot;A class can&#39;t inherit from itself.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    namedVariable(className, false);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p><span name="cycle">Một</span> class không thể là superclass của chính nó. Trừ khi bạn có trong tay một nhà vật lý hạt nhân “điên” và một chiếc DeLorean được độ cực mạnh, bạn không thể tự kế thừa chính mình.</p>
+<aside name="cycle">
+<p>Thú vị là, với cách ta hiện thực kế thừa method, tôi nghĩ cho phép vòng lặp kế thừa cũng không gây vấn đề gì trong clox. Nó sẽ chẳng làm được gì <em>có ích</em>, nhưng tôi không nghĩ nó sẽ gây crash hay vòng lặp vô hạn.</p>
+</aside>
+<h3><a href="#execute-kế-thừa" id="execute-kế-thừa"><small>29&#8202;.&#8202;1&#8202;.&#8202;1</small>Execute kế thừa</a></h3>
+<p>Giờ đến lệnh mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CLASS,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_INHERIT</span>,
+</pre><pre class="insert-after">  OP_METHOD
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Không có toán hạng nào cần lo. Hai giá trị ta cần — superclass và subclass — đều nằm trên stack. Điều đó khiến việc disassemble trở nên dễ dàng.</p>
+<div class="codehilite"><pre class="insert-before">      return constantInstruction(&quot;OP_CLASS&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_INHERIT</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_INHERIT&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_METHOD:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Interpreter mới là nơi mọi thứ diễn ra.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_INHERIT</span>: {
+        <span class="t">Value</span> <span class="i">superclass</span> = <span class="i">peek</span>(<span class="n">1</span>);
+        <span class="t">ObjClass</span>* <span class="i">subclass</span> = <span class="a">AS_CLASS</span>(<span class="i">peek</span>(<span class="n">0</span>));
+        <span class="i">tableAddAll</span>(&amp;<span class="a">AS_CLASS</span>(<span class="i">superclass</span>)-&gt;<span class="i">methods</span>,
+                    &amp;<span class="i">subclass</span>-&gt;<span class="i">methods</span>);
+        <span class="i">pop</span>(); <span class="c">// Subclass.</span>
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_METHOD:
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Từ đỉnh stack trở xuống, ta có subclass rồi đến superclass. Ta lấy cả hai và thực hiện phần “inherit-y”. Đây là chỗ clox đi khác jlox. Trong interpreter đầu tiên, mỗi subclass lưu một tham chiếu tới superclass của nó. Khi truy cập method, nếu không tìm thấy trong method table của subclass, ta sẽ đệ quy qua chuỗi kế thừa, tìm trong method table của từng ancestor cho đến khi thấy.</p>
+<p>Ví dụ, gọi <code>cook()</code> trên một instance của <code>Cruller</code> sẽ khiến jlox thực hiện hành trình này:</p><img src="image/superclasses/jlox-resolve.png" alt="Việc resolve lời gọi cook() trong một instance của Cruller nghĩa là duyệt qua chuỗi superclass." />
+<p>Đó là rất nhiều việc phải làm tại thời điểm <em>gọi</em> method. Nó chậm, và tệ hơn, method kế thừa càng ở cao trong chuỗi ancestor thì càng chậm. Không phải là một câu chuyện hiệu năng hay ho.</p>
+<p>Cách tiếp cận mới nhanh hơn nhiều. Khi subclass được khai báo, ta copy tất cả method của superclass xuống method table của subclass. Sau này, khi <em>gọi</em> method, bất kỳ method nào kế thừa từ superclass sẽ được tìm thấy ngay trong method table của subclass. Không cần thêm công việc runtime nào cho kế thừa cả. Ngay khi class được khai báo, mọi việc đã xong. Điều này có nghĩa là lời gọi method kế thừa nhanh y như lời gọi method bình thường — chỉ <span name="two">một</span> lần tra cứu hash table.</p><img src="image/superclasses/clox-resolve.png" alt="Resolving a call to cook() in an instance of Cruller which has the method in its own method table." />
+<aside name="two">
+<p>Thực ra là hai lần tra cứu hash table, tôi đoán vậy. Vì trước tiên ta phải đảm bảo rằng một field trên instance không che khuất method.</p>
+</aside>
+<p>Thỉnh thoảng tôi nghe kỹ thuật này được gọi là “copy-down inheritance” (kế thừa sao chép xuống). Nó đơn giản và nhanh, nhưng giống như hầu hết các tối ưu hóa, bạn chỉ có thể dùng nó trong một số điều kiện nhất định. Nó hoạt động trong Lox vì class trong Lox là <em>đóng</em>. Khi một khai báo class đã execute xong, tập hợp method của class đó sẽ không bao giờ thay đổi nữa.</p>
+<p>Trong các ngôn ngữ như Ruby, Python và JavaScript, bạn có thể <span name="monkey">mở tung</span> một class hiện có và nhét thêm method mới vào hoặc thậm chí xóa chúng đi. Điều đó sẽ phá vỡ tối ưu hóa của ta, vì nếu những thay đổi đó xảy ra với một superclass <em>sau khi</em> khai báo subclass đã execute, subclass sẽ không nhận được các thay đổi đó. Điều này phá vỡ kỳ vọng của người dùng rằng kế thừa luôn phản ánh trạng thái hiện tại của superclass.</p>
+<aside name="monkey">
+<p>Như bạn có thể tưởng tượng, việc thay đổi tập hợp method mà một class định nghĩa một cách mệnh lệnh khi runtime có thể khiến việc suy luận về chương trình trở nên khó khăn. Đây là một công cụ rất mạnh, nhưng cũng rất nguy hiểm.</p>
+<p>Những người thấy công cụ này có lẽ hơi <em>quá</em> nguy hiểm đã đặt cho nó cái tên không mấy hay ho là “monkey patching”, hoặc thậm chí là “duck punching” còn ít lịch sự hơn.</p><img src="image/superclasses/monkey.png" alt="Một con khỉ đeo bịt mắt, tất nhiên rồi." />
+</aside>
+<p>May mắn cho chúng ta (nhưng có lẽ không may cho những người thích tính năng này), Lox không cho phép bạn “vá khỉ” hay “đấm vịt”, nên ta có thể áp dụng tối ưu hóa này một cách an toàn.</p>
+<p>Thế còn override method thì sao? Việc sao chép method của superclass vào method table của subclass có xung đột với method riêng của subclass không? May mắn là không. Ta phát sinh <code>OP_INHERIT</code> sau lệnh <code>OP_CLASS</code> tạo subclass nhưng trước khi bất kỳ khai báo method và lệnh <code>OP_METHOD</code> nào được compile. Tại thời điểm ta sao chép method của superclass xuống, method table của subclass vẫn trống. Bất kỳ method nào subclass override sẽ ghi đè lên các entry kế thừa trong bảng.</p>
+<h3><a href="#superclass-không-hợp-lệ" id="superclass-không-hợp-lệ"><small>29&#8202;.&#8202;3&#8202;.&#8202;1</small>Superclass không hợp lệ</a></h3>
+<p>Hiện thực của ta đơn giản và nhanh, đúng kiểu tôi thích cho code VM. Nhưng nó không mạnh mẽ. Không có gì ngăn người dùng kế thừa từ một object vốn chẳng phải class:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="t">NotClass</span> = <span class="s">&quot;So not a class&quot;</span>;
+<span class="k">class</span> <span class="t">OhNo</span> &lt; <span class="t">NotClass</span> {}
+</pre></div>
+<p>Rõ ràng, chẳng lập trình viên nào có lòng tự trọng lại viết như vậy, nhưng ta phải phòng ngừa những người dùng Lox tiềm năng không có lòng tự trọng. Một kiểm tra runtime đơn giản sẽ xử lý được.</p>
+<div class="codehilite"><pre class="insert-before">        Value superclass = peek(1);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">        <span class="k">if</span> (!<span class="a">IS_CLASS</span>(<span class="i">superclass</span>)) {
+          <span class="i">runtimeError</span>(<span class="s">&quot;Superclass must be a class.&quot;</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+
+</pre><pre class="insert-after">        ObjClass* subclass = AS_CLASS(peek(0));
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Nếu giá trị ta load từ identifier trong mệnh đề superclass không phải là một ObjClass, ta báo lỗi runtime để cho người dùng biết ta nghĩ gì về họ và code của họ.</p>
+<h2><a href="#lưu-trữ-superclass" id="lưu-trữ-superclass"><small>29&#8202;.&#8202;4</small>Lưu trữ Superclass</a></h2>
+<p>Bạn có để ý rằng khi ta thêm kế thừa method, ta thực ra không hề thêm bất kỳ tham chiếu nào từ subclass tới superclass của nó không? Sau khi sao chép các method kế thừa xong, ta quên luôn superclass. Ta không cần giữ tham chiếu tới superclass, nên ta bỏ qua.</p>
+<p>Điều đó sẽ không đủ để hỗ trợ lời gọi <code>super</code>. Vì subclass <span name="may">có thể</span> override method của superclass, ta cần có cách truy cập vào method table của superclass. Trước khi đi vào cơ chế đó, tôi muốn nhắc lại cho bạn cách lời gọi <code>super</code> được resolve tĩnh.</p>
+<aside name="may">
+<p>“Có thể” ở đây có lẽ chưa đủ mạnh. Nhiều khả năng method <em>đã</em> bị override. Nếu không thì tại sao bạn lại dùng <code>super</code> thay vì gọi trực tiếp?</p>
+</aside>
+<p>Quay lại những ngày tươi đẹp của jlox, tôi đã cho bạn xem <a href="inheritance.html#semantics">ví dụ hóc búa này</a> để giải thích cách lời gọi <code>super</code> được phân giải:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;A method&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">B</span> &lt; <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;B method&quot;</span>;
+  }
+
+  <span class="i">test</span>() {
+    <span class="k">super</span>.<span class="i">method</span>();
+  }
+}
+
+<span class="k">class</span> <span class="t">C</span> &lt; <span class="t">B</span> {}
+
+<span class="t">C</span>().<span class="i">test</span>();
+</pre></div>
+<p>Bên trong thân method <code>test()</code>, <code>this</code> là một instance của C. Nếu lời gọi <code>super</code> được resolve dựa trên superclass của <em>receiver</em>, thì ta sẽ tìm trong superclass của C, tức là B. Nhưng <code>super</code> được resolve dựa trên superclass của <em>class bao quanh nơi lời gọi super xảy ra</em>. Trong trường hợp này, ta đang ở method <code>test()</code> của B, nên superclass là A, và chương trình sẽ in ra <code>"A method"</code>.</p>
+<p>Điều này có nghĩa là lời gọi <code>super</code> không được resolve một cách động dựa trên instance khi runtime. Superclass được dùng để tìm method là một thuộc tính tĩnh — gần như là lexical — của vị trí lời gọi xảy ra. Khi ta thêm kế thừa vào jlox, ta đã tận dụng khía cạnh tĩnh đó bằng cách lưu superclass trong cùng cấu trúc Environment mà ta dùng cho tất cả các scope lexical. Gần như thể interpreter nhìn chương trình trên như thế này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;A method&quot;</span>;
+  }
+}
+
+<span class="k">var</span> <span class="t">Bs_super</span> = <span class="t">A</span>;
+<span class="k">class</span> <span class="t">B</span> &lt; <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;B method&quot;</span>;
+  }
+
+  <span class="i">test</span>() {
+    <span class="i">runtimeSuperCall</span>(<span class="t">Bs_super</span>, <span class="s">&quot;method&quot;</span>);
+  }
+}
+
+<span class="k">var</span> <span class="t">Cs_super</span> = <span class="t">B</span>;
+<span class="k">class</span> <span class="t">C</span> &lt; <span class="t">B</span> {}
+
+<span class="t">C</span>().<span class="i">test</span>();
+</pre></div>
+<p>Mỗi subclass có một biến ẩn lưu tham chiếu tới superclass của nó. Bất cứ khi nào cần thực hiện một lời gọi <code>super</code>, ta sẽ truy cập superclass từ biến đó và yêu cầu runtime bắt đầu tìm method từ đó trở đi.</p>
+<p>Ta sẽ áp dụng cách tiếp cận tương tự với clox. Khác biệt là thay vì dùng class Environment được cấp phát trên heap như jlox, ta có value stack và hệ thống upvalue của bytecode VM. Cơ chế hơi khác một chút, nhưng hiệu ứng tổng thể thì giống nhau.</p>
+<h3><a href="#biến-local-cho-superclass" id="biến-local-cho-superclass"><small>29&#8202;.&#8202;2&#8202;.&#8202;1</small>Biến local cho superclass</a></h3>
+<p>Compiler của ta vốn đã sinh code để load superclass lên stack. Thay vì để slot đó như một biến tạm, ta tạo một scope mới và biến nó thành một biến local.</p>
+<div class="codehilite"><pre class="insert-before">    }
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">    <span class="i">beginScope</span>();
+    <span class="i">addLocal</span>(<span class="i">syntheticToken</span>(<span class="s">&quot;super&quot;</span>));
+    <span class="i">defineVariable</span>(<span class="n">0</span>);
+
+</pre><pre class="insert-after">    namedVariable(className, false);
+    emitByte(OP_INHERIT);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Việc tạo một lexical scope mới đảm bảo rằng nếu ta khai báo hai class trong cùng một scope, mỗi class sẽ có một slot local khác nhau để lưu superclass của nó. Vì ta luôn đặt tên biến này là <code>"super"</code>, nếu không tạo scope riêng cho mỗi subclass, các biến này sẽ bị trùng nhau.</p>
+<p>Ta đặt tên biến là <code>"super"</code> vì cùng lý do ta dùng <code>"this"</code> làm tên biến local ẩn mà các biểu thức <code>this</code> sẽ resolve tới: <code>"super"</code> là một từ khóa, đảm bảo biến ẩn của compiler sẽ không bị trùng với biến do người dùng định nghĩa.</p>
+<p>Điểm khác là khi compile biểu thức <code>this</code>, ta tiện lợi có sẵn một token với lexeme là <code>"this"</code>. Ở đây thì không may mắn như vậy. Thay vào đó, ta thêm một hàm helper nhỏ để tạo một token giả (synthetic token) cho một chuỗi <span name="constant">hằng</span> cho trước.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>variable</em>()</div>
+<pre><span class="k">static</span> <span class="t">Token</span> <span class="i">syntheticToken</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">text</span>) {
+  <span class="t">Token</span> <span class="i">token</span>;
+  <span class="i">token</span>.<span class="i">start</span> = <span class="i">text</span>;
+  <span class="i">token</span>.<span class="i">length</span> = (<span class="t">int</span>)<span class="i">strlen</span>(<span class="i">text</span>);
+  <span class="k">return</span> <span class="i">token</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>variable</em>()</div>
+
+<aside name="constant" class="bottom">
+<p>Tôi nói “chuỗi hằng” vì token không quản lý bộ nhớ cho lexeme của nó. Nếu ta cố dùng một chuỗi được cấp phát trên heap cho việc này, ta sẽ bị rò rỉ bộ nhớ vì nó sẽ không bao giờ được giải phóng. Nhưng bộ nhớ cho các chuỗi literal trong C thì nằm trong vùng dữ liệu hằng của file execute và không cần giải phóng, nên ta ổn.</p>
+</aside>
+<p>Vì ta đã mở một local scope cho biến superclass, ta cần đóng nó lại.</p>
+<div class="codehilite"><pre class="insert-before">  emitByte(OP_POP);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">classCompiler</span>.<span class="i">hasSuperclass</span>) {
+    <span class="i">endScope</span>();
+  }
+</pre><pre class="insert-after">
+
+  currentClass = currentClass-&gt;enclosing;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Ta pop scope và loại bỏ biến <code>"super"</code> sau khi compile xong thân class và các method của nó. Cách này giúp biến đó khả dụng trong tất cả các method của subclass. Đây là một tối ưu hóa hơi vô nghĩa, nhưng ta chỉ tạo scope nếu <em>có</em> mệnh đề superclass. Do đó, ta chỉ cần đóng scope nếu có mệnh đề này.</p>
+<p>Để theo dõi điều đó, ta có thể khai báo một biến local nhỏ trong <code>classDeclaration()</code>. Nhưng sớm thôi, các hàm khác trong compiler cũng sẽ cần biết class bao quanh có phải là subclass hay không. Vậy nên tốt hơn là giúp chính mình trong tương lai bằng cách lưu thông tin này vào một field trong ClassCompiler ngay bây giờ.</p>
+<div class="codehilite"><pre class="insert-before">typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in struct <em>ClassCompiler</em></div>
+<pre class="insert">  <span class="t">bool</span> <span class="i">hasSuperclass</span>;
+</pre><pre class="insert-after">} ClassCompiler;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in struct <em>ClassCompiler</em></div>
+
+<p>Khi khởi tạo một ClassCompiler, ta giả định nó không phải là subclass.</p>
+<div class="codehilite"><pre class="insert-before">  ClassCompiler classCompiler;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="i">classCompiler</span>.<span class="i">hasSuperclass</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">  classCompiler.enclosing = currentClass;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Sau đó, nếu ta thấy một mệnh đề superclass, ta biết mình đang compile một subclass.</p>
+<div class="codehilite"><pre class="insert-before">    emitByte(OP_INHERIT);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">    <span class="i">classCompiler</span>.<span class="i">hasSuperclass</span> = <span class="k">true</span>;
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Cơ chế này cho phép ta, tại runtime, truy cập object superclass của subclass bao quanh từ bên trong bất kỳ method nào của subclass — chỉ cần sinh code để load biến tên <code>"super"</code>. Biến đó là một local nằm ngoài thân method, nhưng hệ thống upvalue hiện có của VM cho phép capture biến local đó bên trong thân method hoặc thậm chí trong các hàm lồng bên trong method đó.</p>
+<h2><a href="#lời-gọi-`super`" id="lời-gọi-`super`"><small>29&#8202;.&#8202;3</small>Lời gọi <code>super</code></a></h2>
+<p>Với phần hỗ trợ runtime đã sẵn sàng, ta có thể bắt tay vào hiện thực lời gọi <code>super</code>. Như thường lệ, ta sẽ đi từ front-end tới back-end, bắt đầu với cú pháp mới. Một lời gọi <code>super</code> <span name="last">bắt đầu</span> — tất nhiên rồi — bằng từ khóa <code>super</code>.</p>
+<aside name="last">
+<p>Đây rồi, bạn của tôi. Mục cuối cùng bạn sẽ thêm vào bảng parse.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_SUPER</span>]         = {<span class="i">super_</span>,   <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Khi expression parser gặp một token <code>super</code>, điều khiển sẽ nhảy tới một hàm parse mới, bắt đầu như sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>syntheticToken</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">super_</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+  <span class="i">consume</span>(<span class="a">TOKEN_DOT</span>, <span class="s">&quot;Expect &#39;.&#39; after &#39;super&#39;.&quot;</span>);
+  <span class="i">consume</span>(<span class="a">TOKEN_IDENTIFIER</span>, <span class="s">&quot;Expect superclass method name.&quot;</span>);
+  <span class="t">uint8_t</span> <span class="i">name</span> = <span class="i">identifierConstant</span>(&amp;<span class="i">parser</span>.<span class="i">previous</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>syntheticToken</em>()</div>
+
+<p>Điều này khá khác so với cách ta compile biểu thức <code>this</code>. Không giống <code>this</code>, một token <code>super</code> <span name="token">không</span> phải là một expression độc lập. Thay vào đó, dấu chấm và tên method theo sau nó là những phần không thể tách rời của cú pháp. Tuy nhiên, danh sách đối số trong ngoặc đơn thì tách biệt. Giống như truy cập method thông thường, Lox cho phép lấy một tham chiếu tới method của superclass dưới dạng closure mà không cần gọi nó:</p>
+<aside name="token">
+<p>Câu hỏi giả định: Nếu một token <code>super</code> trần <em>là</em> một expression, nó sẽ evaluate ra loại object nào?</p>
+</aside>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;A&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">B</span> &lt; <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">var</span> <span class="i">closure</span> = <span class="k">super</span>.<span class="i">method</span>;
+    <span class="i">closure</span>(); <span class="c">// Prints &quot;A&quot;.</span>
+  }
+}
+</pre></div>
+<aside name="two">
+<p>Thực ra là hai lần tra cứu hash table, tôi đoán vậy. Vì trước tiên ta phải đảm bảo rằng một field trên instance không che khuất method.</p>
+</aside>
+<p>Thỉnh thoảng tôi nghe kỹ thuật này được gọi là “copy-down inheritance” (kế thừa sao chép xuống). Nó đơn giản và nhanh, nhưng giống như hầu hết các tối ưu hóa, bạn chỉ có thể dùng nó trong một số điều kiện nhất định. Nó hoạt động trong Lox vì class trong Lox là <em>đóng</em>. Khi một khai báo class đã execute xong, tập hợp method của class đó sẽ không bao giờ thay đổi nữa.</p>
+<p>Trong các ngôn ngữ như Ruby, Python và JavaScript, bạn có thể <span name="monkey">mở tung</span> một class hiện có và nhét thêm method mới vào hoặc thậm chí xóa chúng đi. Điều đó sẽ phá vỡ tối ưu hóa của ta, vì nếu những thay đổi đó xảy ra với một superclass <em>sau khi</em> khai báo subclass đã execute, subclass sẽ không nhận được các thay đổi đó. Điều này phá vỡ kỳ vọng của người dùng rằng kế thừa luôn phản ánh trạng thái hiện tại của superclass.</p>
+<aside name="monkey">
+<p>Như bạn có thể tưởng tượng, việc thay đổi tập hợp method mà một class định nghĩa một cách mệnh lệnh khi runtime có thể khiến việc suy luận về chương trình trở nên khó khăn. Đây là một công cụ rất mạnh, nhưng cũng rất nguy hiểm.</p>
+<p>Những người thấy công cụ này có lẽ hơi <em>quá</em> nguy hiểm đã đặt cho nó cái tên không mấy hay ho là “monkey patching”, hoặc thậm chí là “duck punching” còn ít lịch sự hơn.</p><img src="image/superclasses/monkey.png" alt="Một con khỉ đeo bịt mắt, tất nhiên rồi." />
+</aside>
+<p>May mắn cho chúng ta (nhưng có lẽ không may cho những người thích tính năng này), Lox không cho phép bạn “vá khỉ” hay “đấm vịt”, nên ta có thể áp dụng tối ưu hóa này một cách an toàn.</p>
+<p>Thế còn override method thì sao? Việc sao chép method của superclass vào method table của subclass có xung đột với method riêng của subclass không? May mắn là không. Ta phát sinh <code>OP_INHERIT</code> sau lệnh <code>OP_CLASS</code> tạo subclass nhưng trước khi bất kỳ khai báo method và lệnh <code>OP_METHOD</code> nào được compile. Tại thời điểm ta sao chép method của superclass xuống, method table của subclass vẫn trống. Bất kỳ method nào subclass override sẽ ghi đè lên các entry kế thừa trong bảng.</p>
+<h3><a href="#superclass-không-hợp-lệ" id="superclass-không-hợp-lệ"><small>29&#8202;.&#8202;3&#8202;.&#8202;1</small>Superclass không hợp lệ</a></h3>
+<p>Hiện thực của ta đơn giản và nhanh, đúng kiểu tôi thích cho code VM. Nhưng nó không mạnh mẽ. Không có gì ngăn người dùng kế thừa từ một object vốn chẳng phải class:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="t">NotClass</span> = <span class="s">&quot;So not a class&quot;</span>;
+<span class="k">class</span> <span class="t">OhNo</span> &lt; <span class="t">NotClass</span> {}
+</pre></div>
+<p>Rõ ràng, chẳng lập trình viên nào có lòng tự trọng lại viết như vậy, nhưng ta phải phòng ngừa những người dùng Lox tiềm năng không có lòng tự trọng. Một kiểm tra runtime đơn giản sẽ xử lý được.</p>
+<div class="codehilite"><pre class="insert-before">        Value superclass = peek(1);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">        <span class="k">if</span> (!<span class="a">IS_CLASS</span>(<span class="i">superclass</span>)) {
+          <span class="i">runtimeError</span>(<span class="s">&quot;Superclass must be a class.&quot;</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+
+</pre><pre class="insert-after">        ObjClass* subclass = AS_CLASS(peek(0));
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Nếu giá trị ta load từ identifier trong mệnh đề superclass không phải là một ObjClass, ta báo lỗi runtime để cho người dùng biết ta nghĩ gì về họ và code của họ.</p>
+<h2><a href="#lưu-trữ-superclass" id="lưu-trữ-superclass"><small>29&#8202;.&#8202;4</small>Lưu trữ Superclass</a></h2>
+<p>Bạn có để ý rằng khi ta thêm kế thừa method, ta thực ra không hề thêm bất kỳ tham chiếu nào từ subclass tới superclass của nó không? Sau khi sao chép các method kế thừa xong, ta quên luôn superclass. Ta không cần giữ tham chiếu tới superclass, nên ta bỏ qua.</p>
+<p>Điều đó sẽ không đủ để hỗ trợ lời gọi <code>super</code>. Vì subclass <span name="may">có thể</span> override method của superclass, ta cần có cách truy cập vào method table của superclass. Trước khi đi vào cơ chế đó, tôi muốn nhắc lại cho bạn cách lời gọi <code>super</code> được resolve tĩnh.</p>
+<aside name="may">
+<p>“Có thể” ở đây có lẽ chưa đủ mạnh. Nhiều khả năng method <em>đã</em> bị override. Nếu không thì tại sao bạn lại dùng <code>super</code> thay vì gọi trực tiếp?</p>
+</aside>
+<p>Quay lại những ngày tươi đẹp của jlox, tôi đã cho bạn xem <a href="inheritance.html#semantics">ví dụ hóc búa này</a> để giải thích cách lời gọi <code>super</code> được phân giải:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;A method&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">B</span> &lt; <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;B method&quot;</span>;
+  }
+
+  <span class="i">test</span>() {
+    <span class="k">super</span>.<span class="i">method</span>();
+  }
+}
+
+<span class="k">class</span> <span class="t">C</span> &lt; <span class="t">B</span> {}
+
+<span class="t">C</span>().<span class="i">test</span>();
+</pre></div>
+<p>Bên trong thân method <code>test()</code>, <code>this</code> là một instance của C. Nếu lời gọi <code>super</code> được resolve dựa trên superclass của <em>receiver</em>, thì ta sẽ tìm trong superclass của C, tức là B. Nhưng <code>super</code> được resolve dựa trên superclass của <em>class bao quanh nơi lời gọi super xảy ra</em>. Trong trường hợp này, ta đang ở method <code>test()</code> của B, nên superclass là A, và chương trình sẽ in ra <code>"A method"</code>.</p>
+<p>Điều này có nghĩa là lời gọi <code>super</code> không được resolve một cách động dựa trên instance khi runtime. Superclass được dùng để tìm method là một thuộc tính tĩnh — gần như là lexical — của vị trí lời gọi xảy ra. Khi ta thêm kế thừa vào jlox, ta đã tận dụng khía cạnh tĩnh đó bằng cách lưu superclass trong cùng cấu trúc Environment mà ta dùng cho tất cả các scope lexical. Gần như thể interpreter nhìn chương trình trên như thế này:</p>
+<p>Nói cách khác, Lox thực ra không có biểu thức <code>super</code> dạng <em>gọi hàm</em> (call expression), mà là biểu thức <code>super</code> dạng <em>truy cập</em> (access expression), và bạn có thể chọn gọi ngay nó nếu muốn. Vì vậy, khi compiler gặp một token <code>super</code>, ta đọc tiếp token <code>.</code> theo sau và sau đó tìm tên method. Method được tra cứu một cách động, nên ta dùng <code>identifierConstant()</code> để lấy lexeme của token tên method và lưu nó vào constant table, giống như ta làm với các biểu thức truy cập property.</p>
+<p>Đây là những gì compiler làm sau khi đọc các token đó:</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t name = identifierConstant(&amp;parser.previous);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>super_</em>()</div>
+<pre class="insert">
+
+  <span class="i">namedVariable</span>(<span class="i">syntheticToken</span>(<span class="s">&quot;this&quot;</span>), <span class="k">false</span>);
+  <span class="i">namedVariable</span>(<span class="i">syntheticToken</span>(<span class="s">&quot;super&quot;</span>), <span class="k">false</span>);
+  <span class="i">emitBytes</span>(<span class="a">OP_GET_SUPER</span>, <span class="i">name</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>super_</em>()</div>
+
+<p>Để truy cập một <em>method của superclass</em> trên <em>instance hiện tại</em>, runtime cần cả receiver <em>và</em> superclass của class chứa method đó. Lệnh <code>namedVariable()</code> đầu tiên sinh code để tìm receiver hiện tại được lưu trong biến ẩn <code>"this"</code> và đẩy nó lên stack. Lệnh <code>namedVariable()</code> thứ hai sinh code để tìm superclass từ biến <code>"super"</code> của nó và đẩy lên trên cùng.</p>
+<p>Cuối cùng, ta sinh một lệnh mới <code>OP_GET_SUPER</code> với toán hạng là chỉ số trong constant table của tên method. Nghe thì nhiều thứ phải nhớ, nên để dễ hình dung, hãy xem ví dụ chương trình này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Dunk in the fryer.&quot;</span>;
+    <span class="k">this</span>.<span class="i">finish</span>(<span class="s">&quot;sprinkles&quot;</span>);
+  }
+
+  <span class="i">finish</span>(<span class="i">ingredient</span>) {
+    <span class="k">print</span> <span class="s">&quot;Finish with &quot;</span> + <span class="i">ingredient</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">Cruller</span> &lt; <span class="t">Doughnut</span> {
+  <span class="i">finish</span>(<span class="i">ingredient</span>) {
+    <span class="c">// Không rắc sprinkles, luôn dùng icing.</span>
+    <span class="k">super</span>.<span class="i">finish</span>(<span class="s">&quot;icing&quot;</span>);
+  }
+}
+</pre></div>
+<p>Bytecode được generated cho biểu thức <code>super.finish("icing")</code> trông và hoạt động như sau:</p><img src="image/superclasses/super-instructions.png" alt="Chuỗi lệnh bytecode cho lời gọi super.finish()." />
+<p>Ba lệnh đầu tiên cung cấp cho runtime ba mảnh thông tin cần thiết để thực hiện truy cập <code>super</code>:</p>
+<ol>
+<li>
+<p>Lệnh đầu tiên load <strong>instance</strong> lên stack.</p>
+</li>
+<li>
+<p>Lệnh thứ hai load <strong>superclass nơi method được resolve</strong>.</p>
+</li>
+<li>
+<p>Sau đó, lệnh <code>OP_GET_SUPER</code> mới mã hóa <strong>tên method cần truy cập</strong> dưới dạng toán hạng.</p>
+</li>
+</ol>
+<p>Các lệnh còn lại là bytecode thông thường để đánh giá danh sách đối số và gọi hàm.</p>
+<p>Ta gần như đã sẵn sàng hiện thực lệnh <code>OP_GET_SUPER</code> mới trong interpreter. Nhưng trước khi làm vậy, compiler cần báo một số lỗi mà nó chịu trách nhiệm.</p>
+<div class="codehilite"><pre class="insert-before">static void super_(bool canAssign) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>super_</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">currentClass</span> == <span class="a">NULL</span>) {
+    <span class="i">error</span>(<span class="s">&quot;Can&#39;t use &#39;super&#39; outside of a class.&quot;</span>);
+  } <span class="k">else</span> <span class="k">if</span> (!<span class="i">currentClass</span>-&gt;<span class="i">hasSuperclass</span>) {
+    <span class="i">error</span>(<span class="s">&quot;Can&#39;t use &#39;super&#39; in a class with no superclass.&quot;</span>);
+  }
+
+</pre><pre class="insert-after">  consume(TOKEN_DOT, &quot;Expect '.' after 'super'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>super_</em>()</div>
+
+<p>Một lời gọi <code>super</code> chỉ có ý nghĩa bên trong thân của một method (hoặc trong một hàm lồng bên trong method), và chỉ trong method của một class có superclass. Ta phát hiện cả hai trường hợp này bằng cách dùng giá trị của <code>currentClass</code>. Nếu nó là <code>NULL</code> hoặc trỏ tới một class không có superclass, ta báo lỗi.</p>
+<h3><a href="#execute-truy-cập-`super`" id="execute-truy-cập-`super`"><small>29&#8202;.&#8202;4&#8202;.&#8202;1</small>Execute truy cập <code>super</code></a></h3>
+<p>Giả sử người dùng không đặt biểu thức <code>super</code> ở nơi không được phép, code của họ sẽ đi từ compiler sang runtime. Ta có một lệnh mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_SET_PROPERTY,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_GET_SUPER</span>,
+</pre><pre class="insert-after">  OP_EQUAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Ta disassemble nó giống như các opcode khác có toán hạng là chỉ số constant table.</p>
+<div class="codehilite"><pre class="insert-before">      return constantInstruction(&quot;OP_SET_PROPERTY&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_GET_SUPER</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_GET_SUPER&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_EQUAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Bạn có thể nghĩ sẽ phức tạp hơn, nhưng việc execute lệnh mới này khá giống với việc execute truy cập property thông thường.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_GET_SUPER</span>: {
+        <span class="t">ObjString</span>* <span class="i">name</span> = <span class="a">READ_STRING</span>();
+        <span class="t">ObjClass</span>* <span class="i">superclass</span> = <span class="a">AS_CLASS</span>(<span class="i">pop</span>());
+
+        <span class="k">if</span> (!<span class="i">bindMethod</span>(<span class="i">superclass</span>, <span class="i">name</span>)) {
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Giống như với property, ta đọc tên method từ constant table. Sau đó, ta truyền nó vào <code>bindMethod()</code>, hàm này sẽ tìm method trong method table của class được chỉ định và tạo một ObjBoundMethod để gắn closure kết quả với instance hiện tại.</p>
+<p>Điểm <span name="field">khác biệt</span> chính là <em>class nào</em> ta truyền vào <code>bindMethod()</code>. Với truy cập property thông thường, ta dùng chính class của ObjInstance, điều này cho ta dynamic dispatch như mong muốn. Với lời gọi <code>super</code>, ta không dùng class của instance. Thay vào đó, ta dùng superclass đã được resolve tĩnh của class chứa method, mà compiler đã đảm bảo tiện lợi đặt sẵn trên đỉnh stack chờ ta.</p>
+<p>Ta pop superclass đó và truyền nó vào <code>bindMethod()</code>, hàm này sẽ bỏ qua đúng cách bất kỳ method override nào trong các subclass nằm giữa superclass đó và class của instance. Nó cũng bao gồm đúng cách mọi method mà superclass kế thừa từ bất kỳ superclass nào của <em>nó</em>.</p>
+<p>Phần còn lại của hành vi thì giống nhau. Pop superclass sẽ để lại instance ở đỉnh stack. Khi <code>bindMethod()</code> thành công, nó pop instance và push bound method mới. Nếu không, nó báo lỗi runtime và trả về <code>false</code>. Trong trường hợp đó, ta dừng interpreter.</p>
+<aside name="field">
+<p>Một điểm khác so với <code>OP_GET_PROPERTY</code> là ta không cố tìm field che khuất trước. Field không được kế thừa, nên biểu thức <code>super</code> luôn resolve tới method.</p>
+<p>Nếu Lox là một ngôn ngữ dựa trên prototype và dùng <em>delegation</em> thay vì <em>inheritance</em>, thì thay vì một <em>class</em> kế thừa từ một <em>class</em> khác, các instance sẽ kế thừa từ (hay “ủy quyền cho”) các instance khác. Khi đó, field <em>có thể</em> được kế thừa, và ta sẽ cần kiểm tra chúng ở đây.</p>
+</aside>
+<h3><a href="#lời-gọi-`super`-nhanh-hơn" id="lời-gọi-`super`-nhanh-hơn"><small>29&#8202;.&#8202;4&#8202;.&#8202;2</small>Lời gọi <code>super</code> nhanh hơn</a></h3>
+<p>Giờ ta đã có thể truy cập method của superclass. Và vì object trả về là một ObjBoundMethod mà bạn có thể gọi, nên ta cũng đã có lời gọi <code>super</code> hoạt động. Giống như chương trước, ta đã đạt tới điểm mà VM của ta có ngữ nghĩa đầy đủ và chính xác.</p>
+<p>Nhưng, cũng như chương trước, nó khá chậm. Một lần nữa, ta lại cấp phát trên heap một ObjBoundMethod cho mỗi lời gọi <code>super</code> dù rằng hầu hết thời gian, lệnh tiếp theo ngay sau đó là <code>OP_CALL</code> sẽ lập tức “mở” bound method đó, gọi nó, rồi bỏ đi. Thực tế, điều này còn có khả năng xảy ra cao hơn với lời gọi <code>super</code> so với lời gọi method thông thường. Ít nhất với lời gọi method, vẫn có khả năng người dùng thực sự đang gọi một hàm được lưu trong một field. Với lời gọi <code>super</code>, bạn <em>luôn</em> tìm method. Câu hỏi duy nhất là bạn có gọi nó ngay lập tức hay không.</p>
+<p>Compiler hoàn toàn có thể tự trả lời câu hỏi đó nếu nó thấy một dấu ngoặc đơn ngay sau tên method của superclass, nên ta sẽ thực hiện cùng một tối ưu hóa như với lời gọi method. Bỏ hai dòng code load superclass và phát sinh <code>OP_GET_SUPER</code>, thay bằng đoạn này:</p>
+<div class="codehilite"><pre class="insert-before">  namedVariable(syntheticToken(&quot;this&quot;), false);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>super_</em>()<br>
+replace 2 lines</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_LEFT_PAREN</span>)) {
+    <span class="t">uint8_t</span> <span class="i">argCount</span> = <span class="i">argumentList</span>();
+    <span class="i">namedVariable</span>(<span class="i">syntheticToken</span>(<span class="s">&quot;super&quot;</span>), <span class="k">false</span>);
+    <span class="i">emitBytes</span>(<span class="a">OP_SUPER_INVOKE</span>, <span class="i">name</span>);
+    <span class="i">emitByte</span>(<span class="i">argCount</span>);
+  } <span class="k">else</span> {
+    <span class="i">namedVariable</span>(<span class="i">syntheticToken</span>(<span class="s">&quot;super&quot;</span>), <span class="k">false</span>);
+    <span class="i">emitBytes</span>(<span class="a">OP_GET_SUPER</span>, <span class="i">name</span>);
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>super_</em>(), replace 2 lines</div>
+
+<p>Giờ trước khi phát sinh bất kỳ thứ gì, ta tìm danh sách đối số trong ngoặc đơn. Nếu tìm thấy, ta compile nó. Sau đó ta load superclass. Tiếp theo, ta phát sinh một lệnh mới <code>OP_SUPER_INVOKE</code>. Lệnh <span name="superinstruction">superinstruction</span> này kết hợp hành vi của <code>OP_GET_SUPER</code> và <code>OP_CALL</code>, nên nó nhận hai toán hạng: chỉ số trong constant table của tên method cần tìm và số lượng đối số cần truyền vào.</p>
+<aside name="superinstruction">
+<p>Đây là một <em>super</em> superinstruction đúng nghĩa, nếu bạn hiểu ý tôi. Tôi… xin lỗi vì trò đùa tệ này.</p>
+</aside>
+<p>Ngược lại, nếu không tìm thấy <code>(</code>, ta tiếp tục compile biểu thức như một truy cập <code>super</code> như trước và phát sinh <code>OP_GET_SUPER</code>.</p>
+<p>Trôi xuống đường ống compile, điểm dừng đầu tiên của ta là một lệnh mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_INVOKE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_SUPER_INVOKE</span>,
+</pre><pre class="insert-after">  OP_CLOSURE,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Và ngay sau đó là phần hỗ trợ disassembler của nó.</p>
+<div class="codehilite"><pre class="insert-before">      return invokeInstruction(&quot;OP_INVOKE&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_SUPER_INVOKE</span>:
+      <span class="k">return</span> <span class="i">invokeInstruction</span>(<span class="s">&quot;OP_SUPER_INVOKE&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_CLOSURE: {
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Một lệnh gọi <code>super</code> có cùng tập toán hạng như <code>OP_INVOKE</code>, nên ta tái sử dụng cùng helper để disassemble nó. Cuối cùng, đường ống đưa ta vào interpreter.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_SUPER_INVOKE</span>: {
+        <span class="t">ObjString</span>* <span class="i">method</span> = <span class="a">READ_STRING</span>();
+        <span class="t">int</span> <span class="i">argCount</span> = <span class="a">READ_BYTE</span>();
+        <span class="t">ObjClass</span>* <span class="i">superclass</span> = <span class="a">AS_CLASS</span>(<span class="i">pop</span>());
+        <span class="k">if</span> (!<span class="i">invokeFromClass</span>(<span class="i">superclass</span>, <span class="i">method</span>, <span class="i">argCount</span>)) {
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="i">frame</span> = &amp;<span class="i">vm</span>.<span class="i">frames</span>[<span class="i">vm</span>.<span class="i">frameCount</span> - <span class="n">1</span>];
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_CLOSURE: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Đoạn code này về cơ bản là hiện thực của <code>OP_INVOKE</code> trộn thêm một chút <code>OP_GET_SUPER</code>. Tuy nhiên, có vài khác biệt về cách tổ chức stack. Với một lời gọi <code>super</code> chưa tối ưu, superclass sẽ bị pop và thay thế bằng ObjBoundMethod của hàm đã resolve <em>trước khi</em> các đối số của lời gọi được execute. Điều này đảm bảo rằng khi <code>OP_CALL</code> được execute, bound method nằm <em>dưới</em> danh sách đối số, đúng vị trí runtime mong đợi cho một lời gọi closure.</p>
+<p>Với lệnh tối ưu hóa, mọi thứ được xáo trộn một chút:</p><img src="image/superclasses/super-invoke.png" class="wide" alt="Chuỗi lệnh bytecode cho lời gọi super.finish() dùng OP_SUPER_INVOKE." />
+<p>Giờ việc resolve method của superclass là một phần của <em>invocation</em>, nên các đối số cần phải có sẵn trên stack tại thời điểm ta tìm method. Điều này có nghĩa là object superclass nằm trên cùng của các đối số.</p>
+<p>Ngoài ra, hành vi gần như giống hệt <code>OP_GET_SUPER</code> theo sau bởi <code>OP_CALL</code>. Đầu tiên, ta lấy tên method và số lượng đối số từ toán hạng. Sau đó, ta pop superclass khỏi đỉnh stack để tìm method trong method table của nó. Việc này tiện lợi để lại stack ở trạng thái sẵn sàng cho một lời gọi method.</p>
+<p>Ta truyền superclass, tên method và số lượng đối số vào hàm <code>invokeFromClass()</code> hiện có. Hàm này tìm method được chỉ định trên class được chỉ định và cố gắng tạo một lời gọi tới nó với arity đã cho. Nếu không tìm thấy method, nó trả về <code>false</code> và ta thoát interpreter. Ngược lại, <code>invokeFromClass()</code> sẽ push một CallFrame mới lên call stack cho closure của method. Điều đó làm mất hiệu lực con trỏ CallFrame đã cache của interpreter, nên ta làm mới <code>frame</code>.</p>
+<h2><a href="#một-máy-ảo-ho&agrave;n-chỉnh" id="một-máy-ảo-ho&agrave;n-chỉnh"><small>29&#8202;.&#8202;5</small>Một máy ảo ho&agrave;n chỉnh</a></h2>
+<p>Hãy nhìn lại những gì ta đã tạo ra. Theo tôi đếm, ta đã viết khoảng 2.500 dòng C khá sạch và rõ ràng. Chương trình nhỏ bé đó chứa một hiện thực hoàn chỉnh của ngôn ngữ Lox — khá là cấp cao! — với một bảng độ ưu tiên đầy đủ các loại biểu thức và một bộ câu lệnh điều khiển luồng. Ta đã hiện thực biến, hàm, closure, class, field, method và kế thừa.</p>
+<p>Ấn tượng hơn nữa, hiện thực của ta có thể chạy trên bất kỳ nền tảng nào có compiler C, và đủ nhanh cho việc sử dụng thực tế. Ta có một compiler bytecode một-pass, một interpreter máy ảo chặt chẽ cho tập lệnh nội bộ, các biểu diễn object gọn nhẹ, một stack để lưu biến mà không cần cấp phát heap, và một garbage collector chính xác.</p>
+<p>Nếu bạn đi tìm hiểu các hiện thực của Lua, Python hoặc Ruby, bạn sẽ ngạc nhiên bởi có bao nhiêu thứ giờ đây trông quen thuộc. Bạn đã thực sự nâng cấp kiến thức của mình về cách ngôn ngữ lập trình hoạt động, từ đó hiểu sâu hơn về lập trình. Giống như trước đây bạn là tay đua xe, và giờ bạn có thể mở nắp capo và tự sửa động cơ.</p>
+<p>Bạn có thể dừng ở đây nếu muốn. Hai hiện thực Lox mà bạn có giờ đã hoàn chỉnh và đầy đủ tính năng. Bạn đã chế tạo chiếc xe và có thể lái nó đi bất cứ đâu. Nhưng nếu bạn muốn vui hơn nữa với việc tinh chỉnh để đạt hiệu năng cao hơn trên đường đua, vẫn còn một chương nữa. Chúng ta sẽ không thêm khả năng mới nào, nhưng sẽ áp dụng một vài tối ưu hóa kinh điển để vắt thêm hiệu năng. Nếu nghe thú vị, <a href="optimization.html">hãy đọc tiếp</a><span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<h2><a href="#thử-thách" id="thử-thách"><small>29&#8202;.&#8202;6</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Một nguyên tắc của lập trình hướng đối tượng là một class phải đảm bảo các object mới được tạo ra ở trạng thái hợp lệ. Trong Lox, điều đó có nghĩa là định nghĩa một initializer để gán giá trị cho các field của instance. Kế thừa làm phức tạp các bất biến này vì instance phải ở trạng thái hợp lệ theo tất cả các class trong chuỗi kế thừa của object.</p>
+<p>Phần dễ là nhớ gọi <code>super.init()</code> trong mỗi phương thức <code>init()</code> của subclass. Phần khó hơn là các field. Không có gì ngăn hai class trong chuỗi kế thừa vô tình dùng cùng một tên field. Khi điều này xảy ra, chúng sẽ ghi đè field của nhau và có thể khiến instance rơi vào trạng thái hỏng.</p>
+<p>Nếu Lox là ngôn ngữ của bạn, bạn sẽ xử lý điều này thế nào, hoặc có xử lý không? Nếu bạn muốn thay đổi ngôn ngữ, hãy hiện thực thay đổi đó.</p>
+</li>
+<li>
+<p>Tối ưu hóa “copy-down inheritance” của ta chỉ hợp lệ vì Lox không cho phép bạn sửa đổi method của một class sau khi nó được khai báo. Điều này có nghĩa là ta không phải lo việc các method đã sao chép trong subclass bị lệch so với các thay đổi sau này ở superclass.</p>
+<p>Các ngôn ngữ khác, như Ruby, <em>có</em> cho phép class được sửa đổi sau đó. Các hiện thực của những ngôn ngữ như vậy hỗ trợ việc sửa đổi class mà vẫn giữ cho việc tìm method hiệu quả bằng cách nào?</p>
+</li>
+<li>
+<p>Trong <a href="inheritance.html">chương về kế thừa của jlox</a>, ta đã có một thử thách để hiện thực cách tiếp cận của ngôn ngữ BETA đối với việc override method. Hãy giải lại thử thách đó, nhưng lần này trong clox. Đây là mô tả của thử thách trước:</p>
+<p>Trong Lox, cũng như hầu hết các ngôn ngữ hướng đối tượng khác, khi tìm một method, ta bắt đầu từ đáy của cây kế thừa và đi ngược lên — method của subclass được ưu tiên hơn method của superclass. Để gọi method của superclass từ bên trong một method override, bạn dùng <code>super</code>.</p>
+<p>Ngôn ngữ <a href="https://beta.cs.au.dk/">BETA</a> lại <a href="http://journal.stuffwithstuff.com/2012/12/19/the-impoliteness-of-overriding-methods/">tiếp cận ngược lại</a>. Khi bạn gọi một method, nó bắt đầu từ <em>đỉnh</em> của cây kế thừa và đi <em>xuống</em>. Method của superclass sẽ thắng method của subclass. Để gọi method của subclass, method của superclass có thể gọi <code>inner</code>, thứ giống như nghịch đảo của <code>super</code>. Nó sẽ nối tiếp xuống method tiếp theo trong cây kế thừa.</p>
+<p>Method của superclass kiểm soát khi nào và ở đâu subclass được phép tinh chỉnh hành vi của nó. Nếu method của superclass không gọi <code>inner</code> chút nào, thì subclass không có cách nào để override hoặc thay đổi hành vi của superclass.</p>
+<p>Hãy bỏ hành vi override và <code>super</code> hiện tại của Lox, và thay thế bằng ngữ nghĩa của BETA. Tóm lại:</p>
+<ul>
+<li>
+<p>Khi gọi một method trên một class, method <em>cao nhất</em> trong chuỗi kế thừa của class đó sẽ được ưu tiên.</p>
+</li>
+<li>
+<p>Bên trong thân của một method, một lời gọi <code>inner</code> sẽ tìm method cùng tên trong subclass gần nhất dọc theo chuỗi kế thừa, nằm giữa class chứa <code>inner</code> và class của <code>this</code>. Nếu không có method khớp, lời gọi <code>inner</code> sẽ không làm gì cả.</p>
+</li>
+</ul>
+<p>Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Fry until golden brown.&quot;</span>;
+    <span class="i">inner</span>();
+    <span class="k">print</span> <span class="s">&quot;Place in a nice box.&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">BostonCream</span> &lt; <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Pipe full of custard and coat with chocolate.&quot;</span>;
+  }
+}
+
+<span class="t">BostonCream</span>().<span class="i">cook</span>();
+</pre></div>
+<p>Kết quả in ra sẽ là:</p>
+<div class="codehilite"><pre>Fry until golden brown.
+Pipe full of custard and coat with chocolate.
+Place in a nice box.
+</pre></div>
+<p>Vì clox không chỉ là hiện thực Lox, mà còn hướng tới hiệu năng tốt, nên lần này hãy thử giải bài toán với mục tiêu tối ưu hiệu suất.</p>
+</li>
+</ol>
+
+<footer>
+<a href="optimization.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Optimization&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

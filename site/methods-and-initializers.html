@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Methods and Initializers &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Methods and Initializers<small>28</small></a></h3>
+
+<ul>
+    <li><a href="#khai-báo-method"><small>28.1</small> Khai báo Method</a></li>
+    <li><a href="#tham-chiếu-method"><small>28.2</small> Tham chiếu Method</a></li>
+    <li><a href="#this"><small>28.3</small> This</a></li>
+    <li><a href="#instance-initializer"><small>28.4</small> Instance Initializer</a></li>
+    <li><a href="#lời-gọi-được-tối-ưu-hóa"><small>28.5</small> Lời gọi được tối ưu hóa</a></li>
+    <li><a href="#thử-thách"><small>28.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-ngân-sách-“độ-mới-lạ”-novelty-budget"><small>28.7</small> Ghi chú thiết kế: Ngân sách “độ mới lạ” (Novelty Budget)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="classes-and-instances.html" title="Classes and Instances" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="superclasses.html" title="Superclasses" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="classes-and-instances.html" title="Classes and Instances" class="prev">←</a>
+<a href="superclasses.html" title="Superclasses" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Methods and Initializers<small>28</small></a></h3>
+
+<ul>
+    <li><a href="#khai-báo-method"><small>28.1</small> Khai báo Method</a></li>
+    <li><a href="#tham-chiếu-method"><small>28.2</small> Tham chiếu Method</a></li>
+    <li><a href="#this"><small>28.3</small> This</a></li>
+    <li><a href="#instance-initializer"><small>28.4</small> Instance Initializer</a></li>
+    <li><a href="#lời-gọi-được-tối-ưu-hóa"><small>28.5</small> Lời gọi được tối ưu hóa</a></li>
+    <li><a href="#thử-thách"><small>28.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-ngân-sách-“độ-mới-lạ”-novelty-budget"><small>28.7</small> Ghi chú thiết kế: Ngân sách “độ mới lạ” (Novelty Budget)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="classes-and-instances.html" title="Classes and Instances" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="superclasses.html" title="Superclasses" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">28</div>
+  <h1>Methods and Initializers</h1>
+
+<blockquote>
+<p>Khi bạn đã ở trên sàn nhảy, thì chẳng còn gì khác để làm ngoài việc nhảy.</p>
+<p><cite>Umberto Eco, <em>The Mysterious Flame of Queen Loana</em></cite></p>
+</blockquote>
+<p>Đã đến lúc virtual machine của chúng ta thổi hồn vào những object mới chớm hình thành bằng hành vi. Điều đó có nghĩa là method và lời gọi method. Và vì initializer cũng là một dạng method đặc biệt, nên chúng ta sẽ làm cả chúng nữa.</p>
+<p>Tất cả những điều này đều là “lãnh thổ quen thuộc” từ interpreter jlox trước đây. Điểm mới trong “chuyến đi” thứ hai này là một tối ưu quan trọng mà ta sẽ implement để khiến lời gọi method nhanh hơn gấp bảy lần so với hiệu năng cơ bản. Nhưng trước khi đến phần thú vị đó, ta cần làm cho những thứ cơ bản hoạt động trước đã.</p>
+<h2><a href="#khai-báo-method" id="khai-báo-method"><small>28&#8202;.&#8202;1</small>Khai báo Method</a></h2>
+<p>Ta không thể tối ưu lời gọi method trước khi có lời gọi method, và ta cũng không thể gọi method nếu chưa có method để gọi, nên ta sẽ bắt đầu với phần khai báo.</p>
+<h3><a href="#biểu-diễn-method" id="biểu-diễn-method"><small>28&#8202;.&#8202;1&#8202;.&#8202;1</small>Biểu diễn method</a></h3>
+<p>Thông thường ta sẽ bắt đầu ở compiler, nhưng lần này hãy xử lý phần object model trước. Biểu diễn runtime cho method trong clox tương tự như trong jlox. Mỗi class lưu một hash table các method. Key là tên method, và mỗi value là một ObjClosure cho phần thân method.</p>
+<div class="codehilite"><pre class="insert-before">typedef struct {
+  Obj obj;
+  ObjString* name;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>ObjClass</em></div>
+<pre class="insert">  <span class="t">Table</span> <span class="i">methods</span>;
+</pre><pre class="insert-after">} ObjClass;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>ObjClass</em></div>
+
+<p>Một class mới tinh bắt đầu với một bảng method rỗng.</p>
+<div class="codehilite"><pre class="insert-before">  klass-&gt;name = name;<span name="klass"> </span>
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newClass</em>()</div>
+<pre class="insert">  <span class="i">initTable</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>);
+</pre><pre class="insert-after">  return klass;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newClass</em>()</div>
+
+<p>Struct ObjClass sở hữu vùng nhớ cho bảng này, nên khi memory manager giải phóng một class, bảng này cũng cần được free.</p>
+<div class="codehilite"><pre class="insert-before">    case OBJ_CLASS: {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert">      <span class="t">ObjClass</span>* <span class="i">klass</span> = (<span class="t">ObjClass</span>*)<span class="i">object</span>;
+      <span class="i">freeTable</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>);
+</pre><pre class="insert-after">      FREE(ObjClass, object);
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p>Nói đến memory manager, GC cần trace qua class để vào bảng method. Nếu một class vẫn còn reachable (thường là qua một instance nào đó), thì tất cả method của nó chắc chắn cũng cần được giữ lại.</p>
+<div class="codehilite"><pre class="insert-before">      markObject((Obj*)klass-&gt;name);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert">      <span class="i">markTable</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>);
+</pre><pre class="insert-after">      break;
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Ta dùng hàm <code>markTable()</code> sẵn có, hàm này sẽ trace qua key string và value trong mỗi entry của bảng.</p>
+<p>Việc lưu method của class khá quen thuộc nếu bạn đến từ jlox. Phần khác biệt là cách bảng này được “lấp đầy”. Interpreter trước đây có thể truy cập toàn bộ AST node cho khai báo class và tất cả method bên trong nó. Ở runtime, interpreter chỉ việc duyệt qua danh sách khai báo đó.</p>
+<p>Giờ đây, mọi thông tin mà compiler muốn chuyển sang runtime đều phải “len” qua giao diện của một chuỗi bytecode instruction phẳng. Làm sao để ta lấy một khai báo class — vốn có thể chứa một tập method lớn tùy ý — và biểu diễn nó thành bytecode? Hãy nhảy sang compiler để tìm hiểu.</p>
+<h3><a href="#compile-khai-báo-method" id="compile-khai-báo-method"><small>28&#8202;.&#8202;1&#8202;.&#8202;2</small>Compile khai báo method</a></h3>
+<p>Chương trước để lại cho ta một compiler có thể parse class nhưng chỉ cho phép phần thân rỗng. Giờ ta sẽ chèn thêm một chút code để compile một loạt khai báo method giữa hai dấu ngoặc nhọn.</p>
+<div class="codehilite"><pre class="insert-before">  consume(TOKEN_LEFT_BRACE, &quot;Expect '{' before class body.&quot;);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="k">while</span> (!<span class="i">check</span>(<span class="a">TOKEN_RIGHT_BRACE</span>) &amp;&amp; !<span class="i">check</span>(<span class="a">TOKEN_EOF</span>)) {
+    <span class="i">method</span>();
+  }
+</pre><pre class="insert-after">  consume(TOKEN_RIGHT_BRACE, &quot;Expect '}' after class body.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Lox không có khai báo field, nên bất cứ thứ gì trước dấu ngoặc nhọn đóng ở cuối thân class đều phải là method. Ta dừng compile method khi gặp dấu ngoặc nhọn cuối cùng hoặc khi đến cuối file. Kiểm tra thứ hai đảm bảo compiler không bị kẹt trong vòng lặp vô hạn nếu người dùng quên dấu ngoặc nhọn đóng.</p>
+<p>Điểm khó khi compile khai báo class là một class có thể khai báo bất kỳ số lượng method nào. Bằng cách nào đó, runtime cần tra cứu và bind tất cả chúng. Sẽ là quá nhiều nếu nhét hết vào một instruction <code>OP_CLASS</code>. Thay vào đó, bytecode mà ta tạo ra cho một khai báo class sẽ chia quá trình này thành một <span name="series"><em>chuỗi</em></span> instruction. Compiler vốn đã phát sinh một instruction <code>OP_CLASS</code> để tạo ra một ObjClass rỗng. Sau đó nó phát sinh các instruction để lưu class vào một biến với tên của nó.</p>
+<aside name="series">
+<p>Ta đã làm điều gì đó tương tự với closure. Instruction <code>OP_CLOSURE</code> cần biết kiểu và chỉ số cho mỗi upvalue được capture. Ta mã hóa điều đó bằng một chuỗi pseudo-instruction theo sau instruction <code>OP_CLOSURE</code> chính — về cơ bản là một số lượng toán hạng biến đổi. VM sẽ xử lý tất cả byte bổ sung đó ngay khi interpret instruction <code>OP_CLOSURE</code>.</p>
+<p>Ở đây, cách tiếp cận hơi khác vì từ góc nhìn của VM, mỗi instruction định nghĩa một method là một thao tác độc lập. Cả hai cách đều hoạt động. Một pseudo-instruction kích thước biến đổi có thể nhanh hơn đôi chút, nhưng khai báo class hiếm khi nằm trong hot loop, nên điều đó không quan trọng lắm.</p>
+</aside>
+<p>Giờ, với mỗi khai báo method, ta phát sinh một instruction <code>OP_METHOD</code> mới để thêm một method vào class đó. Khi tất cả instruction <code>OP_METHOD</code> đã execute, ta sẽ có một class hoàn chỉnh. Trong khi người dùng nhìn thấy khai báo class như một thao tác nguyên tử duy nhất, VM lại implement nó như một chuỗi thay đổi.</p>
+<p>Để định nghĩa một method mới, VM cần ba thứ:</p>
+<ol>
+<li>
+<p>Tên method.</p>
+</li>
+<li>
+<p>Closure cho phần thân method.</p>
+</li>
+<li>
+<p>Class để bind method vào.</p>
+</li>
+</ol>
+<p>Ta sẽ viết code compiler từng bước để xem cách tất cả những thứ này được chuyển đến runtime, bắt đầu từ đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>function</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">method</span>() {
+  <span class="i">consume</span>(<span class="a">TOKEN_IDENTIFIER</span>, <span class="s">&quot;Expect method name.&quot;</span>);
+  <span class="t">uint8_t</span> <span class="i">constant</span> = <span class="i">identifierConstant</span>(&amp;<span class="i">parser</span>.<span class="i">previous</span>);
+  <span class="i">emitBytes</span>(<span class="a">OP_METHOD</span>, <span class="i">constant</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>function</em>()</div>
+
+<p>Giống như <code>OP_GET_PROPERTY</code> và các instruction khác cần tên ở runtime, compiler thêm lexeme của token tên method vào constant table và nhận lại chỉ số trong bảng. Sau đó ta phát sinh một instruction <code>OP_METHOD</code> với chỉ số đó làm toán hạng. Đó là phần tên. Tiếp theo là phần thân method:</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t constant = identifierConstant(&amp;parser.previous);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>method</em>()</div>
+<pre class="insert">
+
+  <span class="t">FunctionType</span> <span class="i">type</span> = <span class="a">TYPE_FUNCTION</span>;
+  <span class="i">function</span>(<span class="i">type</span>);
+</pre><pre class="insert-after">  emitBytes(OP_METHOD, constant);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>method</em>()</div>
+
+<p>Ta dùng cùng helper <code>function()</code> mà ta đã viết để compile khai báo hàm. Hàm tiện ích này compile danh sách tham số và phần thân hàm. Sau đó nó phát sinh code để tạo một ObjClosure và để nó trên đỉnh stack. Ở runtime, VM sẽ tìm closure ở đó.</p>
+<p>Cuối cùng là class để bind method vào. VM có thể tìm nó ở đâu? Tiếc là, khi ta đến instruction <code>OP_METHOD</code>, ta không biết nó ở đâu. Nó <span name="global">có thể</span> nằm trên stack, nếu người dùng khai báo class trong local scope. Nhưng một khai báo class ở cấp cao nhất sẽ đưa ObjClass vào bảng biến global.</p>
+<aside name="global">
+<p>Nếu Lox chỉ hỗ trợ khai báo class ở cấp cao nhất, VM có thể giả định rằng bất kỳ class nào cũng có thể được tìm thấy bằng cách tra trực tiếp từ bảng biến global. Tiếc là, vì ta hỗ trợ class cục bộ, nên ta cần xử lý cả trường hợp đó nữa.</p>
+</aside>
+<p>Đừng lo. Compiler <strong>có</strong> biết <em>tên</em> của class. Ta có thể lưu lại nó ngay sau khi tiêu thụ token của nó.</p>
+<div class="codehilite"><pre class="insert-before">  consume(TOKEN_IDENTIFIER, &quot;Expect class name.&quot;);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="t">Token</span> <span class="i">className</span> = <span class="i">parser</span>.<span class="i">previous</span>;
+</pre><pre class="insert-after">  uint8_t nameConstant = identifierConstant(&amp;parser.previous);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Và ta biết rằng sẽ không có khai báo nào khác với tên đó có thể shadow class này. Vậy nên ta làm một cách xử lý đơn giản: trước khi bắt đầu bind method, ta phát sinh bất kỳ code nào cần thiết để load class trở lại lên đỉnh stack.</p>
+<div class="codehilite"><pre class="insert-before">  defineVariable(nameConstant);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="i">namedVariable</span>(<span class="i">className</span>, <span class="k">false</span>);
+</pre><pre class="insert-after">  consume(TOKEN_LEFT_BRACE, &quot;Expect '{' before class body.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Ngay trước khi compile phần thân class, ta <span name="load">gọi</span> <code>namedVariable()</code>. Hàm helper này sẽ tạo code để load một biến với tên đã cho lên stack. Sau đó ta compile các method.</p>
+<aside name="load">
+<p>Lệnh gọi <code>defineVariable()</code> ngay trước đó sẽ pop class, nên việc gọi <code>namedVariable()</code> để load nó lại lên stack nghe có vẻ hơi buồn cười. Sao không để nguyên nó trên stack ngay từ đầu? Ta <strong>có thể</strong> làm vậy, nhưng trong <a href="superclasses.html">chương tiếp theo</a> ta sẽ chèn code giữa hai lệnh này để hỗ trợ kế thừa. Lúc đó, sẽ đơn giản hơn nếu class không “nằm chình ình” trên stack.</p>
+</aside>
+<p>Điều này có nghĩa là khi ta execute mỗi instruction <code>OP_METHOD</code>, stack sẽ có closure của method ở trên cùng và class ngay bên dưới. Khi compile xong tất cả method, ta không cần class nữa và yêu cầu VM pop nó khỏi stack.</p>
+<div class="codehilite"><pre class="insert-before">  consume(TOKEN_RIGHT_BRACE, &quot;Expect '}' after class body.&quot;);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Gộp tất cả lại, đây là một ví dụ khai báo class để “ném” vào compiler:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Brunch</span> {
+  <span class="i">bacon</span>() {}
+  <span class="i">eggs</span>() {}
+}
+</pre></div>
+<p>Với ví dụ này, đây là những gì compiler tạo ra và cách các instruction đó ảnh hưởng đến stack ở runtime:</p><img src="image/methods-and-initializers/method-instructions.png" alt="Chuỗi bytecode instruction cho một khai báo class với hai method." />
+<p>Giờ việc còn lại là implement runtime cho instruction <code>OP_METHOD</code> mới này.</p>
+<h3><a href="#execute-khai-báo-method" id="execute-khai-báo-method"><small>28&#8202;.&#8202;1&#8202;.&#8202;3</small>Execute khai báo method</a></h3>
+<p>Đầu tiên, ta định nghĩa opcode.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CLASS,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_METHOD</span>
+</pre><pre class="insert-after">} OpCode;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Ta disassemble nó giống như các instruction khác có toán hạng là string constant.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CLASS:
+      return constantInstruction(&quot;OP_CLASS&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_METHOD</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_METHOD&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    default:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Và bên trong interpreter, ta thêm một case mới.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_METHOD</span>:
+        <span class="i">defineMethod</span>(<span class="a">READ_STRING</span>());
+        <span class="k">break</span>;
+</pre><pre class="insert-after">    }
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Tại đây, ta đọc tên method từ constant table và truyền nó vào đây:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>closeUpvalues</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">defineMethod</span>(<span class="t">ObjString</span>* <span class="i">name</span>) {
+  <span class="t">Value</span> <span class="i">method</span> = <span class="i">peek</span>(<span class="n">0</span>);
+  <span class="t">ObjClass</span>* <span class="i">klass</span> = <span class="a">AS_CLASS</span>(<span class="i">peek</span>(<span class="n">1</span>));
+  <span class="i">tableSet</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>, <span class="i">name</span>, <span class="i">method</span>);
+  <span class="i">pop</span>();
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>closeUpvalues</em>()</div>
+
+<p>Closure của method nằm trên đỉnh stack, ngay phía trên class mà nó sẽ được bind vào. Ta đọc hai slot stack đó và lưu closure vào bảng method của class. Sau đó ta pop closure vì đã xong việc với nó.</p>
+<p>Lưu ý rằng ta không thực hiện bất kỳ runtime type checking nào với closure hay object class. Lời gọi <code>AS_CLASS()</code> là an toàn vì chính compiler đã tạo ra code khiến class nằm ở slot stack đó. VM <span name="verify">tin tưởng</span> compiler của chính nó.</p>
+<aside name="verify">
+<p>VM tin rằng các instruction nó execute là hợp lệ vì <em>cách duy nhất</em> để đưa code vào bytecode interpreter là thông qua compiler của clox. Nhiều bytecode VM khác, như JVM và CPython, hỗ trợ execute bytecode được compile riêng. Điều đó dẫn đến một câu chuyện bảo mật khác: bytecode được tạo ra với mục đích xấu có thể làm crash VM hoặc tệ hơn.</p>
+<p>Để ngăn điều đó, JVM thực hiện một bước xác minh bytecode trước khi execute bất kỳ code nào được load. CPython thì nói rằng việc đảm bảo bytecode an toàn là trách nhiệm của người dùng.</p>
+</aside>
+<p>Sau khi chuỗi instruction <code>OP_METHOD</code> hoàn tất và <code>OP_POP</code> đã pop class, ta sẽ có một class với bảng method được “lấp đầy” gọn gàng, sẵn sàng hoạt động. Bước tiếp theo là lấy các method đó ra và sử dụng chúng.</p>
+<h2><a href="#tham-chiếu-method" id="tham-chiếu-method"><small>28&#8202;.&#8202;2</small>Tham chiếu Method</a></h2>
+<p>Phần lớn thời gian, method được truy cập và gọi ngay lập tức, dẫn đến cú pháp quen thuộc này:</p>
+<div class="codehilite"><pre><span class="i">instance</span>.<span class="i">method</span>(<span class="i">argument</span>);
+</pre></div>
+<p>Nhưng hãy nhớ, trong Lox và một số ngôn ngữ khác, hai bước này là riêng biệt và có thể tách rời.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">closure</span> = <span class="i">instance</span>.<span class="i">method</span>;
+<span class="i">closure</span>(<span class="i">argument</span>);
+</pre></div>
+<p>Vì người dùng <em>có thể</em> tách riêng các thao tác này, ta phải implement chúng riêng biệt. Bước đầu tiên là dùng cú pháp property có dấu chấm hiện có để truy cập một method được định nghĩa trong class của instance. Việc này sẽ trả về một loại object nào đó mà người dùng có thể gọi như một hàm.</p>
+<p>Cách tiếp cận hiển nhiên là tra method trong bảng method của class và trả về ObjClosure tương ứng với tên đó. Nhưng ta cũng cần nhớ rằng khi bạn truy cập một method, <code>this</code> sẽ được bind tới instance mà method được truy cập từ đó. Đây là ví dụ từ <a href="classes.html#methods-on-classes">khi ta thêm method vào jlox</a>:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Person</span> {
+  <span class="i">sayName</span>() {
+    <span class="k">print</span> <span class="k">this</span>.<span class="i">name</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">jane</span> = <span class="t">Person</span>();
+<span class="i">jane</span>.<span class="i">name</span> = <span class="s">&quot;Jane&quot;</span>;
+
+<span class="k">var</span> <span class="i">method</span> = <span class="i">jane</span>.<span class="i">sayName</span>;
+<span class="i">method</span>(); <span class="c">// ?</span>
+</pre></div>
+<p>Đoạn code này sẽ in ra <code>"Jane"</code>, nên object được trả về bởi <code>.sayName</code> bằng cách nào đó cần phải “nhớ” instance mà nó được truy cập từ đó, để khi được gọi sau này nó vẫn biết. Trong jlox, ta hiện thực phần “ghi nhớ” này bằng cách tận dụng class Environment cấp phát trên heap sẵn có của interpreter, vốn xử lý toàn bộ việc lưu trữ biến.</p>
+<p>Bytecode VM của ta có kiến trúc lưu trữ trạng thái phức tạp hơn. <a href="local-variables.html#representing-local-variables">Biến local và temporary</a> nằm trên stack, <a href="global-variables.html#variable-declarations">biến global</a> nằm trong hash table, và biến trong closure dùng <a href="closures.html#upvalues">upvalue</a>. Điều này đòi hỏi một giải pháp phức tạp hơn để theo dõi receiver của method trong clox, và cần một kiểu runtime mới.</p>
+<h3><a href="#bound-method" id="bound-method"><small>28&#8202;.&#8202;2&#8202;.&#8202;1</small>Bound method</a></h3>
+<p>Khi người dùng execute một thao tác truy cập method, ta sẽ tìm closure của method đó và bọc nó trong một object <span name="bound">“bound method”</span> mới, object này sẽ theo dõi instance mà method được truy cập từ đó. Bound object này có thể được gọi sau đó như một hàm. Khi được invoke, VM sẽ “dàn xếp” để <code>this</code> trỏ tới receiver bên trong phần thân method.</p>
+<aside name="bound">
+<p>Tôi lấy tên “bound method” từ CPython. Python hoạt động tương tự Lox ở điểm này, và tôi đã lấy cảm hứng từ cách hiện thực của nó.</p>
+</aside>
+<p>Đây là kiểu object mới:</p>
+<div class="codehilite"><pre class="insert-before">} ObjInstance;
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjInstance</em></div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">Obj</span> <span class="i">obj</span>;
+  <span class="t">Value</span> <span class="i">receiver</span>;
+  <span class="t">ObjClosure</span>* <span class="i">method</span>;
+} <span class="t">ObjBoundMethod</span>;
+
+</pre><pre class="insert-after">ObjClass* newClass(ObjString* name);
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjInstance</em></div>
+
+<p>Nó gói cả receiver và method closure lại với nhau. Kiểu của receiver là Value, dù method chỉ có thể được gọi trên ObjInstance. Vì VM vốn không quan tâm receiver thuộc loại gì, nên dùng Value giúp ta không phải chuyển đổi con trỏ về Value mỗi khi truyền nó cho các hàm tổng quát hơn.</p>
+<p>Struct mới này kéo theo phần “boilerplate” quen thuộc mà giờ bạn đã quá rành. Một case mới trong enum loại object:</p>
+<div class="codehilite"><pre class="insert-before">typedef enum {
+</pre><div class="source-file"><em>object.h</em><br>
+in enum <em>ObjType</em></div>
+<pre class="insert">  <span class="a">OBJ_BOUND_METHOD</span>,
+</pre><pre class="insert-after">  OBJ_CLASS,
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in enum <em>ObjType</em></div>
+
+<p>Một macro để kiểm tra kiểu của value:</p>
+<div class="codehilite"><pre class="insert-before">#define OBJ_TYPE(value)        (AS_OBJ(value)-&gt;type)
+
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert"><span class="a">#define IS_BOUND_METHOD(value) isObjType(value, OBJ_BOUND_METHOD)</span>
+</pre><pre class="insert-after">#define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Một macro khác để cast value sang con trỏ ObjBoundMethod:</p>
+<div class="codehilite"><pre class="insert-before">#define IS_STRING(value)       isObjType(value, OBJ_STRING)
+
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert"><span class="a">#define AS_BOUND_METHOD(value) ((ObjBoundMethod*)AS_OBJ(value))</span>
+</pre><pre class="insert-after">#define AS_CLASS(value)        ((ObjClass*)AS_OBJ(value))
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Một hàm để tạo ObjBoundMethod mới:</p>
+<div class="codehilite"><pre class="insert-before">} ObjBoundMethod;
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjBoundMethod</em></div>
+<pre class="insert"><span class="t">ObjBoundMethod</span>* <span class="i">newBoundMethod</span>(<span class="t">Value</span> <span class="i">receiver</span>,
+                               <span class="t">ObjClosure</span>* <span class="i">method</span>);
+</pre><pre class="insert-after">ObjClass* newClass(ObjString* name);
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjBoundMethod</em></div>
+
+<p>Và phần hiện thực của hàm đó:</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+add after <em>allocateObject</em>()</div>
+<pre><span class="t">ObjBoundMethod</span>* <span class="i">newBoundMethod</span>(<span class="t">Value</span> <span class="i">receiver</span>,
+                               <span class="t">ObjClosure</span>* <span class="i">method</span>) {
+  <span class="t">ObjBoundMethod</span>* <span class="i">bound</span> = <span class="a">ALLOCATE_OBJ</span>(<span class="t">ObjBoundMethod</span>,
+                                       <span class="a">OBJ_BOUND_METHOD</span>);
+  <span class="i">bound</span>-&gt;<span class="i">receiver</span> = <span class="i">receiver</span>;
+  <span class="i">bound</span>-&gt;<span class="i">method</span> = <span class="i">method</span>;
+  <span class="k">return</span> <span class="i">bound</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, add after <em>allocateObject</em>()</div>
+
+<p>Hàm “constructor” này đơn giản chỉ lưu closure và receiver được truyền vào. Khi bound method không còn cần nữa, ta free nó.</p>
+<div class="codehilite"><pre class="insert-before">  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_BOUND_METHOD</span>:
+      <span class="a">FREE</span>(<span class="t">ObjBoundMethod</span>, <span class="i">object</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case OBJ_CLASS: {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p>Bound method có một vài tham chiếu, nhưng nó không <em>sở hữu</em> chúng, nên nó chỉ free chính nó. Tuy nhiên, các tham chiếu đó vẫn được trace bởi garbage collector.</p>
+<div class="codehilite"><pre class="insert-before">  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>blackenObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_BOUND_METHOD</span>: {
+      <span class="t">ObjBoundMethod</span>* <span class="i">bound</span> = (<span class="t">ObjBoundMethod</span>*)<span class="i">object</span>;
+      <span class="i">markValue</span>(<span class="i">bound</span>-&gt;<span class="i">receiver</span>);
+      <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">bound</span>-&gt;<span class="i">method</span>);
+      <span class="k">break</span>;
+    }
+</pre><pre class="insert-after">    case OBJ_CLASS: {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>blackenObject</em>()</div>
+
+<p>Điều này <span name="trace">đảm bảo</span> rằng một handle tới method sẽ giữ receiver lại trong bộ nhớ để <code>this</code> vẫn có thể tìm thấy object khi bạn invoke handle đó sau này. Ta cũng trace cả method closure.</p>
+<aside name="trace">
+<p>Việc trace method closure thực ra không thật sự cần thiết. Receiver là một ObjInstance, nó có con trỏ tới ObjClass của nó, và ObjClass này có bảng chứa tất cả method. Nhưng tôi vẫn cảm thấy hơi “lấn cấn” nếu để ObjBoundMethod phụ thuộc vào điều đó.</p>
+</aside>
+<p>Thao tác cuối cùng mà mọi object hỗ trợ là in ra.</p>
+<div class="codehilite"><pre class="insert-before">  switch (OBJ_TYPE(value)) {
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>printObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_BOUND_METHOD</span>:
+      <span class="i">printFunction</span>(<span class="a">AS_BOUND_METHOD</span>(<span class="i">value</span>)-&gt;<span class="i">method</span>-&gt;<span class="i">function</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case OBJ_CLASS:
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>printObject</em>()</div>
+
+<p>Bound method được in ra giống hệt như function. Từ góc nhìn của người dùng, bound method <em>là</em> một function — một object mà họ có thể gọi. Ta không để lộ rằng VM hiện thực bound method bằng một kiểu object khác.</p>
+<aside name="party"><img src="image/methods-and-initializers/party-hat.png" alt="Một chiếc mũ tiệc." />
+</aside>
+<p>Hãy đội mũ <span name="party">party</span> lên vì ta vừa đạt một cột mốc nhỏ: ObjBoundMethod là kiểu runtime cuối cùng cần thêm vào clox. Bạn vừa viết xong macro <code>IS_</code> và <code>AS_</code> cuối cùng. Chỉ còn vài chương nữa là hết sách, và ta đang tiến rất gần tới một VM hoàn chỉnh.</p>
+<h3><a href="#truy-cập-method" id="truy-cập-method"><small>28&#8202;.&#8202;2&#8202;.&#8202;2</small>Truy cập method</a></h3>
+<p>Hãy để kiểu object mới của chúng ta bắt đầu “ra tay”. Method được truy cập bằng cú pháp property có dấu chấm giống hệt như ta đã implement ở chương trước. Compiler đã parse đúng các biểu thức và phát sinh instruction <code>OP_GET_PROPERTY</code> cho chúng. Việc duy nhất ta cần thay đổi là ở runtime.</p>
+<p>Khi một instruction truy cập property được execute, instance sẽ nằm trên đỉnh stack. Nhiệm vụ của instruction là tìm một field hoặc method với tên đã cho và thay thế đỉnh stack bằng property vừa truy cập.</p>
+<p>Interpreter đã xử lý field, nên ta chỉ cần mở rộng case <code>OP_GET_PROPERTY</code> với một phần mới.</p>
+<div class="codehilite"><pre class="insert-before">          pop(); // Instance.
+          push(value);
+          break;
+        }
+
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 2 lines</div>
+<pre class="insert">        <span class="k">if</span> (!<span class="i">bindMethod</span>(<span class="i">instance</span>-&gt;<span class="i">klass</span>, <span class="i">name</span>)) {
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      }
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 2 lines</div>
+
+<p>Ta chèn đoạn này sau phần code tìm field trên receiver instance. Field được ưu tiên hơn và sẽ shadow method, nên ta tìm field trước. Nếu instance không có field với tên property đã cho, thì tên đó có thể là một method.</p>
+<p>Ta lấy class của instance và truyền nó vào helper mới <code>bindMethod()</code>. Nếu hàm này tìm thấy method, nó sẽ đặt method lên stack và trả về <code>true</code>. Ngược lại, nó trả về <code>false</code> để báo rằng không tìm thấy method với tên đó. Vì tên này cũng không phải là field, điều đó có nghĩa là ta gặp lỗi runtime và interpreter sẽ dừng.</p>
+<p>Đây là phần “ngon”:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>callValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">bindMethod</span>(<span class="t">ObjClass</span>* <span class="i">klass</span>, <span class="t">ObjString</span>* <span class="i">name</span>) {
+  <span class="t">Value</span> <span class="i">method</span>;
+  <span class="k">if</span> (!<span class="i">tableGet</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>, <span class="i">name</span>, &amp;<span class="i">method</span>)) {
+    <span class="i">runtimeError</span>(<span class="s">&quot;Undefined property &#39;%s&#39;.&quot;</span>, <span class="i">name</span>-&gt;<span class="i">chars</span>);
+    <span class="k">return</span> <span class="k">false</span>;
+  }
+
+  <span class="t">ObjBoundMethod</span>* <span class="i">bound</span> = <span class="i">newBoundMethod</span>(<span class="i">peek</span>(<span class="n">0</span>),
+                                         <span class="a">AS_CLOSURE</span>(<span class="i">method</span>));
+  <span class="i">pop</span>();
+  <span class="i">push</span>(<span class="a">OBJ_VAL</span>(<span class="i">bound</span>));
+  <span class="k">return</span> <span class="k">true</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>callValue</em>()</div>
+
+<p>Đầu tiên, ta tìm method với tên đã cho trong bảng method của class. Nếu không tìm thấy, ta báo lỗi runtime và thoát. Nếu tìm thấy, ta lấy method đó và bọc nó trong một ObjBoundMethod mới. Ta lấy receiver từ vị trí của nó trên đỉnh stack. Cuối cùng, ta pop instance và thay đỉnh stack bằng bound method.</p>
+<p>Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Brunch</span> {
+  <span class="i">eggs</span>() {}
+}
+
+<span class="k">var</span> <span class="i">brunch</span> = <span class="t">Brunch</span>();
+<span class="k">var</span> <span class="i">eggs</span> = <span class="i">brunch</span>.<span class="i">eggs</span>;
+</pre></div>
+<p>Đây là những gì xảy ra khi VM execute lời gọi <code>bindMethod()</code> cho biểu thức <code>brunch.eggs</code>:</p><img src="image/methods-and-initializers/bind-method.png" alt="Những thay đổi trên stack do bindMethod() gây ra." />
+<p>Có khá nhiều “máy móc” chạy ngầm bên dưới, nhưng từ góc nhìn của người dùng, họ chỉ đơn giản nhận được một hàm mà họ có thể gọi.</p>
+<h3><a href="#gọi-method" id="gọi-method"><small>28&#8202;.&#8202;2&#8202;.&#8202;3</small>Gọi method</a></h3>
+<p>Người dùng có thể khai báo method trong class, truy cập chúng từ instance, và đưa bound method lên stack. Nhưng họ vẫn chưa thể <span name="do"><em>làm</em></span> gì hữu ích với các object bound method đó. Thao tác còn thiếu là gọi chúng. Việc gọi được implement trong <code>callValue()</code>, nên ta thêm một case ở đó cho kiểu object mới này.</p>
+<aside name="do">
+<p>Bound method <em>là</em> một giá trị hạng nhất, nên chúng có thể được lưu trong biến, truyền vào hàm, và làm những việc “giống giá trị” khác.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">    switch (OBJ_TYPE(callee)) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>callValue</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OBJ_BOUND_METHOD</span>: {
+        <span class="t">ObjBoundMethod</span>* <span class="i">bound</span> = <span class="a">AS_BOUND_METHOD</span>(<span class="i">callee</span>);
+        <span class="k">return</span> <span class="i">call</span>(<span class="i">bound</span>-&gt;<span class="i">method</span>, <span class="i">argCount</span>);
+      }
+</pre><pre class="insert-after">      case OBJ_CLASS: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>callValue</em>()</div>
+
+<p>Ta lấy lại closure “thô” từ ObjBoundMethod và dùng helper <code>call()</code> sẵn có để bắt đầu invoke closure đó bằng cách push một CallFrame cho nó lên call stack. Chỉ cần vậy là ta có thể chạy chương trình Lox này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Scone</span> {
+  <span class="i">topping</span>(<span class="i">first</span>, <span class="i">second</span>) {
+    <span class="k">print</span> <span class="s">&quot;scone with &quot;</span> + <span class="i">first</span> + <span class="s">&quot; and &quot;</span> + <span class="i">second</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">scone</span> = <span class="t">Scone</span>();
+<span class="i">scone</span>.<span class="i">topping</span>(<span class="s">&quot;berries&quot;</span>, <span class="s">&quot;cream&quot;</span>);
+</pre></div>
+<p>Vậy là ta đã có ba bước lớn: khai báo, truy cập, và invoke method. Nhưng vẫn còn thiếu một thứ. Ta đã mất công bọc closure của method trong một object bind receiver, nhưng khi invoke method, ta lại không hề dùng đến receiver đó.</p>
+<h2><a href="#this" id="this"><small>28&#8202;.&#8202;3</small>This</a></h2>
+<p>Lý do bound method cần giữ lại receiver là để có thể truy cập nó bên trong phần thân method. Lox cung cấp receiver của method thông qua biểu thức <code>this</code>. Đã đến lúc thêm một chút cú pháp mới. Lexer đã coi <code>this</code> là một loại token đặc biệt, nên bước đầu tiên là nối token đó vào parse table.</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_THIS</span>]          = {<span class="i">this_</span>,    <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<aside name="this">
+<p>Dấu gạch dưới ở cuối tên hàm parser là vì <code>this</code> là một từ khóa dành riêng trong C++, và ta hỗ trợ compile clox dưới dạng C++.</p>
+</aside>
+<p>Khi parser gặp <code>this</code> ở vị trí prefix, nó sẽ chuyển sang một hàm parser mới.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>variable</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">this_</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+  <span class="i">variable</span>(<span class="k">false</span>);
+}<span name="this"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>variable</em>()</div>
+
+<p>Ta sẽ áp dụng cùng kỹ thuật hiện thực <code>this</code> trong clox như đã dùng trong jlox. Ta coi <code>this</code> như một biến local có phạm vi từ vựng (lexically scoped) với giá trị được khởi tạo “một cách kỳ diệu”. Compile nó như một biến local giúp ta có được nhiều hành vi miễn phí. Đặc biệt, closure bên trong một method mà tham chiếu <code>this</code> sẽ hoạt động đúng và capture receiver vào một upvalue.</p>
+<p>Khi hàm parser này được gọi, token <code>this</code> vừa được tiêu thụ và được lưu dưới dạng token trước đó. Ta gọi hàm <code>variable()</code> sẵn có, hàm này compile biểu thức identifier như các truy cập biến. Nó nhận một tham số Boolean duy nhất để cho biết compiler có nên tìm toán tử <code>=</code> theo sau và parse một setter hay không. Bạn không thể gán cho <code>this</code>, nên ta truyền <code>false</code> để không cho phép điều đó.</p>
+<p>Hàm <code>variable()</code> không quan tâm việc <code>this</code> có token type riêng và không phải là identifier. Nó vui vẻ coi lexeme <code>"this"</code> như một tên biến và tra cứu nó bằng cơ chế resolve scope sẵn có. Hiện tại, việc tra cứu đó sẽ thất bại vì ta chưa bao giờ khai báo một biến tên <code>"this"</code>. Đã đến lúc nghĩ xem receiver nên nằm ở đâu trong bộ nhớ.</p>
+<p>Ít nhất là cho đến khi bị capture bởi closure, clox lưu mọi biến local trên stack của VM. Compiler theo dõi slot nào trong “cửa sổ” stack của hàm thuộc về biến local nào. Nếu bạn còn nhớ, compiler dành riêng slot 0 trên stack bằng cách khai báo một biến local có tên là chuỗi rỗng.</p>
+<p>Với lời gọi hàm, slot đó sẽ chứa hàm được gọi. Vì slot này không có tên, phần thân hàm sẽ không bao giờ truy cập nó. Bạn có thể đoán được hướng đi rồi đấy. Với <em>lời gọi method</em>, ta có thể tái sử dụng slot đó để lưu receiver. Slot 0 sẽ chứa instance mà <code>this</code> được bind tới. Để compile biểu thức <code>this</code>, compiler chỉ cần gán đúng tên cho biến local đó.</p>
+<div class="codehilite"><pre class="insert-before">  local-&gt;isCaptured = false;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>initCompiler</em>()<br>
+replace 2 lines</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">type</span> != <span class="a">TYPE_FUNCTION</span>) {
+    <span class="i">local</span>-&gt;<span class="i">name</span>.<span class="i">start</span> = <span class="s">&quot;this&quot;</span>;
+    <span class="i">local</span>-&gt;<span class="i">name</span>.<span class="i">length</span> = <span class="n">4</span>;
+  } <span class="k">else</span> {
+    <span class="i">local</span>-&gt;<span class="i">name</span>.<span class="i">start</span> = <span class="s">&quot;&quot;</span>;
+    <span class="i">local</span>-&gt;<span class="i">name</span>.<span class="i">length</span> = <span class="n">0</span>;
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>initCompiler</em>(), replace 2 lines</div>
+
+<p>Ta chỉ muốn làm điều này cho method. Khai báo hàm không có <code>this</code>. Và thực tế, chúng <em>không được</em> khai báo biến tên <code>"this"</code>, để nếu bạn viết một biểu thức <code>this</code> bên trong một khai báo hàm nằm trong một method, thì <code>this</code> sẽ resolve đúng tới receiver của method bên ngoài.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Nested</span> {
+  <span class="i">method</span>() {
+    <span class="k">fun</span> <span class="i">function</span>() {
+      <span class="k">print</span> <span class="k">this</span>;
+    }
+
+    <span class="i">function</span>();
+  }
+}
+
+<span class="t">Nested</span>().<span class="i">method</span>();
+</pre></div>
+<p>Chương trình này sẽ in ra <code>"Nested instance"</code>. Để quyết định tên gán cho slot 0 local, compiler cần biết nó đang compile một khai báo hàm hay method, nên ta thêm một case mới vào enum FunctionType để phân biệt method.</p>
+<div class="codehilite"><pre class="insert-before">  TYPE_FUNCTION,
+</pre><div class="source-file"><em>compiler.c</em><br>
+in enum <em>FunctionType</em></div>
+<pre class="insert">  <span class="a">TYPE_METHOD</span>,
+</pre><pre class="insert-after">  TYPE_SCRIPT
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in enum <em>FunctionType</em></div>
+
+<p>Khi compile một method, ta dùng loại đó.</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t constant = identifierConstant(&amp;parser.previous);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>method</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">FunctionType</span> <span class="i">type</span> = <span class="a">TYPE_METHOD</span>;
+</pre><pre class="insert-after">  function(type);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>method</em>(), replace 1 line</div>
+
+<p>Giờ ta có thể compile đúng các tham chiếu tới biến đặc biệt <code>"this"</code>, và compiler sẽ phát sinh instruction <code>OP_GET_LOCAL</code> phù hợp để truy cập nó. Closure thậm chí có thể capture <code>this</code> và lưu receiver vào upvalue. Khá tuyệt.</p>
+<p>Ngoại trừ việc ở runtime, receiver thực ra chưa <em>nằm</em> trong slot 0. Interpreter vẫn chưa thực hiện phần việc của nó. Đây là cách sửa:</p>
+<div class="codehilite"><pre class="insert-before">      case OBJ_BOUND_METHOD: {
+        ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>callValue</em>()</div>
+<pre class="insert">        <span class="i">vm</span>.<span class="i">stackTop</span>[-<span class="i">argCount</span> - <span class="n">1</span>] = <span class="i">bound</span>-&gt;<span class="i">receiver</span>;
+</pre><pre class="insert-after">        return call(bound-&gt;method, argCount);
+      }
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>callValue</em>()</div>
+
+<p>Khi một method được gọi, đỉnh stack chứa tất cả các đối số, và ngay bên dưới chúng là closure của method được gọi. Đó chính là vị trí slot 0 trong CallFrame mới. Dòng code này chèn receiver vào slot đó. Ví dụ, với lời gọi method như sau:</p>
+<div class="codehilite"><pre><span class="i">scone</span>.<span class="i">topping</span>(<span class="s">&quot;berries&quot;</span>, <span class="s">&quot;cream&quot;</span>);
+</pre></div>
+<p>Ta tính slot để lưu receiver như sau:</p><img src="image/methods-and-initializers/closure-slot.png" alt="Bỏ qua các slot đối số trên stack để tìm slot chứa closure." />
+<p>Phần <code>-argCount</code> bỏ qua các đối số và <code>- 1</code> điều chỉnh vì <code>stackTop</code> trỏ ngay <em>sau</em> slot stack cuối cùng được dùng.</p>
+<h3><a href="#sử-dụng-sai-`this`" id="sử-dụng-sai-`this`"><small>28&#8202;.&#8202;3&#8202;.&#8202;1</small>Sử dụng sai <code>this</code></a></h3>
+<p>VM của chúng ta giờ đã hỗ trợ người dùng sử dụng <code>this</code> <em>đúng cách</em>, nhưng ta cũng cần đảm bảo nó xử lý đúng khi người dùng <em>dùng sai</em> <code>this</code>. Lox quy định rằng nếu một biểu thức <code>this</code> xuất hiện bên ngoài phần thân của một method thì đó là lỗi compile. Hai trường hợp sai sau đây cần được compiler phát hiện:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="k">this</span>; <span class="c">// Ở top level.</span>
+
+<span class="k">fun</span> <span class="i">notMethod</span>() {
+  <span class="k">print</span> <span class="k">this</span>; <span class="c">// Bên trong một hàm.</span>
+}
+</pre></div>
+<p>Vậy compiler biết mình đang ở bên trong một method bằng cách nào? Câu trả lời hiển nhiên là nhìn vào <code>FunctionType</code> của <code>Compiler</code> hiện tại. Ta vừa thêm một case enum để xử lý method đặc biệt. Tuy nhiên, cách này sẽ không xử lý đúng đoạn code như ví dụ trước đó, nơi bạn đang ở bên trong một hàm mà bản thân nó lại được lồng bên trong một method.</p>
+<p>Ta có thể thử resolve <code>"this"</code> rồi báo lỗi nếu nó không được tìm thấy trong bất kỳ scope từ vựng bao quanh nào. Cách này sẽ hoạt động, nhưng sẽ yêu cầu ta phải sắp xếp lại khá nhiều code, vì hiện tại code resolve biến ngầm định coi đó là truy cập global nếu không tìm thấy khai báo.</p>
+<p>Trong chương tiếp theo, ta sẽ cần thông tin về class bao ngoài gần nhất. Nếu có thông tin đó, ta có thể dùng nó ở đây để xác định xem mình có đang ở trong một method hay không. Vậy nên tốt nhất là chuẩn bị sẵn cơ chế này ngay bây giờ để sau này đỡ vất vả.</p>
+<div class="codehilite"><pre class="insert-before">Compiler* current = NULL;
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after variable <em>current</em></div>
+<pre class="insert"><span class="t">ClassCompiler</span>* <span class="i">currentClass</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">
+
+static Chunk* currentChunk() {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after variable <em>current</em></div>
+
+<p>Biến module này trỏ tới một struct đại diện cho class trong cùng hiện tại đang được compile. Kiểu mới này trông như sau:</p>
+<div class="codehilite"><pre class="insert-before">} Compiler;
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after struct <em>Compiler</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">struct</span> <span class="t">ClassCompiler</span> {
+  <span class="k">struct</span> <span class="t">ClassCompiler</span>* <span class="i">enclosing</span>;
+} <span class="t">ClassCompiler</span>;
+</pre><pre class="insert-after">
+
+Parser parser;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after struct <em>Compiler</em></div>
+
+<p>Hiện tại, ta chỉ lưu một con trỏ tới <code>ClassCompiler</code> của class bao ngoài, nếu có. Việc lồng một khai báo class bên trong một method của class khác là điều hiếm gặp, nhưng Lox vẫn hỗ trợ. Giống như struct <code>Compiler</code>, điều này có nghĩa là <code>ClassCompiler</code> tạo thành một danh sách liên kết từ class trong cùng hiện tại đang compile ra tới tất cả các class bao ngoài.</p>
+<p>Nếu ta không ở trong bất kỳ khai báo class nào, biến module <code>currentClass</code> sẽ là <code>NULL</code>. Khi compiler bắt đầu compile một class, nó sẽ push một <code>ClassCompiler</code> mới vào “ngăn xếp” liên kết ngầm này.</p>
+<div class="codehilite"><pre class="insert-before">  defineVariable(nameConstant);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">  <span class="t">ClassCompiler</span> <span class="i">classCompiler</span>;
+  <span class="i">classCompiler</span>.<span class="i">enclosing</span> = <span class="i">currentClass</span>;
+  <span class="i">currentClass</span> = &amp;<span class="i">classCompiler</span>;
+
+</pre><pre class="insert-after">  namedVariable(className, false);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Vùng nhớ cho struct <code>ClassCompiler</code> nằm ngay trên stack của C, một khả năng tiện lợi mà ta có được nhờ viết compiler theo kiểu recursive descent. Khi kết thúc phần thân class, ta pop compiler đó ra khỏi stack và khôi phục lại class bao ngoài.</p>
+<div class="codehilite"><pre class="insert-before">  emitByte(OP_POP);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">
+
+  <span class="i">currentClass</span> = <span class="i">currentClass</span>-&gt;<span class="i">enclosing</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>classDeclaration</em>()</div>
+
+<p>Khi phần thân của class ngoài cùng kết thúc, <code>enclosing</code> sẽ là <code>NULL</code>, nên lúc này <code>currentClass</code> được đặt lại thành <code>NULL</code>. Do đó, để biết ta có đang ở trong một class — và vì thế là trong một method — hay không, ta chỉ cần kiểm tra biến module này.</p>
+<div class="codehilite"><pre class="insert-before">static void this_(bool canAssign) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>this_</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">currentClass</span> == <span class="a">NULL</span>) {
+    <span class="i">error</span>(<span class="s">&quot;Can&#39;t use &#39;this&#39; outside of a class.&quot;</span>);
+    <span class="k">return</span>;
+  }
+
+</pre><pre class="insert-after">  variable(false);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>this_</em>()</div>
+
+<p>Với cơ chế này, <code>this</code> bên ngoài một class sẽ bị cấm đúng như quy định. Giờ thì method của ta thực sự mang đúng nghĩa <em>method</em> trong lập trình hướng đối tượng. Việc truy cập receiver cho phép chúng tác động đến instance mà bạn gọi method trên đó. Chúng ta đang tiến triển tốt!</p>
+<h2><a href="#instance-initializer" id="instance-initializer"><small>28&#8202;.&#8202;4</small>Instance Initializer</a></h2>
+<p>Lý do các ngôn ngữ hướng đối tượng gắn kết state và behavior — một trong những nguyên lý cốt lõi của mô hình này — là để đảm bảo object luôn ở trạng thái hợp lệ và có ý nghĩa. Khi cách duy nhất để tác động đến state của object là <span name="through">thông qua</span> các method của nó, các method có thể đảm bảo không có gì sai sót. Nhưng điều đó giả định rằng object đã <em>sẵn</em> ở trạng thái đúng. Vậy khi nó vừa được tạo ra thì sao?</p>
+<aside name="through">
+<p>Tất nhiên, Lox cho phép code bên ngoài truy cập và sửa đổi trực tiếp các field của instance mà không cần thông qua method. Điều này khác với Ruby và Smalltalk, vốn đóng gói hoàn toàn state bên trong object. Ngôn ngữ script “đồ chơi” của chúng ta, tiếc là, không nguyên tắc đến vậy.</p>
+</aside>
+<p>Các ngôn ngữ hướng đối tượng đảm bảo object mới được tạo ra được thiết lập đúng thông qua constructor, vừa tạo ra một instance mới vừa khởi tạo state của nó. Trong Lox, runtime sẽ cấp phát các instance thô mới, và một class có thể khai báo một initializer để thiết lập các field. Initializer hoạt động gần giống như method bình thường, nhưng có một vài điểm khác:</p>
+<ol>
+<li>
+<p>Runtime sẽ tự động invoke method initializer bất cứ khi nào một instance của class được tạo.</p>
+</li>
+<li>
+<p>Caller tạo instance luôn nhận lại instance đó <span name="return">sau</span> khi initializer kết thúc, bất kể bản thân hàm initializer trả về gì. Method initializer không cần phải <code>return this</code> một cách tường minh.</p>
+</li>
+<li>
+<p>Thực tế, initializer <em>bị cấm</em> trả về bất kỳ giá trị nào vì giá trị đó sẽ không bao giờ được dùng đến.</p>
+</li>
+</ol>
+<aside name="return">
+<p>Giống như thể initializer được ngầm bọc trong một đoạn code như sau:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">create</span>(<span class="i">klass</span>) {
+  <span class="k">var</span> <span class="i">obj</span> = <span class="i">newInstance</span>(<span class="i">klass</span>);
+  <span class="i">obj</span>.<span class="i">init</span>();
+  <span class="k">return</span> <span class="i">obj</span>;
+}
+</pre></div>
+<p>Hãy chú ý rằng giá trị trả về từ <code>init()</code> bị bỏ qua.</p>
+</aside>
+<p>Giờ khi ta đã hỗ trợ method, để thêm initializer, ta chỉ cần implement ba quy tắc đặc biệt này. Ta sẽ làm theo thứ tự.</p>
+<h3><a href="#gọi-initializer" id="gọi-initializer"><small>28&#8202;.&#8202;4&#8202;.&#8202;1</small>Gọi initializer</a></h3>
+<p>Đầu tiên, tự động gọi <code>init()</code> trên các instance mới:</p>
+<div class="codehilite"><pre class="insert-before">        vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>callValue</em>()</div>
+<pre class="insert">        <span class="t">Value</span> <span class="i">initializer</span>;
+        <span class="k">if</span> (<span class="i">tableGet</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>, <span class="i">vm</span>.<span class="i">initString</span>,
+                     &amp;<span class="i">initializer</span>)) {
+          <span class="k">return</span> <span class="i">call</span>(<span class="a">AS_CLOSURE</span>(<span class="i">initializer</span>), <span class="i">argCount</span>);
+        }
+</pre><pre class="insert-after">        return true;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>callValue</em>()</div>
+
+<p>Sau khi runtime cấp phát instance mới, ta tìm method <code>init()</code> trong class. Nếu tìm thấy, ta bắt đầu gọi nó. Việc này sẽ push một CallFrame mới cho closure của initializer. Giả sử ta chạy chương trình này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Brunch</span> {
+  <span class="i">init</span>(<span class="i">food</span>, <span class="i">drink</span>) {}
+}
+
+<span class="t">Brunch</span>(<span class="s">&quot;eggs&quot;</span>, <span class="s">&quot;coffee&quot;</span>);
+</pre></div>
+<p>Khi VM execute lời gọi <code>Brunch()</code>, quá trình diễn ra như sau:</p><img src="image/methods-and-initializers/init-call-frame.png" alt="Các cửa sổ stack được căn chỉnh cho lời gọi Brunch() và method init() tương ứng mà nó chuyển tiếp đến." />
+<p>Bất kỳ đối số nào được truyền vào class khi ta gọi nó vẫn nằm trên stack phía trên instance. CallFrame mới cho method <code>init()</code> sẽ dùng chung cửa sổ stack đó, nên các đối số này sẽ được chuyển tiếp ngầm định tới initializer.</p>
+<p>Lox không bắt buộc một class phải định nghĩa initializer. Nếu bỏ qua, runtime đơn giản trả về instance mới chưa được khởi tạo. Tuy nhiên, nếu không có method <code>init()</code>, thì việc truyền đối số vào class khi tạo instance là vô nghĩa. Ta coi đó là lỗi.</p>
+<div class="codehilite"><pre class="insert-before">          return call(AS_CLOSURE(initializer), argCount);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>callValue</em>()</div>
+<pre class="insert">        } <span class="k">else</span> <span class="k">if</span> (<span class="i">argCount</span> != <span class="n">0</span>) {
+          <span class="i">runtimeError</span>(<span class="s">&quot;Expected 0 arguments but got %d.&quot;</span>,
+                       <span class="i">argCount</span>);
+          <span class="k">return</span> <span class="k">false</span>;
+</pre><pre class="insert-after">        }
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>callValue</em>()</div>
+
+<p>Khi class <em>có</em> cung cấp initializer, ta cũng cần đảm bảo số lượng đối số truyền vào khớp với arity của initializer. May mắn là helper <code>call()</code> đã làm điều đó cho ta.</p>
+<p>Để gọi initializer, runtime tra cứu method <code>init()</code> theo tên. Ta muốn việc này nhanh vì nó diễn ra mỗi khi một instance được tạo. Điều đó có nghĩa là nên tận dụng string interning mà ta đã implement. Để làm vậy, VM tạo một ObjString cho <code>"init"</code> và tái sử dụng nó. String này được lưu ngay trong struct VM.</p>
+<div class="codehilite"><pre class="insert-before">  Table strings;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">ObjString</span>* <span class="i">initString</span>;
+</pre><pre class="insert-after">  ObjUpvalue* openUpvalues;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Ta tạo và intern string này khi VM khởi động.</p>
+<div class="codehilite"><pre class="insert-before">  initTable(&amp;vm.strings);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">
+
+  <span class="i">vm</span>.<span class="i">initString</span> = <span class="i">copyString</span>(<span class="s">&quot;init&quot;</span>, <span class="n">4</span>);
+</pre><pre class="insert-after">
+
+  defineNative(&quot;clock&quot;, clockNative);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Ta muốn nó tồn tại lâu dài, nên GC sẽ coi nó là một root.</p>
+<div class="codehilite"><pre class="insert-before">  markCompilerRoots();
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>markRoots</em>()</div>
+<pre class="insert">  <span class="i">markObject</span>((<span class="t">Obj</span>*)<span class="i">vm</span>.<span class="i">initString</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>markRoots</em>()</div>
+
+<p>Hãy nhìn kỹ. Thấy lỗi tiềm ẩn nào không? Không à? Đây là một lỗi tinh vi. Garbage collector giờ sẽ đọc <code>vm.initString</code>. Trường này được khởi tạo từ kết quả của lời gọi <code>copyString()</code>. Nhưng việc copy string sẽ cấp phát bộ nhớ, có thể kích hoạt GC. Nếu collector chạy đúng vào thời điểm xấu, nó sẽ đọc <code>vm.initString</code> trước khi trường này được khởi tạo. Vì vậy, trước tiên ta gán giá trị 0 cho trường này.</p>
+<div class="codehilite"><pre class="insert-before">  initTable(&amp;vm.strings);
+
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">initString</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">  vm.initString = copyString(&quot;init&quot;, 4);
+
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Ta xóa con trỏ này khi VM tắt vì dòng tiếp theo sẽ free nó.</p>
+<div class="codehilite"><pre class="insert-before">  freeTable(&amp;vm.strings);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>freeVM</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">initString</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">  freeObjects();
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>freeVM</em>()</div>
+
+<p>OK, vậy là ta đã có thể gọi initializer.</p>
+<h3><a href="#giá-trị-trả-về-của-initializer" id="giá-trị-trả-về-của-initializer"><small>28&#8202;.&#8202;4&#8202;.&#8202;2</small>Giá trị trả về của initializer</a></h3>
+<p>Bước tiếp theo là đảm bảo rằng việc tạo một instance của class có initializer luôn trả về instance mới, chứ không phải <code>nil</code> hay bất kỳ giá trị nào mà phần thân initializer trả về. Hiện tại, nếu một class định nghĩa initializer, thì khi một instance được tạo, VM sẽ push một lời gọi tới initializer đó lên CallFrame stack. Sau đó nó cứ tiếp tục chạy.</p>
+<p>Lời gọi của người dùng tới class để tạo instance sẽ hoàn tất khi method initializer trả về, và sẽ để lại trên stack bất kỳ giá trị nào mà initializer đặt ở đó. Điều này có nghĩa là trừ khi người dùng cẩn thận đặt <code>return this;</code> ở cuối initializer, sẽ không có instance nào được trả về. Không hữu ích lắm.</p>
+<p>Để khắc phục, bất cứ khi nào front end compile một method initializer, nó sẽ phát sinh bytecode khác ở cuối phần thân để trả về <code>this</code> từ method thay vì <code>nil</code> ngầm định mà hầu hết các hàm trả về. Để <em>làm được</em> điều đó, compiler cần biết khi nào nó đang compile một initializer. Ta phát hiện điều này bằng cách kiểm tra xem tên method đang compile có phải <code>"init"</code> hay không.</p>
+<div class="codehilite"><pre class="insert-before">  FunctionType type = TYPE_METHOD;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>method</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">parser</span>.<span class="i">previous</span>.<span class="i">length</span> == <span class="n">4</span> &amp;&amp;
+      <span class="i">memcmp</span>(<span class="i">parser</span>.<span class="i">previous</span>.<span class="i">start</span>, <span class="s">&quot;init&quot;</span>, <span class="n">4</span>) == <span class="n">0</span>) {
+    <span class="i">type</span> = <span class="a">TYPE_INITIALIZER</span>;
+  }
+
+</pre><pre class="insert-after">  function(type);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>method</em>()</div>
+
+<p>Ta định nghĩa một loại function mới để phân biệt initializer với các method khác.</p>
+<div class="codehilite"><pre class="insert-before">  TYPE_FUNCTION,
+</pre><div class="source-file"><em>compiler.c</em><br>
+in enum <em>FunctionType</em></div>
+<pre class="insert">  <span class="a">TYPE_INITIALIZER</span>,
+</pre><pre class="insert-after">  TYPE_METHOD,
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in enum <em>FunctionType</em></div>
+
+<p>Bất cứ khi nào compiler phát sinh lệnh return ngầm ở cuối phần thân, ta kiểm tra loại để quyết định có chèn hành vi đặc biệt cho initializer hay không.</p>
+<div class="codehilite"><pre class="insert-before">static void emitReturn() {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>emitReturn</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">current</span>-&gt;<span class="i">type</span> == <span class="a">TYPE_INITIALIZER</span>) {
+    <span class="i">emitBytes</span>(<span class="a">OP_GET_LOCAL</span>, <span class="n">0</span>);
+  } <span class="k">else</span> {
+    <span class="i">emitByte</span>(<span class="a">OP_NIL</span>);
+  }
+
+</pre><pre class="insert-after">  emitByte(OP_RETURN);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>emitReturn</em>(), replace 1 line</div>
+
+<p>Trong initializer, thay vì push <code>nil</code> lên stack trước khi return, ta load slot 0, nơi chứa instance. Hàm <code>emitReturn()</code> này cũng được gọi khi compile một câu lệnh <code>return</code> không có giá trị, nên nó cũng xử lý đúng các trường hợp người dùng return sớm bên trong initializer.</p>
+<h3><a href="#lệnh-`return`-không-hợp-lệ-trong-initializer" id="lệnh-`return`-không-hợp-lệ-trong-initializer"><small>28&#8202;.&#8202;4&#8202;.&#8202;3</small>Lệnh <code>return</code> không hợp lệ trong initializer</a></h3>
+<p>Bước cuối cùng, mục cuối trong danh sách các tính năng đặc biệt của initializer, là biến việc cố gắng trả về bất kỳ thứ gì <em>khác</em> thành lỗi. Giờ khi compiler đã theo dõi loại method, việc này trở nên đơn giản.</p>
+<div class="codehilite"><pre class="insert-before">  if (match(TOKEN_SEMICOLON)) {
+    emitReturn();
+  } else {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>returnStatement</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">current</span>-&gt;<span class="i">type</span> == <span class="a">TYPE_INITIALIZER</span>) {
+      <span class="i">error</span>(<span class="s">&quot;Can&#39;t return a value from an initializer.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    expression();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>returnStatement</em>()</div>
+
+<p>Ta báo lỗi nếu một câu lệnh <code>return</code> trong initializer có giá trị trả về. Ta vẫn tiếp tục compile giá trị đó sau đó để compiler không bị nhầm lẫn bởi biểu thức theo sau và báo một loạt lỗi dây chuyền.</p>
+<p>Ngoại trừ phần kế thừa, mà ta sẽ bàn tới <a href="super">sớm thôi</a>, giờ ta đã có một hệ thống class khá đầy đủ tính năng hoạt động trong clox.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">CoffeeMaker</span> {
+  <span class="i">init</span>(<span class="i">coffee</span>) {
+    <span class="k">this</span>.<span class="i">coffee</span> = <span class="i">coffee</span>;
+  }
+
+  <span class="i">brew</span>() {
+    <span class="k">print</span> <span class="s">&quot;Enjoy your cup of &quot;</span> + <span class="k">this</span>.<span class="i">coffee</span>;
+
+    <span class="c">// Không tái sử dụng bã cà phê nhé!</span>
+    <span class="k">this</span>.<span class="i">coffee</span> = <span class="k">nil</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">maker</span> = <span class="t">CoffeeMaker</span>(<span class="s">&quot;coffee and chicory&quot;</span>);
+<span class="i">maker</span>.<span class="i">brew</span>();
+</pre></div>
+<p>Khá “xịn” đối với một chương trình C có thể vừa trên một chiếc <span name="floppy">đĩa mềm</span> đời cũ.</p>
+<aside name="floppy">
+<p>Tôi biết rằng “đĩa mềm” có thể không còn là một đơn vị so sánh hữu ích cho thế hệ lập trình viên hiện nay. Có lẽ tôi nên nói “vài tweet” hay gì đó tương tự.</p>
+</aside>
+<h2><a href="#lời-gọi-được-tối-ưu-hóa" id="lời-gọi-được-tối-ưu-hóa"><small>28&#8202;.&#8202;5</small>Lời gọi được tối ưu hóa</a></h2>
+<p>VM của ta hiện đã implement đúng ngữ nghĩa của ngôn ngữ cho lời gọi method và initializer. Ta có thể dừng ở đây. Nhưng lý do chính khiến ta xây dựng một bản hiện thực thứ hai của Lox từ đầu là để execute nhanh hơn interpreter Java cũ. Hiện tại, ngay cả trong clox, lời gọi method vẫn chậm.</p>
+<p>Ngữ nghĩa của Lox định nghĩa một lời gọi method gồm hai thao tác — truy cập method và sau đó gọi kết quả. VM của ta phải hỗ trợ chúng như hai thao tác riêng biệt vì người dùng <em>có thể</em> tách chúng ra. Bạn có thể truy cập một method mà không gọi nó, rồi invoke bound method đó sau. Không có gì ta đã implement đến giờ là thừa thãi.</p>
+<p>Nhưng <em>luôn</em> execute chúng như hai thao tác riêng biệt lại có chi phí đáng kể. Mỗi lần một chương trình Lox truy cập và gọi một method, runtime heap sẽ cấp phát một ObjBoundMethod mới, khởi tạo các field của nó, rồi ngay lập tức lấy chúng ra. Sau đó, GC phải tốn thời gian giải phóng tất cả các bound method ngắn ngủi đó.</p>
+<p>Phần lớn thời gian, một chương trình Lox truy cập một method và ngay lập tức gọi nó. Bound method được tạo ra bởi một bytecode instruction và bị tiêu thụ ngay bởi instruction tiếp theo. Thực tế, nó diễn ra nhanh đến mức compiler thậm chí có thể <em>thấy</em> rõ điều đó — một truy cập property bằng dấu chấm theo sau bởi dấu ngoặc mở rất có khả năng là một lời gọi method.</p>
+<p>Vì ta có thể nhận diện cặp thao tác này ngay tại compile time, ta có cơ hội phát sinh một instruction <span name="super">mới, đặc biệt</span> để thực hiện một lời gọi method được tối ưu hóa.</p>
+<p>Ta bắt đầu trong hàm compile các biểu thức property có dấu chấm.</p>
+<aside name="super" class="bottom">
+<p>Nếu bạn dành đủ thời gian quan sát bytecode VM chạy, bạn sẽ nhận thấy nó thường execute cùng một chuỗi bytecode instruction hết lần này đến lần khác. Một kỹ thuật tối ưu hóa kinh điển là định nghĩa một instruction đơn mới gọi là <strong>superinstruction</strong> để hợp nhất chúng thành một instruction duy nhất với hành vi giống hệt toàn bộ chuỗi.</p>
+<p>Một trong những nguyên nhân lớn nhất gây hao phí hiệu năng trong bytecode interpreter là chi phí giải mã và phân phối từng instruction. Hợp nhất nhiều instruction thành một sẽ loại bỏ được phần nào chi phí đó.</p>
+<p>Thách thức là xác định <em>chuỗi</em> instruction nào đủ phổ biến để hưởng lợi từ tối ưu hóa này. Mỗi superinstruction mới sẽ chiếm một opcode riêng và số lượng opcode là hữu hạn. Thêm quá nhiều, bạn sẽ cần một cách mã hóa opcode lớn hơn, điều này sẽ làm tăng kích thước code và khiến việc giải mã <em>tất cả</em> instruction chậm hơn.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  if (canAssign &amp;&amp; match(TOKEN_EQUAL)) {
+    expression();
+    emitBytes(OP_SET_PROPERTY, name);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>dot</em>()</div>
+<pre class="insert">  } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_LEFT_PAREN</span>)) {
+    <span class="t">uint8_t</span> <span class="i">argCount</span> = <span class="i">argumentList</span>();
+    <span class="i">emitBytes</span>(<span class="a">OP_INVOKE</span>, <span class="i">name</span>);
+    <span class="i">emitByte</span>(<span class="i">argCount</span>);
+</pre><pre class="insert-after">  } else {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>dot</em>()</div>
+
+<p>Sau khi compiler đã parse xong tên property, ta kiểm tra xem có dấu ngoặc tròn mở hay không. Nếu có, ta chuyển sang một nhánh code mới. Ở đó, ta compile danh sách đối số giống hệt như khi compile một call expression. Sau đó, ta phát sinh một instruction <code>OP_INVOKE</code> mới duy nhất. Nó nhận hai toán hạng:</p>
+<ol>
+<li>
+<p>Chỉ số của tên property trong constant table.</p>
+</li>
+<li>
+<p>Số lượng đối số được truyền vào method.</p>
+</li>
+</ol>
+<p>Nói cách khác, instruction duy nhất này kết hợp các toán hạng của <code>OP_GET_PROPERTY</code> và <code>OP_CALL</code> mà nó thay thế, theo đúng thứ tự đó. Nó thực sự là sự hợp nhất của hai instruction này. Hãy định nghĩa nó.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CALL,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_INVOKE</span>,
+</pre><pre class="insert-after">  OP_CLOSURE,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Và thêm nó vào disassembler:</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CALL:
+      return byteInstruction(&quot;OP_CALL&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_INVOKE</span>:
+      <span class="k">return</span> <span class="i">invokeInstruction</span>(<span class="s">&quot;OP_INVOKE&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_CLOSURE: {
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Đây là một định dạng instruction mới, đặc biệt, nên cần một chút logic disassembly tùy chỉnh.</p>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+add after <em>constantInstruction</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">invokeInstruction</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>, <span class="t">Chunk</span>* <span class="i">chunk</span>,
+                                <span class="t">int</span> <span class="i">offset</span>) {
+  <span class="t">uint8_t</span> <span class="i">constant</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">1</span>];
+  <span class="t">uint8_t</span> <span class="i">argCount</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">2</span>];
+  <span class="i">printf</span>(<span class="s">&quot;%-16s (%d args) %4d &#39;&quot;</span>, <span class="i">name</span>, <span class="i">argCount</span>, <span class="i">constant</span>);
+  <span class="i">printValue</span>(<span class="i">chunk</span>-&gt;<span class="i">constants</span>.<span class="i">values</span>[<span class="i">constant</span>]);
+  <span class="i">printf</span>(<span class="s">&quot;&#39;</span><span class="e">\n</span><span class="s">&quot;</span>);
+  <span class="k">return</span> <span class="i">offset</span> + <span class="n">3</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, add after <em>constantInstruction</em>()</div>
+
+<p>Ta đọc hai toán hạng và sau đó in ra cả tên method lẫn số lượng đối số. Bên trong vòng lặp dispatch bytecode của interpreter mới là nơi mọi thứ thực sự bắt đầu.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_INVOKE</span>: {
+        <span class="t">ObjString</span>* <span class="i">method</span> = <span class="a">READ_STRING</span>();
+        <span class="t">int</span> <span class="i">argCount</span> = <span class="a">READ_BYTE</span>();
+        <span class="k">if</span> (!<span class="i">invoke</span>(<span class="i">method</span>, <span class="i">argCount</span>)) {
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="i">frame</span> = &amp;<span class="i">vm</span>.<span class="i">frames</span>[<span class="i">vm</span>.<span class="i">frameCount</span> - <span class="n">1</span>];
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_CLOSURE: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Phần lớn công việc diễn ra trong <code>invoke()</code>, mà ta sẽ bàn tới ngay. Ở đây, ta tra cứu tên method từ toán hạng đầu tiên rồi đọc toán hạng số lượng đối số. Sau đó, ta chuyển cho <code>invoke()</code> để xử lý phần nặng. Hàm này trả về <code>true</code> nếu lời gọi thành công. Như thường lệ, trả về <code>false</code> nghĩa là đã xảy ra lỗi runtime. Ta kiểm tra điều đó ở đây và dừng interpreter nếu có sự cố.</p>
+<p>Cuối cùng, giả sử lời gọi thành công, sẽ có một CallFrame mới trên stack, nên ta làm mới bản sao cache của frame hiện tại trong <code>frame</code>.</p>
+<p>Phần thú vị diễn ra ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>callValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">invoke</span>(<span class="t">ObjString</span>* <span class="i">name</span>, <span class="t">int</span> <span class="i">argCount</span>) {
+  <span class="t">Value</span> <span class="i">receiver</span> = <span class="i">peek</span>(<span class="i">argCount</span>);
+  <span class="t">ObjInstance</span>* <span class="i">instance</span> = <span class="a">AS_INSTANCE</span>(<span class="i">receiver</span>);
+  <span class="k">return</span> <span class="i">invokeFromClass</span>(<span class="i">instance</span>-&gt;<span class="i">klass</span>, <span class="i">name</span>, <span class="i">argCount</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>callValue</em>()</div>
+
+<p>Đầu tiên, ta lấy receiver từ stack. Các đối số truyền vào method nằm phía trên nó trên stack, nên ta peek xuống bấy nhiêu slot. Sau đó, chỉ đơn giản là cast object đó thành instance và invoke method trên nó.</p>
+<p>Điều này giả định rằng object <em>là</em> một instance. Giống như với instruction <code>OP_GET_PROPERTY</code>, ta cũng cần xử lý trường hợp người dùng cố gọi method trên một giá trị sai kiểu.</p>
+<div class="codehilite"><pre class="insert-before">  Value receiver = peek(argCount);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>invoke</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (!<span class="a">IS_INSTANCE</span>(<span class="i">receiver</span>)) {
+    <span class="i">runtimeError</span>(<span class="s">&quot;Only instances have methods.&quot;</span>);
+    <span class="k">return</span> <span class="k">false</span>;
+  }
+
+</pre><pre class="insert-after">  ObjInstance* instance = AS_INSTANCE(receiver);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>invoke</em>()</div>
+
+<p><span name="helper">Đây</span> là một lỗi runtime, nên ta báo lỗi và thoát. Nếu không, ta lấy class của instance và nhảy sang hàm tiện ích mới này:</p>
+<aside name="helper">
+<p>Như bạn có thể đoán, ta tách code này thành một hàm riêng vì sẽ tái sử dụng nó sau này — trong trường hợp này là cho các lời gọi <code>super</code>.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>callValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">invokeFromClass</span>(<span class="t">ObjClass</span>* <span class="i">klass</span>, <span class="t">ObjString</span>* <span class="i">name</span>,
+                            <span class="t">int</span> <span class="i">argCount</span>) {
+  <span class="t">Value</span> <span class="i">method</span>;
+  <span class="k">if</span> (!<span class="i">tableGet</span>(&amp;<span class="i">klass</span>-&gt;<span class="i">methods</span>, <span class="i">name</span>, &amp;<span class="i">method</span>)) {
+    <span class="i">runtimeError</span>(<span class="s">&quot;Undefined property &#39;%s&#39;.&quot;</span>, <span class="i">name</span>-&gt;<span class="i">chars</span>);
+    <span class="k">return</span> <span class="k">false</span>;
+  }
+  <span class="k">return</span> <span class="i">call</span>(<span class="a">AS_CLOSURE</span>(<span class="i">method</span>), <span class="i">argCount</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>callValue</em>()</div>
+
+<p>Hàm này kết hợp logic của cách VM hiện thực instruction <code>OP_GET_PROPERTY</code> và <code>OP_CALL</code>, theo đúng thứ tự đó. Đầu tiên, ta tra method theo tên trong bảng method của class. Nếu không tìm thấy, ta báo lỗi runtime và thoát.</p>
+<p>Nếu tìm thấy, ta lấy closure của method và push một lời gọi tới nó lên CallFrame stack. Ta không cần cấp phát trên heap và khởi tạo một ObjBoundMethod. Thực tế, ta thậm chí không cần phải <span name="juggle">xoay</span> gì trên stack. Receiver và các đối số của method đã ở đúng vị trí cần thiết.</p>
+<aside name="juggle">
+<p>Đây là lý do chính <em>tại sao</em> ta dùng slot 0 trên stack để lưu receiver — đó là cách caller đã tổ chức stack cho một lời gọi method. Một calling convention hiệu quả là phần quan trọng trong câu chuyện hiệu năng của một bytecode VM.</p>
+</aside>
+<p>Nếu bạn khởi động VM và chạy một chương trình nhỏ gọi method ngay bây giờ, bạn sẽ thấy hành vi <em>y hệt</em> như trước. Nhưng, nếu ta làm đúng, <em>hiệu năng</em> sẽ được cải thiện đáng kể. Tôi đã viết một microbenchmark nhỏ thực hiện một lô 10.000 lời gọi method. Sau đó, nó kiểm tra xem có thể execute bao nhiêu lô như vậy trong 10 giây. Trên máy của tôi, không có instruction <code>OP_INVOKE</code> mới, nó chạy được 1.089 lô. Với tối ưu hóa mới này, nó hoàn thành 8.324 lô trong cùng thời gian. Đó là <em>nhanh hơn 7,6 lần</em>, một cải thiện khổng lồ khi nói đến tối ưu hóa ngôn ngữ lập trình.</p>
+<p><span name="pat"></span></p>
+<aside name="pat">
+<p>Ta cũng đừng tự vỗ lưng <em>quá</em> mạnh. Cải thiện hiệu năng này là so với chính hiện thực lời gọi method chưa tối ưu của ta, vốn khá chậm. Việc cấp phát trên heap cho <em>mỗi</em> lời gọi method chắc chắn không thể thắng trong cuộc đua nào cả.</p>
+</aside><img src="image/methods-and-initializers/benchmark.png" alt="Bar chart comparing the two benchmark results." />
+<h3><a href="#gọi-field" id="gọi-field"><small>28&#8202;.&#8202;5&#8202;.&#8202;1</small>Gọi field</a></h3>
+<p>Tôn chỉ cơ bản của tối ưu hóa là: <em>&ldquo;Ngươi chớ phá vỡ tính đúng đắn.&rdquo;</em><br />
+<span name="monte">Người dùng</span> sẽ thích khi một hiện thực ngôn ngữ cho họ câu trả lời nhanh hơn, nhưng chỉ khi đó là câu trả lời <em>đúng</em>. Tiếc thay, phần hiện thực lời gọi method nhanh hơn của ta lại không giữ được nguyên tắc này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Oops</span> {
+  <span class="i">init</span>() {
+    <span class="k">fun</span> <span class="i">f</span>() {
+      <span class="k">print</span> <span class="s">&quot;not a method&quot;</span>;
+    }
+
+    <span class="k">this</span>.<span class="i">field</span> = <span class="i">f</span>;
+  }
+}
+
+<span class="k">var</span> <span class="i">oops</span> = <span class="t">Oops</span>();
+<span class="i">oops</span>.<span class="i">field</span>();
+</pre></div>
+<p>Dòng cuối trông giống như một lời gọi method. Compiler nghĩ vậy và cẩn thận phát sinh instruction <code>OP_INVOKE</code> cho nó. Tuy nhiên, thực tế không phải vậy. Điều đang xảy ra là một truy cập <em>field</em> trả về một hàm, rồi hàm đó được gọi. Hiện tại, thay vì execute đúng, VM của ta lại báo lỗi runtime khi không tìm thấy method tên <code>"field"</code>.</p>
+<aside name="monte">
+<p>Có những trường hợp người dùng có thể hài lòng khi một chương trình đôi khi trả về kết quả sai để đổi lấy việc chạy nhanh hơn đáng kể hoặc có giới hạn hiệu năng tốt hơn. Đây là lĩnh vực của <a href="https://en.wikipedia.org/wiki/Monte_Carlo_algorithm"><strong>thuật toán Monte Carlo</strong></a>. Với một số trường hợp sử dụng, đây là một sự đánh đổi hợp lý.</p>
+<p>Điều quan trọng, tuy nhiên, là người dùng <em>tự chọn</em> áp dụng một trong các thuật toán này. Chúng ta — những người hiện thực ngôn ngữ — không thể tự ý quyết định hy sinh tính đúng đắn của chương trình của họ.</p>
+</aside>
+<p>Trước đây, khi hiện thực <code>OP_GET_PROPERTY</code>, ta đã xử lý cả truy cập field và method. Để diệt bug mới này, ta cần làm điều tương tự cho <code>OP_INVOKE</code>.</p>
+<div class="codehilite"><pre class="insert-before">  ObjInstance* instance = AS_INSTANCE(receiver);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>invoke</em>()</div>
+<pre class="insert">
+
+  <span class="t">Value</span> <span class="i">value</span>;
+  <span class="k">if</span> (<span class="i">tableGet</span>(&amp;<span class="i">instance</span>-&gt;<span class="i">fields</span>, <span class="i">name</span>, &amp;<span class="i">value</span>)) {
+    <span class="i">vm</span>.<span class="i">stackTop</span>[-<span class="i">argCount</span> - <span class="n">1</span>] = <span class="i">value</span>;
+    <span class="k">return</span> <span class="i">callValue</span>(<span class="i">value</span>, <span class="i">argCount</span>);
+  }
+
+</pre><pre class="insert-after">  return invokeFromClass(instance-&gt;klass, name, argCount);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>invoke</em>()</div>
+
+<p>Sửa khá đơn giản. Trước khi tra method trong class của instance, ta tìm một field có cùng tên. Nếu tìm thấy field, ta lưu nó lên stack thay cho receiver, <em>bên dưới</em> danh sách đối số. Đây chính là cách <code>OP_GET_PROPERTY</code> hoạt động, vì instruction đó được execute trước khi danh sách đối số trong ngoặc được đánh giá.</p>
+<p>Sau đó, ta thử gọi giá trị của field đó như một callable (nếu may mắn nó là callable). Helper <code>callValue()</code> sẽ kiểm tra kiểu giá trị và gọi nó nếu phù hợp, hoặc báo lỗi runtime nếu giá trị của field không phải là kiểu callable như closure.</p>
+<p>Chỉ cần vậy là tối ưu hóa của ta an toàn hoàn toàn. Dĩ nhiên, ta có hy sinh một chút hiệu năng. Nhưng đôi khi đó là cái giá phải trả. Thỉnh thoảng bạn sẽ thấy khó chịu vì những tối ưu hóa <em>có thể</em> làm được nếu ngôn ngữ không cho phép một vài trường hợp góc cạnh khó chịu. Nhưng, với tư cách là <span name="designer">người hiện thực</span> ngôn ngữ, ta phải chơi theo luật đã có.</p>
+<aside name="designer">
+<p>Còn với tư cách là <em>nhà thiết kế</em> ngôn ngữ, vai trò của ta rất khác. Nếu ta kiểm soát chính ngôn ngữ, đôi khi ta có thể chọn hạn chế hoặc thay đổi ngôn ngữ theo cách cho phép tối ưu hóa. Người dùng muốn ngôn ngữ biểu đạt tốt, nhưng họ cũng muốn hiện thực chạy nhanh. Đôi khi, hy sinh một chút sức mạnh để đổi lấy hiệu năng là một thiết kế ngôn ngữ tốt.</p>
+</aside>
+<p>Code ta vừa viết ở đây tuân theo một mẫu tối ưu hóa điển hình:</p>
+<ol>
+<li>
+<p>Nhận diện một thao tác hoặc chuỗi thao tác phổ biến và quan trọng về hiệu năng. Trong trường hợp này là truy cập method rồi gọi nó.</p>
+</li>
+<li>
+<p>Thêm một hiện thực tối ưu cho mẫu đó. Đây chính là instruction <code>OP_INVOKE</code>.</p>
+</li>
+<li>
+<p>Bảo vệ code tối ưu bằng một số logic điều kiện để xác nhận mẫu thực sự áp dụng. Nếu đúng, ở lại “đường nhanh”. Nếu không, quay về hành vi chậm hơn nhưng chắc chắn hơn. Ở đây, điều đó nghĩa là kiểm tra xem ta thực sự đang gọi method chứ không phải truy cập field.</p>
+</li>
+</ol>
+<p>Khi công việc với ngôn ngữ của bạn chuyển từ việc khiến nó <em>chạy được</em> sang khiến nó <em>chạy nhanh hơn</em>, bạn sẽ dành ngày càng nhiều thời gian tìm kiếm những mẫu như thế này và thêm các tối ưu hóa có điều kiện cho chúng. Các kỹ sư VM toàn thời gian dành phần lớn sự nghiệp của họ trong vòng lặp này.</p>
+<p>Nhưng ta có thể tạm dừng ở đây. Với điều này, clox giờ đã hỗ trợ hầu hết các tính năng của một ngôn ngữ lập trình hướng đối tượng, và với hiệu năng đáng nể.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>28&#8202;.&#8202;6</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Việc tra cứu hash table để tìm method <code>init()</code> của class là O(1), nhưng vẫn khá chậm. Hãy hiện thực một cách nhanh hơn. Viết benchmark và đo sự khác biệt về hiệu năng.</p>
+</li>
+<li>
+<p>Trong một ngôn ngữ kiểu động như Lox, một callsite có thể gọi nhiều method khác nhau trên nhiều class khác nhau trong suốt quá trình chạy chương trình. Tuy nhiên, trên thực tế, phần lớn thời gian một callsite sẽ gọi đúng cùng một method trên cùng một class trong suốt thời gian chạy. Hầu hết các lời gọi thực ra không đa hình, dù ngôn ngữ cho phép.</p>
+<p>Các hiện thực ngôn ngữ tiên tiến tối ưu hóa dựa trên quan sát này như thế nào?</p>
+</li>
+<li>
+<p>Khi interpret một instruction <code>OP_INVOKE</code>, VM phải thực hiện hai lần tra cứu hash table. Đầu tiên, nó tìm một field có thể shadow method, và chỉ khi thất bại mới tìm method. Việc kiểm tra đầu tiên này hiếm khi hữu ích — hầu hết field không chứa hàm. Nhưng nó là <em>bắt buộc</em> vì ngôn ngữ quy định field và method được truy cập bằng cùng cú pháp, và field sẽ shadow method.</p>
+<p>Đây là một <em>lựa chọn</em> thiết kế ngôn ngữ ảnh hưởng đến hiệu năng của hiện thực. Liệu đó có phải là lựa chọn đúng? Nếu Lox là ngôn ngữ của bạn, bạn sẽ làm gì?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-ngân-sách-“độ-mới-lạ”-novelty-budget" id="ghi-chú-thiết-kế-ngân-sách-“độ-mới-lạ”-novelty-budget"><small>28&#8202;.&#8202;7</small>Ghi chú thiết kế: Ngân sách “độ mới lạ” (Novelty Budget)</a></h2>
+<p>Tôi vẫn nhớ lần đầu tiên mình viết một chương trình BASIC bé xíu trên chiếc TRS-80 và khiến máy tính làm một điều mà trước đó nó chưa từng làm. Cảm giác như có siêu năng lực vậy. Lần đầu tiên tôi chắp vá đủ một parser và interpreter để có thể viết một chương trình nhỏ bằng <em>ngôn ngữ của riêng mình</em> và khiến máy tính thực hiện một việc — đó giống như một dạng siêu năng lực ở cấp độ cao hơn. Đó là một cảm giác tuyệt vời, và đến giờ vẫn vậy.</p>
+<p>Tôi nhận ra mình có thể thiết kế một ngôn ngữ trông và hoạt động theo bất kỳ cách nào mình muốn. Giống như cả đời tôi học ở một trường tư bắt buộc mặc đồng phục, rồi một ngày chuyển sang trường công nơi tôi có thể mặc bất cứ gì mình thích. Tôi không cần dùng dấu ngoặc nhọn cho block? Tôi có thể dùng thứ khác ngoài dấu bằng cho phép gán? Tôi có thể làm object mà không cần class? Đa kế thừa <em>và</em> multimethod? Một ngôn ngữ động nhưng overload tĩnh theo arity?</p>
+<p>Tất nhiên, tôi tận dụng sự tự do đó và “chạy hết ga”. Tôi đưa ra những quyết định thiết kế ngôn ngữ kỳ lạ và tùy tiện nhất: dùng dấu nháy đơn cho generics, bỏ dấu phẩy giữa các đối số, cơ chế resolve overload có thể thất bại ở runtime. Tôi làm khác chỉ vì… muốn khác.</p>
+<p>Đây là một trải nghiệm rất vui mà tôi khuyến khích bạn thử. Chúng ta cần nhiều ngôn ngữ lập trình kỳ lạ, tiên phong hơn. Tôi muốn thấy nhiều “ngôn ngữ nghệ thuật” hơn. Thỉnh thoảng tôi vẫn tạo ra những ngôn ngữ “đồ chơi” kỳ quặc chỉ để vui.</p>
+<p><em>Tuy nhiên</em>, nếu mục tiêu của bạn là thành công — mà “thành công” được định nghĩa là có thật nhiều người dùng — thì ưu tiên của bạn sẽ khác. Khi đó, mục tiêu chính là đưa ngôn ngữ của bạn “nạp” vào não của càng nhiều người càng tốt. Điều này <em>rất khó</em>. Cần rất nhiều công sức để chuyển cú pháp và ngữ nghĩa của một ngôn ngữ từ máy tính vào hàng nghìn tỷ neuron.</p>
+<p>Lập trình viên vốn dĩ thận trọng với thời gian của mình và cân nhắc kỹ xem ngôn ngữ nào đáng để “tải” vào bộ não sinh học. Họ không muốn phí thời gian cho một ngôn ngữ cuối cùng lại chẳng hữu ích. Vậy nên, với tư cách là nhà thiết kế ngôn ngữ, mục tiêu của bạn là mang đến cho họ càng nhiều sức mạnh ngôn ngữ càng tốt, với lượng kiến thức mới cần học là ít nhất.</p>
+<p>Một cách tiếp cận tự nhiên là <em>đơn giản hóa</em>. Càng ít khái niệm và tính năng, khối lượng kiến thức cần học càng nhỏ. Đây là một trong những lý do các ngôn ngữ <span name="dynamic">script</span> tối giản thường thành công, dù không mạnh mẽ bằng các ngôn ngữ công nghiệp lớn — chúng dễ bắt đầu hơn, và khi đã “nằm trong não” ai đó, họ sẽ muốn tiếp tục dùng.</p>
+<aside name="dynamic">
+<p>Đặc biệt, đây là lợi thế lớn của ngôn ngữ kiểu động. Một ngôn ngữ kiểu tĩnh yêu cầu bạn học <em>hai</em> ngôn ngữ — ngữ nghĩa runtime và hệ thống kiểu tĩnh — trước khi bạn có thể bắt đầu khiến máy tính làm việc. Ngôn ngữ động chỉ yêu cầu bạn học phần đầu tiên.</p>
+<p>Cuối cùng, khi chương trình đủ lớn, giá trị của phân tích tĩnh sẽ bù đắp công sức học “ngôn ngữ tĩnh” thứ hai đó, nhưng ban đầu thì lợi ích này không rõ ràng.</p>
+</aside>
+<p>Vấn đề của sự đơn giản là việc cắt bỏ tính năng thường đồng nghĩa hy sinh sức mạnh và khả năng biểu đạt. Có một nghệ thuật trong việc tìm ra những tính năng “đáng đồng tiền bát gạo”, nhưng nhiều ngôn ngữ tối giản đơn giản là làm được ít hơn.</p>
+<p>Có một con đường khác để tránh phần lớn vấn đề này. Mấu chốt là nhận ra rằng người dùng không cần “nạp” toàn bộ ngôn ngữ của bạn vào đầu, <em>chỉ phần họ chưa biết</em>. Như tôi đã nói trong <a href="parsing-expressions.html#design-note">một ghi chú thiết kế trước</a>, học là quá trình truyền tải <em>phần chênh lệch</em> giữa những gì họ đã biết và những gì họ cần biết.</p>
+<p>Nhiều người dùng tiềm năng của ngôn ngữ bạn đã biết một ngôn ngữ lập trình khác. Bất kỳ tính năng nào ngôn ngữ của bạn chia sẻ với ngôn ngữ đó gần như là “miễn phí” về mặt học tập. Nó đã ở trong đầu họ, họ chỉ cần nhận ra rằng ngôn ngữ của bạn làm điều tương tự.</p>
+<p>Nói cách khác, <em>sự quen thuộc</em> là một công cụ quan trọng khác để giảm chi phí tiếp nhận ngôn ngữ. Tất nhiên, nếu bạn tối đa hóa yếu tố này, kết quả cuối cùng sẽ là một ngôn ngữ hoàn toàn giống hệt ngôn ngữ khác. Đó không phải là công thức thành công, vì khi đó chẳng có lý do gì để người dùng chuyển sang ngôn ngữ của bạn.</p>
+<p>Vì vậy, bạn vẫn cần mang đến những điểm khác biệt hấp dẫn — những điều ngôn ngữ của bạn có thể làm mà ngôn ngữ khác không thể, hoặc ít nhất là không làm tốt bằng. Tôi tin đây là một trong những bài toán cân bằng cơ bản của thiết kế ngôn ngữ: giống các ngôn ngữ khác giúp giảm chi phí học, trong khi khác biệt lại tăng sức hút.</p>
+<p>Tôi nghĩ về bài toán cân bằng này như một <span name="idiosyncracy"><strong>ngân sách độ mới lạ</strong></span>, hay như Steve Klabnik gọi là “<a href="https://words.steveklabnik.com/the-language-strangeness-budget">ngân sách độ kỳ lạ</a>”. Người dùng có một ngưỡng thấp cho tổng lượng “điều mới” mà họ sẵn sàng chấp nhận để học một ngôn ngữ mới. Vượt quá ngưỡng đó, họ sẽ bỏ đi.</p>
+<aside name="idiosyncracy">
+<p>Một khái niệm liên quan trong tâm lý học là <a href="https://en.wikipedia.org/wiki/Idiosyncrasy_credit"><strong>idiosyncrasy credit</strong></a> — ý tưởng rằng những người khác trong xã hội cho bạn một lượng giới hạn các “lệch chuẩn” so với quy tắc chung. Bạn “kiếm” được tín dụng bằng cách hòa nhập và làm những việc “thuộc nhóm”, rồi có thể “tiêu” nó cho những hành vi khác thường mà bình thường sẽ bị để ý. Nói cách khác, chứng minh rằng bạn “thuộc về nhóm” sẽ cho bạn quyền “giương cờ lập dị”, nhưng chỉ ở mức nào đó thôi.</p>
+</aside>
+<p>Bất cứ khi nào bạn thêm một thứ mới vào ngôn ngữ mà các ngôn ngữ khác không có, hoặc làm một việc theo cách khác so với các ngôn ngữ khác, bạn đang tiêu một phần ngân sách đó. Điều này là bình thường — bạn <em>cần</em> tiêu nó để khiến ngôn ngữ của mình hấp dẫn. Nhưng mục tiêu là tiêu <em>khôn ngoan</em>. Với mỗi tính năng hoặc khác biệt, hãy tự hỏi nó mang lại bao nhiêu sức hút cho ngôn ngữ, rồi đánh giá kỹ xem nó có “đáng tiền” không. Liệu thay đổi này có đủ giá trị để xứng đáng tiêu một phần ngân sách độ mới lạ?</p>
+<p>Trên thực tế, tôi thấy điều này thường dẫn đến việc bạn khá bảo thủ với cú pháp nhưng mạo hiểm hơn với ngữ nghĩa. Dù việc “thay áo mới” rất vui, nhưng đổi dấu ngoặc nhọn sang một ký hiệu block khác hiếm khi mang lại nhiều sức mạnh thực sự cho ngôn ngữ, trong khi vẫn tiêu tốn ngân sách mới lạ. Khó để khác biệt về cú pháp “tự trả chi phí” cho mình.</p>
+<p>Ngược lại, những ngữ nghĩa mới có thể tăng đáng kể sức mạnh của ngôn ngữ. Multimethod, mixin, trait, reflection, dependent type, metaprogramming ở runtime… có thể nâng tầm đáng kể những gì người dùng làm được với ngôn ngữ.</p>
+<p>Tiếc là, cách tiếp cận bảo thủ này không vui bằng việc “thay đổi tất cả”. Nhưng bạn phải tự quyết định xem mình có muốn theo đuổi thành công đại chúng hay không. Không phải ai cũng cần trở thành một ban nhạc pop “thân thiện với radio”. Nếu bạn muốn ngôn ngữ của mình giống như free jazz hay drone metal và hài lòng với một lượng khán giả nhỏ hơn (nhưng có lẽ trung thành hơn), thì cứ làm thôi.</p>
+
+<footer>
+<a href="superclasses.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Superclasses&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

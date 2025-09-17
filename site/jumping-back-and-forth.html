@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Jumping Back and Forth &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Jumping Back and Forth<small>23</small></a></h3>
+
+<ul>
+    <li><a href="#câu-lệnh-if"><small>23.1</small> Câu lệnh If</a></li>
+    <li><a href="#toán-tử-logic"><small>23.2</small> Toán tử logic</a></li>
+    <li><a href="#câu-lệnh-while"><small>23.3</small> Câu lệnh While</a></li>
+    <li><a href="#câu-lệnh-for"><small>23.4</small> Câu lệnh For</a></li>
+    <li><a href="#thử-thách"><small>23.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-xem-xét-“goto”-l&amp;agrave;-có-hại"><small>23.6</small> Ghi chú thiết kế: Xem xét “Goto” l&amp;agrave; có hại</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="local-variables.html" title="Local Variables" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="calls-and-functions.html" title="Calls and Functions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="local-variables.html" title="Local Variables" class="prev">←</a>
+<a href="calls-and-functions.html" title="Calls and Functions" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Jumping Back and Forth<small>23</small></a></h3>
+
+<ul>
+    <li><a href="#câu-lệnh-if"><small>23.1</small> Câu lệnh If</a></li>
+    <li><a href="#toán-tử-logic"><small>23.2</small> Toán tử logic</a></li>
+    <li><a href="#câu-lệnh-while"><small>23.3</small> Câu lệnh While</a></li>
+    <li><a href="#câu-lệnh-for"><small>23.4</small> Câu lệnh For</a></li>
+    <li><a href="#thử-thách"><small>23.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-xem-xét-“goto”-l&amp;agrave;-có-hại"><small>23.6</small> Ghi chú thiết kế: Xem xét “Goto” l&amp;agrave; có hại</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="local-variables.html" title="Local Variables" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="calls-and-functions.html" title="Calls and Functions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">23</div>
+  <h1>Jumping Back and Forth</h1>
+
+<blockquote>
+<p>Thứ tự mà tâm trí ta tưởng tượng ra giống như một tấm lưới, hoặc một cái thang, được dựng lên để đạt được điều gì đó. Nhưng sau đó, bạn phải vứt cái thang đi, vì bạn nhận ra rằng, dù nó từng hữu ích, nó cũng chẳng có ý nghĩa gì.</p>
+<p><cite>Umberto Eco, <em>The Name of the Rose</em></cite></p>
+</blockquote>
+<p>Chúng ta đã mất kha khá thời gian để đi đến đây, nhưng cuối cùng cũng sẵn sàng thêm <strong>control flow</strong> vào virtual machine của mình. Trong tree-walk interpreter mà ta xây cho jlox, ta hiện thực control flow của Lox bằng chính control flow của Java. Để execute một câu lệnh <code>if</code> của Lox, ta dùng câu lệnh <code>if</code> của Java để chạy nhánh được chọn. Cách đó hoạt động, nhưng chưa thật sự thỏa mãn. Bằng “phép màu” nào mà <em>JVM</em> hay CPU gốc lại hiện thực được câu lệnh <code>if</code>? Giờ khi ta đã có bytecode VM của riêng mình để “mổ xẻ”, ta có thể trả lời câu hỏi đó.</p>
+<p>Khi nói về “control flow”, ta đang nói đến điều gì? “Flow” ở đây là cách luồng execute di chuyển qua văn bản chương trình. Gần như thể có một con robot tí hon bên trong máy tính, lang thang qua code của ta, execute từng mảnh ở chỗ này chỗ kia. Flow là con đường mà robot đó đi, và bằng cách <em>kiểm soát</em> robot, ta quyết định những phần code nào nó sẽ chạy.</p>
+<p>Trong jlox, “điểm tập trung” của robot — đoạn code <em>hiện tại</em> — được ngầm định dựa trên AST node nào đang được lưu trong các biến Java và ta đang ở giữa đoạn Java code nào. Trong clox, điều này tường minh hơn nhiều. Trường <code>ip</code> của VM lưu địa chỉ của bytecode instruction hiện tại. Giá trị của trường này chính xác là “ta đang ở đâu” trong chương trình.</p>
+<p>Việc execute bình thường diễn ra bằng cách tăng <code>ip</code>. Nhưng ta có thể thay đổi biến này theo bất kỳ cách nào mình muốn. Để hiện thực control flow, tất cả những gì cần làm là thay đổi <code>ip</code> theo những cách thú vị hơn. Cấu trúc control flow đơn giản nhất là câu lệnh <code>if</code> không có <code>else</code>:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">condition</span>) <span class="k">print</span>(<span class="s">&quot;condition was truthy&quot;</span>);
+</pre></div>
+<p>VM sẽ evaluate bytecode của biểu thức điều kiện. Nếu kết quả là truthy, nó tiếp tục và execute câu lệnh <code>print</code> trong thân. Trường hợp thú vị là khi điều kiện là falsey. Khi đó, quá trình execute sẽ bỏ qua nhánh then và tiếp tục sang câu lệnh tiếp theo.</p>
+<p>Để bỏ qua một đoạn code, ta chỉ cần đặt <code>ip</code> tới địa chỉ của bytecode instruction ngay sau đoạn code đó. Để <em>có điều kiện</em> bỏ qua một đoạn code, ta cần một instruction kiểm tra giá trị trên đỉnh stack. Nếu nó là falsey, instruction này sẽ cộng một offset nhất định vào <code>ip</code> để nhảy qua một loạt instruction. Ngược lại, nó không làm gì và để luồng execute tiếp tục sang instruction kế tiếp như bình thường.</p>
+<p>Khi compile sang bytecode, cấu trúc block lồng nhau tường minh của code sẽ biến mất, chỉ còn lại một chuỗi instruction phẳng. Lox là một ngôn ngữ <a href="https://en.wikipedia.org/wiki/Structured_programming">structured programming</a>, nhưng bytecode của clox thì không. Một tập hợp “đúng” — hoặc “sai”, tùy cách nhìn — các bytecode instruction có thể nhảy vào giữa một block, hoặc từ scope này sang scope khác.</p>
+<p>VM sẽ vui vẻ execute điều đó, ngay cả khi kết quả khiến stack rơi vào trạng thái không xác định hoặc không nhất quán. Vậy nên, dù bytecode là unstructured, ta sẽ đảm bảo compiler chỉ sinh ra code “sạch” duy trì cùng cấu trúc và mức lồng nhau như chính Lox.</p>
+<p>Đây chính xác là cách CPU thật hoạt động. Dù ta lập trình chúng bằng ngôn ngữ cấp cao buộc phải có control flow có cấu trúc, compiler sẽ hạ chúng xuống thành các lệnh nhảy thô. Ở tầng thấp nhất, hóa ra goto là control flow “thật” duy nhất.</p>
+<p>Dù sao thì, tôi không định triết lý quá nhiều. Điều quan trọng là: chỉ cần một conditional jump instruction, ta đã đủ để hiện thực câu lệnh <code>if</code> của Lox, miễn là nó không có <code>else</code>. Vậy hãy bắt đầu thôi.</p>
+<h2><a href="#câu-lệnh-if" id="câu-lệnh-if"><small>23&#8202;.&#8202;1</small>Câu lệnh If</a></h2>
+<p>Đến chương này thì bạn biết quy trình rồi. Bất kỳ tính năng mới nào cũng bắt đầu từ front end và đi qua toàn bộ pipeline. Một câu lệnh <code>if</code> là… một statement, nên ta sẽ gắn nó vào parser ở đó.</p>
+<div class="codehilite"><pre class="insert-before">  if (match(TOKEN_PRINT)) {
+    printStatement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">  } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_IF</span>)) {
+    <span class="i">ifStatement</span>();
+</pre><pre class="insert-after">  } else if (match(TOKEN_LEFT_BRACE)) {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>statement</em>()</div>
+
+<p>Khi gặp từ khóa <code>if</code>, ta chuyển việc compile sang hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expressionStatement</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">ifStatement</span>() {
+  <span class="i">consume</span>(<span class="a">TOKEN_LEFT_PAREN</span>, <span class="s">&quot;Expect &#39;(&#39; after &#39;if&#39;.&quot;</span>);
+  <span class="i">expression</span>();
+  <span class="i">consume</span>(<span class="a">TOKEN_RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after condition.&quot;</span>);<span name="paren"> </span>
+
+  <span class="t">int</span> <span class="i">thenJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP_IF_FALSE</span>);
+  <span class="i">statement</span>();
+
+  <span class="i">patchJump</span>(<span class="i">thenJump</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expressionStatement</em>()</div>
+
+<aside name="paren">
+<p>Bạn có bao giờ để ý rằng dấu <code>(</code> sau từ khóa <code>if</code> thực ra chẳng làm gì hữu ích không? Ngôn ngữ vẫn sẽ rõ ràng và dễ parse nếu bỏ nó đi, như:</p>
+<div class="codehilite"><pre><span class="k">if</span> <span class="i">condition</span>) <span class="k">print</span>(<span class="s">&quot;looks weird&quot;</span>);
+</pre></div>
+<p>Dấu <code>)</code> đóng thì hữu ích vì nó tách biểu thức điều kiện khỏi phần thân. Một số ngôn ngữ dùng từ khóa <code>then</code> thay thế. Nhưng dấu <code>(</code> mở thì chẳng làm gì cả. Nó chỉ ở đó vì dấu ngoặc không khớp trông… khó chịu với con người chúng ta.</p>
+</aside>
+<p>Đầu tiên, ta compile biểu thức điều kiện, được bao quanh bởi dấu ngoặc. Ở runtime, điều đó sẽ để lại giá trị điều kiện trên đỉnh stack. Ta sẽ dùng nó để quyết định có execute nhánh then hay bỏ qua.</p>
+<p>Tiếp theo, ta phát sinh một instruction mới <code>OP_JUMP_IF_FALSE</code>. Nó có một toán hạng cho biết cần offset <code>ip</code> bao nhiêu — tức bỏ qua bao nhiêu byte code. Nếu điều kiện là falsey, nó sẽ điều chỉnh <code>ip</code> theo giá trị đó. Đại khái như thế này:</p>
+<aside name="legend">
+<p>Các ô có viền rách ở đây biểu thị khối bytecode được generated khi compile một tiểu mục nào đó của cấu trúc control flow. Vậy “condition expression” là toàn bộ instruction được phát sinh khi compile biểu thức đó.</p>
+</aside>
+<p><span name="legend"></span></p><img src="image/jumping-back-and-forth/if-without-else.png" alt="Sơ đồ luồng bytecode được compile từ một câu lệnh if." />
+<p>Nhưng ta gặp một vấn đề. Khi đang ghi toán hạng của instruction <code>OP_JUMP_IF_FALSE</code>, làm sao ta biết phải nhảy bao xa? Ta chưa compile nhánh then, nên chưa biết nó chứa bao nhiêu bytecode.</p>
+<p>Để giải quyết, ta dùng một mẹo kinh điển gọi là <strong>backpatching</strong>. Ta phát sinh lệnh nhảy trước, với một toán hạng offset tạm thời. Ta ghi nhớ vị trí của instruction chưa hoàn thiện này. Tiếp đó, ta compile phần thân then. Khi xong, ta sẽ biết cần nhảy bao xa. Lúc đó, ta quay lại và thay thế offset tạm bằng giá trị thật, giờ đã có thể tính toán được. Giống như khâu một miếng vá vào tấm vải code đã compile sẵn vậy.</p><img src="image/jumping-back-and-forth/patch.png" alt="A patch containing a number being sewn onto a sheet of bytecode." />
+<p>Chúng ta sẽ mã hóa mẹo này thành hai hàm helper.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>emitBytes</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">emitJump</span>(<span class="t">uint8_t</span> <span class="i">instruction</span>) {
+  <span class="i">emitByte</span>(<span class="i">instruction</span>);
+  <span class="i">emitByte</span>(<span class="n">0xff</span>);
+  <span class="i">emitByte</span>(<span class="n">0xff</span>);
+  <span class="k">return</span> <span class="i">currentChunk</span>()-&gt;<span class="i">count</span> - <span class="n">2</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>emitBytes</em>()</div>
+
+<p>Hàm đầu tiên phát sinh một bytecode instruction và ghi một toán hạng tạm thời (placeholder) cho jump offset. Ta truyền opcode vào như một tham số vì sau này sẽ có hai instruction khác nhau dùng chung helper này. Ta dùng hai byte cho toán hạng jump offset. Một <span name="offset">offset</span> 16-bit cho phép ta nhảy qua tối đa 65.535 byte code, con số này là quá đủ cho nhu cầu của ta.</p>
+<aside name="offset">
+<p>Một số tập lệnh (instruction set) có các lệnh nhảy “dài” riêng biệt, nhận toán hạng lớn hơn khi cần nhảy xa hơn.</p>
+</aside>
+<p>Hàm này trả về vị trí (offset) của instruction vừa được phát sinh trong chunk. Sau khi compile xong nhánh then, ta lấy offset đó và truyền vào hàm sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>emitConstant</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">patchJump</span>(<span class="t">int</span> <span class="i">offset</span>) {
+  <span class="c">// -2 to adjust for the bytecode for the jump offset itself.</span>
+  <span class="t">int</span> <span class="i">jump</span> = <span class="i">currentChunk</span>()-&gt;<span class="i">count</span> - <span class="i">offset</span> - <span class="n">2</span>;
+
+  <span class="k">if</span> (<span class="i">jump</span> &gt; <span class="a">UINT16_MAX</span>) {
+    <span class="i">error</span>(<span class="s">&quot;Too much code to jump over.&quot;</span>);
+  }
+
+  <span class="i">currentChunk</span>()-&gt;<span class="i">code</span>[<span class="i">offset</span>] = (<span class="i">jump</span> &gt;&gt; <span class="n">8</span>) &amp; <span class="n">0xff</span>;
+  <span class="i">currentChunk</span>()-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">1</span>] = <span class="i">jump</span> &amp; <span class="n">0xff</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>emitConstant</em>()</div>
+
+<p>Hàm này quay lại bytecode và thay toán hạng tại vị trí đã cho bằng giá trị jump offset đã tính toán. Ta gọi <code>patchJump()</code> ngay trước khi phát sinh instruction tiếp theo mà ta muốn lệnh nhảy trỏ tới, nên nó sẽ dùng số lượng bytecode hiện tại để xác định cần nhảy bao xa. Trong trường hợp câu lệnh <code>if</code>, điều đó nghĩa là ngay sau khi compile xong nhánh then và trước khi compile câu lệnh tiếp theo.</p>
+<p>Vậy là xong phần compile time. Giờ hãy định nghĩa instruction mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_PRINT,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_JUMP_IF_FALSE</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Bên phía VM, ta hiện thực nó như sau:</p>
+<div class="codehilite"><pre class="insert-before">        break;
+      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_JUMP_IF_FALSE</span>: {
+        <span class="t">uint16_t</span> <span class="i">offset</span> = <span class="a">READ_SHORT</span>();
+        <span class="k">if</span> (<span class="i">isFalsey</span>(<span class="i">peek</span>(<span class="n">0</span>))) <span class="i">vm</span>.<span class="i">ip</span> += <span class="i">offset</span>;
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Đây là instruction đầu tiên ta thêm vào có toán hạng 16-bit. Để đọc nó từ chunk, ta dùng một macro mới.</p>
+<div class="codehilite"><pre class="insert-before">#define READ_CONSTANT() (vm.chunk-&gt;constants.values[READ_BYTE()])
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#define READ_SHORT() \</span>
+<span class="a">    (vm.ip += 2, (uint16_t)((vm.ip[-2] &lt;&lt; 8) | vm.ip[-1]))</span>
+</pre><pre class="insert-after">#define READ_STRING() AS_STRING(READ_CONSTANT())
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Macro này lấy hai byte tiếp theo từ chunk và ghép chúng thành một số nguyên không dấu 16-bit. Như thường lệ, ta undef macro này khi dùng xong.</p>
+<div class="codehilite"><pre class="insert-before">#undef READ_BYTE
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#undef READ_SHORT</span>
+</pre><pre class="insert-after">#undef READ_CONSTANT
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Sau khi đọc offset, ta kiểm tra giá trị điều kiện trên đỉnh stack. <span name="if">Nếu</span> nó là falsey, ta áp dụng jump offset này vào <code>ip</code>. Ngược lại, ta giữ nguyên <code>ip</code> và luồng execute sẽ tự động tiếp tục sang instruction kế tiếp sau lệnh nhảy.</p>
+<p>Trong trường hợp điều kiện là falsey, ta không cần làm gì thêm. Ta đã điều chỉnh <code>ip</code>, nên khi vòng lặp dispatch instruction bên ngoài quay lại, nó sẽ tiếp tục execute tại instruction mới, bỏ qua toàn bộ code trong nhánh then.</p>
+<aside name="if">
+<p>Tôi đã nói rằng ta sẽ không dùng câu lệnh <code>if</code> của C để hiện thực control flow của Lox, nhưng ở đây ta vẫn dùng một câu để quyết định có điều chỉnh instruction pointer hay không. Tuy nhiên, ta không thực sự dùng C cho <em>control flow</em>. Nếu muốn, ta có thể làm điều tương tự hoàn toàn bằng số học. Giả sử ta có hàm <code>falsey()</code> nhận một Lox Value và trả về 1 nếu nó là falsey hoặc 0 nếu không. Khi đó ta có thể hiện thực lệnh nhảy như sau:</p>
+<div class="codehilite"><pre><span class="k">case</span> <span class="a">OP_JUMP_IF_FALSE</span>: {
+  <span class="t">uint16_t</span> <span class="i">offset</span> = <span class="a">READ_SHORT</span>();
+  <span class="i">vm</span>.<span class="i">ip</span> += <span class="i">falsey</span>() * <span class="i">offset</span>;
+  <span class="k">break</span>;
+}
+</pre></div>
+<p>Hàm <code>falsey()</code> có thể sẽ dùng một chút control flow để xử lý các kiểu giá trị khác nhau, nhưng đó là chi tiết hiện thực của hàm đó và không ảnh hưởng đến cách VM của ta tự thực hiện control flow.</p>
+</aside>
+<p>Lưu ý rằng lệnh nhảy này không pop giá trị điều kiện khỏi stack. Vậy nên ta vẫn chưa hoàn toàn xong, vì điều này để lại một giá trị “lơ lửng” trên stack. Ta sẽ xử lý nó sớm thôi. Tạm bỏ qua điều đó, giờ ta đã có một câu lệnh <code>if</code> hoạt động trong Lox, chỉ với một instruction nhỏ hỗ trợ ở runtime trong VM.</p>
+<h3><a href="#mệnh-đề-else" id="mệnh-đề-else"><small>23&#8202;.&#8202;1&#8202;.&#8202;1</small>Mệnh đề Else</a></h3>
+<p>Một câu lệnh <code>if</code> mà không hỗ trợ mệnh đề <code>else</code> thì như Morticia Addams mà thiếu Gomez vậy. Thế nên, sau khi compile nhánh then, ta sẽ tìm từ khóa <code>else</code>. Nếu có, ta compile nhánh else.</p>
+<div class="codehilite"><pre class="insert-before">  patchJump(thenJump);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>ifStatement</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_ELSE</span>)) <span class="i">statement</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>ifStatement</em>()</div>
+
+<p>Khi điều kiện là falsey, ta sẽ nhảy qua nhánh then. Nếu có nhánh else, <code>ip</code> sẽ trỏ ngay vào đầu code của nó. Nhưng như vậy là chưa đủ. Đây là luồng dẫn đến vấn đề:</p><img src="image/jumping-back-and-forth/bad-else.png" alt="Sơ đồ bytecode được compile với nhánh then rẽ sai sang nhánh else." />
+<p>Nếu điều kiện là truthy, ta execute nhánh then như mong muốn. Nhưng sau đó, luồng execute lại chạy thẳng vào nhánh else. Ối! Khi điều kiện là true, sau khi chạy nhánh then, ta cần nhảy qua nhánh else. Như vậy, trong cả hai trường hợp, ta chỉ execute một nhánh duy nhất, như sau:</p><img src="image/jumping-back-and-forth/if-else.png" alt="Sơ đồ bytecode được compile cho một if có mệnh đề else." />
+<p>Để hiện thực điều đó, ta cần một lệnh nhảy khác từ cuối nhánh then.</p>
+<div class="codehilite"><pre class="insert-before">  statement();
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>ifStatement</em>()</div>
+<pre class="insert">  <span class="t">int</span> <span class="i">elseJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP</span>);
+
+</pre><pre class="insert-after">  patchJump(thenJump);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>ifStatement</em>()</div>
+
+<p>Ta patch offset này sau khi kết thúc phần thân nhánh else.</p>
+<div class="codehilite"><pre class="insert-before">  if (match(TOKEN_ELSE)) statement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>ifStatement</em>()</div>
+<pre class="insert">  <span class="i">patchJump</span>(<span class="i">elseJump</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>ifStatement</em>()</div>
+
+<p>Sau khi execute nhánh then, lệnh này sẽ nhảy tới câu lệnh tiếp theo sau nhánh else. Khác với lệnh nhảy trước, lệnh này là vô điều kiện. Ta luôn thực hiện nó, nên cần một instruction khác thể hiện điều đó.</p>
+<div class="codehilite"><pre class="insert-before">  OP_PRINT,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_JUMP</span>,
+</pre><pre class="insert-after">  OP_JUMP_IF_FALSE,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Ta interpret nó như sau:</p>
+<div class="codehilite"><pre class="insert-before">        break;
+      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_JUMP</span>: {
+        <span class="t">uint16_t</span> <span class="i">offset</span> = <span class="a">READ_SHORT</span>();
+        <span class="i">vm</span>.<span class="i">ip</span> += <span class="i">offset</span>;
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_JUMP_IF_FALSE: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Không có gì bất ngờ ở đây — điểm khác biệt duy nhất là nó không kiểm tra điều kiện và luôn áp dụng offset.</p>
+<p>Giờ ta đã có cả nhánh then và else hoạt động, vậy là gần xong. Phần cuối cùng là dọn dẹp giá trị điều kiện còn sót lại trên stack. Hãy nhớ, mỗi statement phải có stack effect bằng 0 — sau khi statement execute xong, chiều cao stack phải bằng lúc trước.</p>
+<p>Ta có thể để instruction <code>OP_JUMP_IF_FALSE</code> tự pop điều kiện, nhưng sắp tới ta sẽ dùng lại instruction này cho các toán tử logic, nơi ta không muốn pop điều kiện. Thay vào đó, ta sẽ để compiler phát sinh một vài instruction <code>OP_POP</code> rõ ràng khi compile câu lệnh <code>if</code>. Ta cần đảm bảo mọi đường đi qua code sinh ra đều pop điều kiện.</p>
+<p>Khi điều kiện là truthy, ta pop nó ngay trước code bên trong nhánh then.</p>
+<div class="codehilite"><pre class="insert-before">  int thenJump = emitJump(OP_JUMP_IF_FALSE);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>ifStatement</em>()</div>
+<pre class="insert">  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+</pre><pre class="insert-after">  statement();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>ifStatement</em>()</div>
+
+<p>Ngược lại, ta pop nó ở đầu nhánh else.</p>
+<div class="codehilite"><pre class="insert-before">  patchJump(thenJump);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>ifStatement</em>()</div>
+<pre class="insert">  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+</pre><pre class="insert-after">
+
+  if (match(TOKEN_ELSE)) statement();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>ifStatement</em>()</div>
+
+<p>Instruction nhỏ này cũng có nghĩa là mọi câu lệnh <code>if</code> đều có một nhánh else ngầm, ngay cả khi người dùng không viết mệnh đề <code>else</code>. Trong trường hợp họ bỏ qua, nhánh này chỉ đơn giản là loại bỏ giá trị điều kiện.</p>
+<p>Luồng execute đầy đủ và đúng sẽ trông như sau:</p><img src="image/jumping-back-and-forth/full-if-else.png" alt="Flowchart of the compiled bytecode including necessary pop instructions." />
+<p>Nếu bạn lần theo luồng execute, bạn sẽ thấy nó luôn chạy đúng một nhánh và đảm bảo giá trị điều kiện được pop trước. Việc còn lại chỉ là thêm một chút hỗ trợ cho disassembler.</p>
+<div class="codehilite"><pre class="insert-before">      return simpleInstruction(&quot;OP_PRINT&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_JUMP</span>:
+      <span class="k">return</span> <span class="i">jumpInstruction</span>(<span class="s">&quot;OP_JUMP&quot;</span>, <span class="n">1</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_JUMP_IF_FALSE</span>:
+      <span class="k">return</span> <span class="i">jumpInstruction</span>(<span class="s">&quot;OP_JUMP_IF_FALSE&quot;</span>, <span class="n">1</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Hai instruction này có định dạng mới với toán hạng 16-bit, nên ta thêm một hàm tiện ích mới để disassemble chúng.</p>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+add after <em>byteInstruction</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">jumpInstruction</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>, <span class="t">int</span> <span class="i">sign</span>,
+                           <span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">int</span> <span class="i">offset</span>) {
+  <span class="t">uint16_t</span> <span class="i">jump</span> = (<span class="t">uint16_t</span>)(<span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">1</span>] &lt;&lt; <span class="n">8</span>);
+  <span class="i">jump</span> |= <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">2</span>];
+  <span class="i">printf</span>(<span class="s">&quot;%-16s %4d -&gt; %d</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">name</span>, <span class="i">offset</span>,
+         <span class="i">offset</span> + <span class="n">3</span> + <span class="i">sign</span> * <span class="i">jump</span>);
+  <span class="k">return</span> <span class="i">offset</span> + <span class="n">3</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, add after <em>byteInstruction</em>()</div>
+
+<p>Vậy là xong, ta đã hoàn thiện một cấu trúc control flow. Nếu đây là một bộ phim thập niên 80, nhạc montage sẽ vang lên và phần còn lại của cú pháp control flow sẽ tự lo liệu. Tiếc là <span name="80s">thập niên 80</span> đã qua lâu rồi, nên ta sẽ phải tự mình cày tiếp.</p>
+<aside name="80s">
+<p>Bất chấp tình yêu lâu dài của tôi dành cho Depeche Mode.</p>
+</aside>
+<h2><a href="#toán-tử-logic" id="toán-tử-logic"><small>23&#8202;.&#8202;2</small>Toán tử logic</a></h2>
+<p>Chắc bạn còn nhớ từ jlox, các toán tử logic <code>and</code> và <code>or</code> không chỉ là một cặp toán tử nhị phân như <code>+</code> và <code>-</code>. Vì chúng <strong>short-circuit</strong> và có thể không evaluate toán hạng bên phải tùy vào giá trị của toán hạng bên trái, chúng hoạt động giống các biểu thức control flow hơn.</p>
+<p>Về cơ bản, chúng là một biến thể nhỏ của câu lệnh <code>if</code> với mệnh đề <code>else</code>. Cách dễ nhất để giải thích là cho bạn xem luôn code của compiler và luồng control flow mà nó tạo ra trong bytecode. Bắt đầu với <code>and</code>, ta gắn nó vào bảng parse expression ở đây:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_AND</span>]           = {<span class="a">NULL</span>,     <span class="i">and_</span>,   <span class="a">PREC_AND</span>},
+</pre><pre class="insert-after">  [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Từ đó, việc xử lý được chuyển sang một hàm parser mới.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>defineVariable</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">and_</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+  <span class="t">int</span> <span class="i">endJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP_IF_FALSE</span>);
+
+  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+  <span class="i">parsePrecedence</span>(<span class="a">PREC_AND</span>);
+
+  <span class="i">patchJump</span>(<span class="i">endJump</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>defineVariable</em>()</div>
+
+<p>Tại thời điểm hàm này được gọi, biểu thức phía bên trái đã được compile xong. Nghĩa là ở runtime, giá trị của nó sẽ nằm trên đỉnh stack. Nếu giá trị đó là falsey, ta biết toàn bộ <code>and</code> sẽ là false, nên ta bỏ qua toán hạng bên phải và giữ nguyên giá trị bên trái làm kết quả của cả biểu thức. Ngược lại, ta loại bỏ giá trị bên trái và evaluate toán hạng bên phải, giá trị này sẽ trở thành kết quả của toàn bộ biểu thức <code>and</code>.</p>
+<p>Bốn dòng code kia làm đúng như vậy. Luồng execute trông như sau:</p><img src="image/jumping-back-and-forth/and.png" alt="Sơ đồ bytecode được compile từ một biểu thức 'and'." />
+<p>Giờ bạn thấy vì sao <code>OP_JUMP_IF_FALSE</code> <span name="instr">giữ lại</span> giá trị trên đỉnh stack. Khi toán hạng bên trái của <code>and</code> là falsey, giá trị đó vẫn ở lại để trở thành kết quả của cả biểu thức.</p>
+<aside name="instr">
+<p>Chúng ta vẫn còn nhiều khoảng trống trong dải opcode, nên hoàn toàn có thể tạo các instruction riêng cho conditional jump mà tự động pop và loại không pop. Nhưng tôi đang cố giữ mọi thứ tối giản cho cuốn sách này. Trong bytecode VM của bạn, đáng để thử thêm các instruction chuyên biệt hơn và xem chúng ảnh hưởng thế nào đến hiệu năng.</p>
+</aside>
+<h3><a href="#toán-tử-logic-or" id="toán-tử-logic-or"><small>23&#8202;.&#8202;2&#8202;.&#8202;1</small>Toán tử logic or</a></h3>
+<p>Toán tử <code>or</code> phức tạp hơn một chút. Đầu tiên, ta thêm nó vào bảng parse.</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_OR</span>]            = {<span class="a">NULL</span>,     <span class="i">or_</span>,    <span class="a">PREC_OR</span>},
+</pre><pre class="insert-after">  [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Khi parser gặp token <code>or</code> ở dạng infix, nó sẽ gọi hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>number</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">or_</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+  <span class="t">int</span> <span class="i">elseJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP_IF_FALSE</span>);
+  <span class="t">int</span> <span class="i">endJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP</span>);
+
+  <span class="i">patchJump</span>(<span class="i">elseJump</span>);
+  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+
+  <span class="i">parsePrecedence</span>(<span class="a">PREC_OR</span>);
+  <span class="i">patchJump</span>(<span class="i">endJump</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>number</em>()</div>
+
+<p>Trong một biểu thức <code>or</code>, nếu toán hạng bên trái là <em>truthy</em>, ta sẽ bỏ qua toán hạng bên phải. Do đó, ta cần nhảy khi giá trị là truthy. Ta có thể thêm một instruction riêng, nhưng để minh họa rằng compiler có thể tự do ánh xạ ngữ nghĩa của ngôn ngữ sang bất kỳ chuỗi instruction nào nó muốn, tôi hiện thực nó bằng cách tận dụng các lệnh nhảy đã có.</p>
+<p>Khi toán hạng bên trái là falsey, nó sẽ thực hiện một cú nhảy nhỏ qua câu lệnh tiếp theo. Câu lệnh đó là một lệnh nhảy vô điều kiện qua phần code của toán hạng bên phải. “Điệu nhảy” nhỏ này thực chất tạo ra một cú nhảy khi giá trị là truthy. Luồng execute trông như sau:</p><img src="image/jumping-back-and-forth/or.png" alt="Sơ đồ bytecode được compile từ một biểu thức logic or." />
+<p>Thành thật mà nói, đây không phải cách tốt nhất để làm. Có nhiều instruction hơn để dispatch và nhiều overhead hơn. Không có lý do gì <code>or</code> lại chậm hơn <code>and</code>. Nhưng cũng khá thú vị khi thấy rằng ta có thể hiện thực cả hai toán tử mà không cần thêm instruction mới nào. Mong bạn bỏ qua sự “tự thưởng” này của tôi.</p>
+<p>OK, đó là ba cấu trúc <em>branching</em> trong Lox. Ý tôi là, đây là những tính năng control flow chỉ nhảy <em>tiến</em> qua code. Các ngôn ngữ khác thường có dạng rẽ nhánh nhiều hướng như <code>switch</code> và có thể là biểu thức điều kiện như <code>?:</code>, nhưng Lox thì giữ mọi thứ đơn giản.</p>
+<h2><a href="#câu-lệnh-while" id="câu-lệnh-while"><small>23&#8202;.&#8202;3</small>Câu lệnh While</a></h2>
+<p>Giờ ta đến với các câu lệnh <em>lặp</em> (looping), những câu lệnh nhảy <em>lùi</em> để code có thể được execute nhiều hơn một lần. Lox chỉ có hai cấu trúc vòng lặp: <code>while</code> và <code>for</code>. Vòng lặp <code>while</code> đơn giản hơn nhiều, nên ta sẽ bắt đầu với nó trước.</p>
+<div class="codehilite"><pre class="insert-before">    ifStatement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">  } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_WHILE</span>)) {
+    <span class="i">whileStatement</span>();
+</pre><pre class="insert-after">  } else if (match(TOKEN_LEFT_BRACE)) {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>statement</em>()</div>
+
+<p>Khi gặp token <code>while</code>, ta gọi:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>printStatement</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">whileStatement</span>() {
+  <span class="i">consume</span>(<span class="a">TOKEN_LEFT_PAREN</span>, <span class="s">&quot;Expect &#39;(&#39; after &#39;while&#39;.&quot;</span>);
+  <span class="i">expression</span>();
+  <span class="i">consume</span>(<span class="a">TOKEN_RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after condition.&quot;</span>);
+
+  <span class="t">int</span> <span class="i">exitJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP_IF_FALSE</span>);
+  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+  <span class="i">statement</span>();
+
+  <span class="i">patchJump</span>(<span class="i">exitJump</span>);
+  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>printStatement</em>()</div>
+
+<p>Phần lớn đoạn này giống với câu lệnh <code>if</code> — ta compile biểu thức điều kiện, được bao quanh bởi dấu ngoặc bắt buộc. Tiếp theo là một lệnh nhảy bỏ qua câu lệnh thân ngay sau đó nếu điều kiện là falsey.</p>
+<p>Ta patch lệnh nhảy sau khi compile xong phần thân và đảm bảo <span name="pop">pop</span> giá trị điều kiện khỏi stack ở cả hai nhánh. Điểm khác biệt duy nhất so với câu lệnh <code>if</code> là vòng lặp. Nó trông như thế này:</p>
+<aside name="pop">
+<p>Bắt đầu thấy hơi hối hận về quyết định dùng chung lệnh nhảy cho cả toán tử logic.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  statement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>whileStatement</em>()</div>
+<pre class="insert">  <span class="i">emitLoop</span>(<span class="i">loopStart</span>);
+</pre><pre class="insert-after">
+
+  patchJump(exitJump);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>whileStatement</em>()</div>
+
+<p>Sau phần thân, ta gọi hàm này để phát sinh một lệnh “loop”. Lệnh này cần biết phải nhảy lùi bao xa. Khi nhảy tiến, ta phải phát sinh lệnh theo hai giai đoạn vì chưa biết sẽ nhảy bao xa cho đến khi phát sinh xong lệnh nhảy. Giờ ta không gặp vấn đề đó nữa. Ta đã compile xong điểm trong code mà ta muốn nhảy về — ngay trước biểu thức điều kiện.</p>
+<p>Tất cả những gì cần làm là ghi lại vị trí đó khi compile.</p>
+<div class="codehilite"><pre class="insert-before">static void whileStatement() {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>whileStatement</em>()</div>
+<pre class="insert">  <span class="t">int</span> <span class="i">loopStart</span> = <span class="i">currentChunk</span>()-&gt;<span class="i">count</span>;
+</pre><pre class="insert-after">  consume(TOKEN_LEFT_PAREN, &quot;Expect '(' after 'while'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>whileStatement</em>()</div>
+
+<p>Sau khi execute phần thân của vòng lặp <code>while</code>, ta nhảy ngược lại ngay trước điều kiện. Như vậy, ta sẽ đánh giá lại biểu thức điều kiện ở mỗi vòng lặp. Ta lưu số lượng instruction hiện tại của chunk vào <code>loopStart</code> để ghi nhận offset trong bytecode ngay trước biểu thức điều kiện sắp compile. Sau đó, ta truyền nó vào hàm helper này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>emitBytes</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">emitLoop</span>(<span class="t">int</span> <span class="i">loopStart</span>) {
+  <span class="i">emitByte</span>(<span class="a">OP_LOOP</span>);
+
+  <span class="t">int</span> <span class="i">offset</span> = <span class="i">currentChunk</span>()-&gt;<span class="i">count</span> - <span class="i">loopStart</span> + <span class="n">2</span>;
+  <span class="k">if</span> (<span class="i">offset</span> &gt; <span class="a">UINT16_MAX</span>) <span class="i">error</span>(<span class="s">&quot;Loop body too large.&quot;</span>);
+
+  <span class="i">emitByte</span>((<span class="i">offset</span> &gt;&gt; <span class="n">8</span>) &amp; <span class="n">0xff</span>);
+  <span class="i">emitByte</span>(<span class="i">offset</span> &amp; <span class="n">0xff</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>emitBytes</em>()</div>
+
+<p>Hàm này giống như sự kết hợp giữa <code>emitJump()</code> và <code>patchJump()</code>. Nó phát sinh một lệnh loop mới, nhảy <em>lùi</em> vô điều kiện theo một offset cho trước. Giống như các lệnh nhảy, sau đó là một toán hạng 16-bit. Ta tính offset từ instruction hiện tại đến điểm <code>loopStart</code> mà ta muốn nhảy về. Phần <code>+ 2</code> là để tính cả kích thước của chính toán hạng của lệnh <code>OP_LOOP</code> mà ta cũng cần nhảy qua.</p>
+<p>Từ góc nhìn của VM, thực ra không có khác biệt ngữ nghĩa nào giữa <code>OP_LOOP</code> và <code>OP_JUMP</code>. Cả hai đều chỉ cộng một offset vào <code>ip</code>. Ta hoàn toàn có thể dùng một instruction duy nhất cho cả hai và cho nó một toán hạng offset có dấu. Nhưng tôi nghĩ sẽ dễ hơn nếu tránh việc thao tác bit phức tạp để tự đóng gói một số nguyên 16-bit có dấu vào hai byte, và vì ta còn dư opcode, nên tại sao không dùng luôn?</p>
+<p>Lệnh mới được định nghĩa ở đây:</p>
+<div class="codehilite"><pre class="insert-before">  OP_JUMP_IF_FALSE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_LOOP</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Và trong VM, ta hiện thực nó như sau:</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_LOOP</span>: {
+        <span class="t">uint16_t</span> <span class="i">offset</span> = <span class="a">READ_SHORT</span>();
+        <span class="i">vm</span>.<span class="i">ip</span> -= <span class="i">offset</span>;
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Điểm khác biệt duy nhất so với <code>OP_JUMP</code> là phép trừ thay vì phép cộng. Phần disassembly cũng tương tự.</p>
+<div class="codehilite"><pre class="insert-before">      return jumpInstruction(&quot;OP_JUMP_IF_FALSE&quot;, 1, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_LOOP</span>:
+      <span class="k">return</span> <span class="i">jumpInstruction</span>(<span class="s">&quot;OP_LOOP&quot;</span>, -<span class="n">1</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Vậy là ta đã có câu lệnh <code>while</code>. Nó gồm hai lệnh nhảy — một lệnh nhảy tiến có điều kiện để thoát vòng lặp khi điều kiện không thỏa mãn, và một lệnh nhảy lùi vô điều kiện sau khi execute phần thân. Luồng execute trông như sau:</p><img src="image/jumping-back-and-forth/while.png" alt="Sơ đồ bytecode được compile từ một câu lệnh while." />
+<h2><a href="#câu-lệnh-for" id="câu-lệnh-for"><small>23&#8202;.&#8202;4</small>Câu lệnh For</a></h2>
+<p>Câu lệnh lặp còn lại trong Lox là vòng lặp <code>for</code> quen thuộc, được kế thừa từ C. So với vòng lặp <code>while</code>, nó phức tạp hơn nhiều. Nó có ba mệnh đề, tất cả đều là tùy chọn:</p>
+<p><span name="detail"></span></p>
+<ul>
+<li>Phần khởi tạo (initializer) có thể là khai báo biến hoặc một biểu thức. Nó chạy một lần ở đầu câu lệnh.</li>
+<li>Mệnh đề điều kiện là một biểu thức. Giống như trong vòng lặp <code>while</code>, ta thoát vòng lặp khi nó evaluate ra giá trị falsey.</li>
+<li>Biểu thức tăng (increment) chạy một lần ở cuối mỗi vòng lặp.</li>
+</ul>
+<aside name="detail">
+<p>Nếu bạn muốn ôn lại, chương tương ứng trong Phần II sẽ đi sâu hơn về ngữ nghĩa <a href="control-flow.html#for-loops">tại đây</a>.</p>
+</aside>
+<p>Trong jlox, parser sẽ “desugar” vòng lặp <code>for</code> thành một AST tổng hợp cho vòng lặp <code>while</code> với một số phần bổ sung ở trước và cuối thân vòng lặp. Ở đây, ta sẽ làm điều tương tự, nhưng sẽ không đi qua bước tạo AST. Thay vào đó, bytecode compiler sẽ tận dụng các lệnh nhảy (jump) và vòng lặp (loop) mà ta đã có sẵn.</p>
+<p>Ta sẽ triển khai từng phần một, bắt đầu với từ khóa <code>for</code>.</p>
+<div class="codehilite"><pre class="insert-before">    printStatement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">  } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_FOR</span>)) {
+    <span class="i">forStatement</span>();
+</pre><pre class="insert-after">  } else if (match(TOKEN_IF)) {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>statement</em>()</div>
+
+<p>Hàm này gọi một helper function. Nếu ta chỉ hỗ trợ vòng lặp <code>for</code> với các mệnh đề rỗng như <code>for (;;)</code>, thì có thể hiện thực nó như sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expressionStatement</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">forStatement</span>() {
+  <span class="i">consume</span>(<span class="a">TOKEN_LEFT_PAREN</span>, <span class="s">&quot;Expect &#39;(&#39; after &#39;for&#39;.&quot;</span>);
+  <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39;.&quot;</span>);
+
+  <span class="t">int</span> <span class="i">loopStart</span> = <span class="i">currentChunk</span>()-&gt;<span class="i">count</span>;
+  <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39;.&quot;</span>);
+  <span class="i">consume</span>(<span class="a">TOKEN_RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after for clauses.&quot;</span>);
+
+  <span class="i">statement</span>();
+  <span class="i">emitLoop</span>(<span class="i">loopStart</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expressionStatement</em>()</div>
+
+<p>Phần đầu sẽ có một loạt dấu câu bắt buộc. Sau đó ta compile phần thân. Giống như với vòng lặp <code>while</code>, ta ghi lại bytecode offset ở đầu thân vòng lặp và phát sinh một lệnh loop để nhảy về điểm đó sau khi chạy xong. Giờ ta đã có một bản hiện thực hoạt động của vòng lặp <span name="infinite">vô hạn</span>.</p>
+<aside name="infinite">
+<p>Tiếc là, nếu không có câu lệnh <code>return</code>, sẽ không có cách nào kết thúc nó ngoài việc gặp lỗi runtime.</p>
+</aside>
+<h3><a href="#mệnh-đề-khởi-tạo-initializer-clause" id="mệnh-đề-khởi-tạo-initializer-clause"><small>23&#8202;.&#8202;4&#8202;.&#8202;1</small>Mệnh đề khởi tạo (Initializer clause)</a></h3>
+<p>Giờ ta sẽ thêm mệnh đề đầu tiên — initializer. Nó chỉ chạy một lần, trước phần thân, nên compile khá đơn giản.</p>
+<div class="codehilite"><pre class="insert-before">  consume(TOKEN_LEFT_PAREN, &quot;Expect '(' after 'for'.&quot;);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_SEMICOLON</span>)) {
+    <span class="c">// No initializer.</span>
+  } <span class="k">else</span> <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_VAR</span>)) {
+    <span class="i">varDeclaration</span>();
+  } <span class="k">else</span> {
+    <span class="i">expressionStatement</span>();
+  }
+</pre><pre class="insert-after">
+
+  int loopStart = currentChunk()-&gt;count;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>(), replace 1 line</div>
+
+<p>Cú pháp hơi phức tạp vì ta cho phép hoặc là khai báo biến, hoặc là một biểu thức. Ta dựa vào sự xuất hiện của từ khóa <code>var</code> để phân biệt. Với trường hợp biểu thức, ta gọi <code>expressionStatement()</code> thay vì <code>expression()</code>. Hàm này sẽ tìm dấu chấm phẩy (semicolon) — thứ ta cũng cần ở đây — và đồng thời phát sinh một lệnh <code>OP_POP</code> để loại bỏ giá trị. Ta không muốn initializer để lại bất cứ thứ gì trên stack.</p>
+<p>Nếu một câu lệnh <code>for</code> khai báo biến, biến đó phải được giới hạn phạm vi trong thân vòng lặp. Ta đảm bảo điều này bằng cách bao toàn bộ câu lệnh trong một scope.</p>
+<div class="codehilite"><pre class="insert-before">static void forStatement() {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()</div>
+<pre class="insert">  <span class="i">beginScope</span>();
+</pre><pre class="insert-after">  consume(TOKEN_LEFT_PAREN, &quot;Expect '(' after 'for'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>()</div>
+
+<p>Rồi đóng scope đó ở cuối.</p>
+<div class="codehilite"><pre class="insert-before">  emitLoop(loopStart);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()</div>
+<pre class="insert">  <span class="i">endScope</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>()</div>
+
+<h3><a href="#mệnh-đề-điều-kiện-condition-clause" id="mệnh-đề-điều-kiện-condition-clause"><small>23&#8202;.&#8202;4&#8202;.&#8202;2</small>Mệnh đề điều kiện (Condition clause)</a></h3>
+<p>Tiếp theo là biểu thức điều kiện, dùng để thoát vòng lặp.</p>
+<div class="codehilite"><pre class="insert-before">  int loopStart = currentChunk()-&gt;count;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">int</span> <span class="i">exitJump</span> = -<span class="n">1</span>;
+  <span class="k">if</span> (!<span class="i">match</span>(<span class="a">TOKEN_SEMICOLON</span>)) {
+    <span class="i">expression</span>();
+    <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after loop condition.&quot;</span>);
+
+    <span class="c">// Jump out of the loop if the condition is false.</span>
+    <span class="i">exitJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP_IF_FALSE</span>);
+    <span class="i">emitByte</span>(<span class="a">OP_POP</span>); <span class="c">// Condition.</span>
+  }
+
+</pre><pre class="insert-after">  consume(TOKEN_RIGHT_PAREN, &quot;Expect ')' after for clauses.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>(), replace 1 line</div>
+
+<p>Vì mệnh đề này là tùy chọn, ta cần kiểm tra xem nó có thực sự tồn tại không. Nếu bị bỏ qua, token tiếp theo chắc chắn phải là dấu chấm phẩy, nên ta dựa vào đó để nhận biết. Nếu không có dấu chấm phẩy, tức là có biểu thức điều kiện.</p>
+<p>Trong trường hợp đó, ta compile nó. Sau đó, giống như với <code>while</code>, ta phát sinh một lệnh nhảy có điều kiện để thoát vòng lặp nếu điều kiện là falsey. Vì lệnh nhảy này giữ lại giá trị trên stack, ta pop nó trước khi execute phần thân. Điều này đảm bảo ta loại bỏ giá trị khi điều kiện là true.</p>
+<p>Sau phần thân vòng lặp, ta cần patch lệnh nhảy đó.</p>
+<div class="codehilite"><pre class="insert-before">  emitLoop(loopStart);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">exitJump</span> != -<span class="n">1</span>) {
+    <span class="i">patchJump</span>(<span class="i">exitJump</span>);
+    <span class="i">emitByte</span>(<span class="a">OP_POP</span>); <span class="c">// Condition.</span>
+  }
+
+</pre><pre class="insert-after">  endScope();
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>()</div>
+
+<p>Ta chỉ làm điều này khi có mệnh đề điều kiện. Nếu không có, sẽ không có lệnh nhảy nào để patch và cũng không có giá trị điều kiện nào trên stack để pop.</p>
+<h3><a href="#mệnh-đề-tăng-increment-clause" id="mệnh-đề-tăng-increment-clause"><small>23&#8202;.&#8202;4&#8202;.&#8202;3</small>Mệnh đề tăng (Increment clause)</a></h3>
+<p>Tôi để phần thú vị nhất lại cuối cùng — mệnh đề increment. Nó khá rắc rối. Trong code, nó xuất hiện trước phần thân, nhưng lại execute <em>sau</em> phần thân. Nếu ta parse thành AST và sinh code trong một pass riêng, ta có thể đơn giản duyệt vào và compile field body của AST <code>for</code> trước khi compile mệnh đề increment.</p>
+<p>Tiếc là, ta không thể compile mệnh đề increment sau, vì compiler của ta chỉ duyệt code một lần. Thay vào đó, ta sẽ <em>nhảy qua</em> phần increment, chạy phần thân, nhảy <em>ngược lại</em> lên increment, chạy nó, rồi mới sang vòng lặp tiếp theo.</p>
+<p>Nghe hơi kỳ, nhưng này, vẫn còn hơn là phải tự quản lý AST trong bộ nhớ bằng C, đúng không? Đây là code:</p>
+<div class="codehilite"><pre class="insert-before">  }
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>forStatement</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">if</span> (!<span class="i">match</span>(<span class="a">TOKEN_RIGHT_PAREN</span>)) {
+    <span class="t">int</span> <span class="i">bodyJump</span> = <span class="i">emitJump</span>(<span class="a">OP_JUMP</span>);
+    <span class="t">int</span> <span class="i">incrementStart</span> = <span class="i">currentChunk</span>()-&gt;<span class="i">count</span>;
+    <span class="i">expression</span>();
+    <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+    <span class="i">consume</span>(<span class="a">TOKEN_RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after for clauses.&quot;</span>);
+
+    <span class="i">emitLoop</span>(<span class="i">loopStart</span>);
+    <span class="i">loopStart</span> = <span class="i">incrementStart</span>;
+    <span class="i">patchJump</span>(<span class="i">bodyJump</span>);
+  }
+</pre><pre class="insert-after">
+
+  statement();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>forStatement</em>(), replace 1 line</div>
+
+<p>Một lần nữa, đây là mệnh đề tùy chọn. Vì đây là mệnh đề cuối, nếu bị bỏ qua, token tiếp theo sẽ là dấu ngoặc đóng. Khi có increment, ta cần compile nó ngay bây giờ, nhưng chưa được execute. Vậy nên, trước tiên, ta phát sinh một lệnh nhảy vô điều kiện để bỏ qua code của mệnh đề increment và tới phần thân vòng lặp.</p>
+<p>Tiếp theo, ta compile chính biểu thức increment. Thường thì đây là một phép gán. Dù là gì, ta chỉ chạy nó vì tác dụng phụ, nên cũng phát sinh một lệnh pop để loại bỏ giá trị của nó.</p>
+<p>Phần cuối hơi tinh vi một chút. Đầu tiên, ta phát sinh một lệnh loop. Đây là vòng lặp chính đưa ta trở lại đầu vòng <code>for</code> — ngay trước biểu thức điều kiện nếu có. Lệnh loop này xảy ra ngay sau increment, vì increment chạy ở cuối mỗi vòng lặp.</p>
+<p>Sau đó, ta thay đổi <code>loopStart</code> để trỏ tới offset nơi bắt đầu biểu thức increment. Sau này, khi ta phát sinh lệnh loop sau câu lệnh thân, nó sẽ nhảy lên <em>biểu thức increment</em> thay vì nhảy về đầu vòng lặp như khi không có increment. Đây là cách ta “đan” increment vào để nó chạy sau phần thân.</p>
+<p>Nghe có vẻ rối, nhưng mọi thứ đều ổn. Một vòng lặp đầy đủ với tất cả các mệnh đề sẽ compile thành luồng execute như sau:</p><img src="image/jumping-back-and-forth/for.png" alt="Flowchart of the compiled bytecode of a for statement." />
+<p>Giống như khi hiện thực vòng lặp <code>for</code> trong jlox, ta không cần đụng gì đến runtime. Tất cả đều được compile xuống các thao tác control flow nguyên thủy mà VM đã hỗ trợ sẵn. Trong chương này, ta đã tiến một bước <span name="leap">nhảy vọt</span> lớn — clox giờ đã Turing complete. Ta cũng đã bao quát khá nhiều cú pháp mới: ba câu lệnh và hai dạng biểu thức. Vậy mà chỉ cần thêm ba instruction đơn giản. Tỉ lệ công sức/hiệu quả này là khá ấn tượng đối với kiến trúc của VM.</p>
+<aside name="leap">
+<p>Tôi không thể cưỡng lại trò chơi chữ này. Và tôi không hối hận.</p>
+</aside>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>23&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Ngoài câu lệnh <code>if</code>, hầu hết các ngôn ngữ họ C đều có câu lệnh <code>switch</code> rẽ nhánh nhiều hướng. Hãy thêm nó vào clox. Grammar như sau:</p>
+<div class="codehilite"><pre><span class="i">switchStmt</span>     → <span class="s">&quot;switch&quot;</span> <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span>
+                 <span class="s">&quot;{&quot;</span> <span class="i">switchCase</span>* <span class="i">defaultCase</span>? <span class="s">&quot;}&quot;</span> ;
+<span class="i">switchCase</span>     → <span class="s">&quot;case&quot;</span> <span class="i">expression</span> <span class="s">&quot;:&quot;</span> <span class="i">statement</span>* ;
+<span class="i">defaultCase</span>    → <span class="s">&quot;default&quot;</span> <span class="s">&quot;:&quot;</span> <span class="i">statement</span>* ;
+</pre></div>
+<p>Để execute một câu lệnh <code>switch</code>, trước tiên evaluate biểu thức giá trị trong ngoặc. Sau đó duyệt qua các case. Với mỗi case, evaluate biểu thức giá trị của nó. Nếu giá trị case bằng với giá trị switch, execute các câu lệnh trong case đó rồi thoát khỏi <code>switch</code>. Nếu không, thử case tiếp theo. Nếu không case nào khớp và có mệnh đề <code>default</code>, execute các câu lệnh của nó.</p>
+<p>Để đơn giản, ta bỏ qua fallthrough và câu lệnh <code>break</code>. Mỗi case sẽ tự động nhảy đến cuối câu lệnh switch sau khi chạy xong.</p>
+</li>
+<li>
+<p>Trong jlox, ta từng có thử thách thêm hỗ trợ cho câu lệnh <code>break</code>. Lần này, hãy làm <code>continue</code>:</p>
+<div class="codehilite"><pre><span class="i">continueStmt</span>   → <span class="s">&quot;continue&quot;</span> <span class="s">&quot;;&quot;</span> ;
+</pre></div>
+<p>Một câu lệnh <code>continue</code> sẽ nhảy thẳng lên đầu vòng lặp bao ngoài gần nhất, bỏ qua phần còn lại của thân vòng lặp. Trong vòng <code>for</code>, <code>continue</code> sẽ nhảy đến mệnh đề increment, nếu có. Đây là lỗi compile-time nếu <code>continue</code> không nằm trong một vòng lặp.</p>
+<p>Hãy nghĩ về scope. Điều gì sẽ xảy ra với các biến cục bộ được khai báo bên trong thân vòng lặp hoặc trong các block lồng bên trong khi <code>continue</code> được execute?</p>
+</li>
+<li>
+<p>Các cấu trúc control flow hầu như không thay đổi kể từ Algol 68. Sự tiến hóa ngôn ngữ từ đó đến nay tập trung vào việc làm code mang tính khai báo và cấp cao hơn, nên control flow kiểu mệnh lệnh ít được chú ý.</p>
+<p>Cho vui, hãy thử nghĩ ra một tính năng control flow mới hữu ích cho Lox. Nó có thể là một biến thể của dạng hiện có hoặc hoàn toàn mới. Trên thực tế, rất khó để nghĩ ra thứ gì đủ hữu ích ở mức biểu đạt thấp này để bù lại chi phí bắt người dùng học một cú pháp và hành vi lạ, nhưng đây là cơ hội tốt để luyện kỹ năng thiết kế.</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-xem-xét-“goto”-l&agrave;-có-hại" id="ghi-chú-thiết-kế-xem-xét-“goto”-l&agrave;-có-hại"><small>23&#8202;.&#8202;6</small>Ghi chú thiết kế: Xem xét “Goto” l&agrave; có hại</a></h2>
+<p>Nhận ra rằng toàn bộ control flow có cấu trúc đẹp đẽ của Lox thực chất được compile thành các lệnh nhảy thô không cấu trúc cũng giống như khoảnh khắc trong Scooby Doo khi con quái vật giật mặt nạ ra. Thì ra từ đầu đến cuối vẫn là goto! Chỉ khác là trong trường hợp này, “quái vật” lại <em>nằm dưới</em> lớp mặt nạ. Ai cũng biết goto là “ác quỷ”. Nhưng… tại sao?</p>
+<p>Đúng là bạn có thể viết ra những đoạn code cực kỳ khó bảo trì bằng goto. Nhưng tôi nghĩ phần lớn lập trình viên ngày nay chưa từng thấy điều đó tận mắt. Đã lâu lắm rồi kiểu lập trình đó mới phổ biến. Giờ đây, nó giống như một “ông kẹ” mà ta nhắc đến trong những câu chuyện ma quanh đống lửa trại.</p>
+<p>Lý do ta hiếm khi phải đối mặt với “con quái vật” này là vì Edsger Dijkstra đã “hạ gục” nó bằng bức thư nổi tiếng “Go To Statement Considered Harmful”, đăng trên <em>Communications of the ACM</em> (tháng 3, 1968). Cuộc tranh luận về structured programming khi đó rất gay gắt với người ủng hộ ở cả hai phía, nhưng tôi nghĩ Dijkstra xứng đáng được ghi công nhiều nhất vì đã chấm dứt nó. Hầu hết các ngôn ngữ mới ngày nay đều không có lệnh nhảy không cấu trúc.</p>
+<p>Một bức thư dài trang rưỡi mà gần như một mình loại bỏ một tính năng ngôn ngữ hẳn phải là thứ rất ấn tượng. Nếu bạn chưa đọc, tôi khuyến khích bạn nên đọc. Đây là một tác phẩm kinh điển trong kho tàng tri thức khoa học máy tính, một “bài ca tổ tiên” của cộng đồng chúng ta. Ngoài ra, nó cũng là một đoạn ngắn gọn, thích hợp để luyện đọc các bài viết học thuật về khoa học máy tính <span name="style">— một kỹ năng đáng để rèn luyện</span>.</p>
+<aside name="style">
+<p>Tức là, nếu bạn có thể bỏ qua phong cách viết “tự khiêm tốn giả tạo” nhưng đầy tự tôn của Dijkstra:</p>
+<blockquote>
+<p>Gần đây tôi phát hiện ra tại sao việc dùng câu lệnh go to lại gây ra những tác hại nghiêm trọng như vậy. …Lúc đó tôi không coi phát hiện này là quá quan trọng; giờ tôi gửi những suy nghĩ của mình để xuất bản vì trong các cuộc thảo luận rất gần đây khi chủ đề này được nhắc đến, tôi đã được thúc giục làm vậy.</p>
+</blockquote>
+<p>Ồ, lại thêm một trong vô số phát hiện của tôi. Tôi thậm chí còn chẳng buồn viết ra cho đến khi đám đông nài nỉ.</p>
+</aside>
+<p>Tôi đã đọc nó nhiều lần, cùng với một số bài phê bình, phản hồi và bình luận. Cuối cùng, cảm xúc của tôi khá lẫn lộn. Ở mức khái quát cao, tôi đồng ý với ông ấy. Lập luận chung của ông ấy đại loại như sau:</p>
+<ol>
+<li>
+<p>Là lập trình viên, ta viết chương trình — văn bản tĩnh — nhưng điều ta quan tâm là chương trình đang chạy — hành vi động của nó.</p>
+</li>
+<li>
+<p>Ta giỏi suy luận về những thứ tĩnh hơn là những thứ động. (Ông ấy không đưa ra bằng chứng cho nhận định này, nhưng tôi chấp nhận.)</p>
+</li>
+<li>
+<p>Do đó, càng làm cho quá trình execute động của chương trình phản ánh cấu trúc văn bản của nó, càng tốt.</p>
+</li>
+</ol>
+<p>Đây là một khởi đầu tốt. Việc hướng sự chú ý của chúng ta đến khoảng cách giữa code ta viết và code khi chạy trong máy là một góc nhìn thú vị. Sau đó, ông ấy cố gắng định nghĩa một “sự tương ứng” giữa văn bản chương trình và quá trình execute. Với một người đã dành cả sự nghiệp để kêu gọi sự chặt chẽ hơn trong lập trình, định nghĩa này lại khá mơ hồ. Ông ấy nói:</p>
+<blockquote>
+<p>Giờ hãy xem ta có thể đặc trưng hóa tiến trình của một quá trình như thế nào. (Bạn có thể nghĩ về câu hỏi này một cách rất cụ thể: giả sử một quá trình, được coi là một chuỗi hành động theo thời gian, bị dừng lại sau một hành động bất kỳ, ta cần cố định những dữ liệu nào để có thể thực hiện lại quá trình đó cho đến đúng điểm đó?) </p>
+</blockquote>
+<p>Hãy hình dung thế này: bạn có hai máy tính chạy cùng một chương trình với cùng một input — hoàn toàn xác định (deterministic). Bạn tạm dừng một trong hai máy tại một điểm bất kỳ trong quá trình execute. Bạn sẽ cần gửi dữ liệu gì sang máy còn lại để có thể dừng nó đúng chính xác tại cùng điểm tiến trình như máy đầu tiên?</p>
+<p>Nếu chương trình của bạn chỉ cho phép các câu lệnh đơn giản như gán (assignment), thì rất dễ. Bạn chỉ cần biết vị trí ngay sau câu lệnh cuối cùng đã execute. Về cơ bản, đó là một breakpoint, giống như <code>ip</code> trong VM của ta, hoặc số dòng trong thông báo lỗi. Thêm control flow rẽ nhánh như <code>if</code> và <code>switch</code> cũng không làm thay đổi điều này. Ngay cả khi điểm đánh dấu nằm bên trong một nhánh, ta vẫn biết mình đang ở đâu.</p>
+<p>Khi bạn thêm lời gọi hàm (function call), bạn cần thêm thông tin. Bạn có thể đã tạm dừng máy đầu tiên ở giữa một hàm, nhưng hàm đó có thể được gọi từ nhiều nơi khác nhau. Để tạm dừng máy thứ hai đúng tại cùng điểm trong <em>toàn bộ quá trình execute</em> của chương trình, bạn cần dừng nó ở <em>đúng</em> lần gọi hàm đó.</p>
+<p>Vì vậy, bạn cần biết không chỉ câu lệnh hiện tại, mà với các lời gọi hàm chưa trả về, bạn cần biết vị trí của các callsite. Nói cách khác, là một call stack — dù tôi không nghĩ thuật ngữ này đã tồn tại khi Dijkstra viết bài đó. Nghe cũng “ngầu” đấy.</p>
+<p>Ông ấy lưu ý rằng vòng lặp khiến mọi thứ khó hơn. Nếu bạn tạm dừng giữa thân vòng lặp, bạn sẽ không biết đã chạy bao nhiêu vòng lặp. Vì vậy, ông nói bạn cũng cần lưu số vòng lặp đã chạy. Và vì vòng lặp có thể lồng nhau, bạn cần một stack các bộ đếm này (có thể xen kẽ với con trỏ call stack vì bạn có thể đang ở trong vòng lặp của các lời gọi bên ngoài).</p>
+<p>Đây là lúc mọi thứ trở nên kỳ lạ. Bạn sẽ nghĩ rằng ông ấy sắp giải thích cách goto phá vỡ tất cả điều này. Nhưng thay vào đó, ông chỉ nói:</p>
+<blockquote>
+<p>Việc sử dụng câu lệnh go to một cách vô tội vạ dẫn đến hậu quả ngay lập tức là trở nên cực kỳ khó để tìm ra một tập hợp tọa độ có ý nghĩa nhằm mô tả tiến trình của quá trình.</p>
+</blockquote>
+<p>Ông ấy không chứng minh điều này là khó, cũng không giải thích tại sao. Ông chỉ nói vậy. Ông có nói rằng một cách tiếp cận là không thỏa đáng:</p>
+<blockquote>
+<p>Với câu lệnh go to, tất nhiên vẫn có thể mô tả tiến trình một cách duy nhất bằng một bộ đếm đếm số hành động đã thực hiện kể từ khi chương trình bắt đầu (tức là một dạng đồng hồ chuẩn hóa). Khó khăn là ở chỗ, mặc dù tọa độ này là duy nhất, nó hoàn toàn vô dụng.</p>
+</blockquote>
+<p>Nhưng… đó thực chất chính là những gì bộ đếm vòng lặp làm, và ông ấy lại chấp nhận chúng. Không phải mọi vòng lặp đều là kiểu “cho mỗi số nguyên từ 0 đến 10” tăng dần. Nhiều vòng là <code>while</code> với điều kiện phức tạp.</p>
+<p>Lấy ví dụ gần gũi, hãy xem vòng lặp execute bytecode cốt lõi ở trung tâm của clox. Dijkstra lập luận rằng vòng lặp đó có thể xử lý được vì ta chỉ cần đếm số lần vòng lặp chạy để suy luận về tiến trình của nó. Nhưng vòng lặp đó chạy một lần cho mỗi instruction được execute trong chương trình Lox đã compile của người dùng. Liệu việc biết rằng nó đã execute 6.201 bytecode instruction có thực sự cho ta — những người bảo trì VM — <em>bất kỳ</em> thông tin hữu ích nào về trạng thái của interpreter không?</p>
+<p>Thực tế, ví dụ này chỉ ra một sự thật sâu hơn. Böhm và Jacopini <a href="https://en.wikipedia.org/wiki/Structured_program_theorem">đã chứng minh</a> rằng <em>bất kỳ</em> control flow nào dùng goto đều có thể được chuyển đổi thành dạng chỉ dùng tuần tự, vòng lặp và rẽ nhánh. Vòng lặp interpreter bytecode của ta là một minh chứng sống cho điều đó: nó hiện thực control flow không cấu trúc của tập lệnh bytecode clox mà không dùng bất kỳ goto nào.</p>
+<p>Điều này dường như đưa ra một phản biện với lập luận của Dijkstra: bạn <em>có thể</em> định nghĩa một sự tương ứng cho chương trình dùng goto bằng cách chuyển nó thành chương trình không dùng goto, rồi dùng sự tương ứng từ chương trình đó — điều mà theo ông — là chấp nhận được vì nó chỉ dùng rẽ nhánh và vòng lặp.</p>
+<p>Nhưng, thành thật mà nói, lập luận của tôi ở đây cũng yếu. Tôi nghĩ cả hai chúng tôi đều đang làm “toán giả” và dùng “logic giả” để bàn về một vấn đề lẽ ra nên là một lập luận thực nghiệm, tập trung vào con người. Dijkstra đúng ở chỗ một số code dùng goto thực sự rất tệ. Phần lớn trong số đó có thể và nên được viết lại rõ ràng hơn bằng control flow có cấu trúc.</p>
+<p>Bằng cách loại bỏ hoàn toàn goto khỏi ngôn ngữ, bạn chắc chắn sẽ tránh được việc viết code tệ dùng goto. Có thể việc buộc người dùng dùng control flow có cấu trúc và khiến việc viết code kiểu goto trở nên khó khăn hơn là một lợi ích ròng cho năng suất của tất cả chúng ta.</p>
+<p>Nhưng đôi khi tôi tự hỏi liệu chúng ta có “đổ cả em bé lẫn chậu nước tắm” đi không. Khi không có goto, ta thường phải dùng đến các mẫu cấu trúc phức tạp hơn. “Switch bên trong vòng lặp” là một ví dụ kinh điển. Một ví dụ khác là dùng biến cờ (guard variable) để thoát khỏi một loạt vòng lặp lồng nhau:</p><span name="break">
+</span>
+<div class="codehilite"><pre><span class="c">// Kiểm tra xem ma trận có chứa số 0 không.</span>
+<span class="t">bool</span> <span class="i">found</span> = <span class="k">false</span>;
+<span class="k">for</span> (<span class="t">int</span> <span class="i">x</span> = <span class="n">0</span>; <span class="i">x</span> &lt; <span class="i">xSize</span>; <span class="i">x</span>++) {
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">y</span> = <span class="n">0</span>; <span class="i">y</span> &lt; <span class="i">ySize</span>; <span class="i">y</span>++) {
+    <span class="k">for</span> (<span class="t">int</span> <span class="i">z</span> = <span class="n">0</span>; <span class="i">z</span> &lt; <span class="i">zSize</span>; <span class="i">z</span>++) {
+      <span class="k">if</span> (<span class="i">matrix</span>[<span class="i">x</span>][<span class="i">y</span>][<span class="i">z</span>] == <span class="n">0</span>) {
+        <span class="i">printf</span>(<span class="s">&quot;found&quot;</span>);
+        <span class="i">found</span> = <span class="k">true</span>;
+        <span class="k">break</span>;
+      }
+    }
+    <span class="k">if</span> (<span class="i">found</span>) <span class="k">break</span>;
+  }
+  <span class="k">if</span> (<span class="i">found</span>) <span class="k">break</span>;
+}
+</pre></div>
+<p>Điều đó có thực sự tốt hơn so với:</p>
+<div class="codehilite"><pre><span class="k">for</span> (<span class="t">int</span> <span class="i">x</span> = <span class="n">0</span>; <span class="i">x</span> &lt; <span class="i">xSize</span>; <span class="i">x</span>++) {
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">y</span> = <span class="n">0</span>; <span class="i">y</span> &lt; <span class="i">ySize</span>; <span class="i">y</span>++) {
+    <span class="k">for</span> (<span class="t">int</span> <span class="i">z</span> = <span class="n">0</span>; <span class="i">z</span> &lt; <span class="i">zSize</span>; <span class="i">z</span>++) {
+      <span class="k">if</span> (<span class="i">matrix</span>[<span class="i">x</span>][<span class="i">y</span>][<span class="i">z</span>] == <span class="n">0</span>) {
+        <span class="i">printf</span>(<span class="s">&quot;found&quot;</span>);
+        <span class="k">goto</span> <span class="i">done</span>;
+      }
+    }
+  }
+}
+<span class="i">done</span>:
+</pre></div>
+<aside name="break">
+<p>Bạn có thể làm điều này mà không cần câu lệnh <code>break</code> — vốn cũng là một dạng goto giới hạn — bằng cách chèn <code>!found &amp;&amp;</code> vào đầu điều kiện của mỗi vòng lặp.</p>
+</aside>
+<p>Tôi đoán điều tôi thực sự không thích là việc chúng ta đang đưa ra các quyết định thiết kế và kỹ thuật ngôn ngữ ngày nay dựa trên nỗi sợ. Ít người hiện nay thực sự hiểu rõ cả vấn đề lẫn lợi ích của goto. Thay vào đó, ta chỉ nghĩ đơn giản rằng nó “được coi là có hại”. Cá nhân tôi, tôi chưa bao giờ thấy giáo điều là một điểm khởi đầu tốt cho công việc sáng tạo chất lượng.</p>
+
+<footer>
+<a href="calls-and-functions.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Calls and Functions&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

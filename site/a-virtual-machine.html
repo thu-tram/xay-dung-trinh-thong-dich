@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>A Virtual Machine &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">A Virtual Machine<small>15</small></a></h3>
+
+<ul>
+    <li><a href="#an-instruction-execution-machine"><small>15.1</small> An Instruction Execution Machine</a></li>
+    <li><a href="#a-value-stack-manipulator"><small>15.2</small> A Value Stack Manipulator</a></li>
+    <li><a href="#an-arithmetic-calculator"><small>15.3</small> An Arithmetic Calculator</a></li>
+    <li><a href="#thử-thách"><small>15.4</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-register-based-bytecode"><small>15.5</small> Ghi chú thiết kế: Register-Based Bytecode</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="chunks-of-bytecode.html" title="Chunks of Bytecode" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="scanning-on-demand.html" title="Scanning on Demand" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="chunks-of-bytecode.html" title="Chunks of Bytecode" class="prev">←</a>
+<a href="scanning-on-demand.html" title="Scanning on Demand" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">A Virtual Machine<small>15</small></a></h3>
+
+<ul>
+    <li><a href="#an-instruction-execution-machine"><small>15.1</small> An Instruction Execution Machine</a></li>
+    <li><a href="#a-value-stack-manipulator"><small>15.2</small> A Value Stack Manipulator</a></li>
+    <li><a href="#an-arithmetic-calculator"><small>15.3</small> An Arithmetic Calculator</a></li>
+    <li><a href="#thử-thách"><small>15.4</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-register-based-bytecode"><small>15.5</small> Ghi chú thiết kế: Register-Based Bytecode</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="chunks-of-bytecode.html" title="Chunks of Bytecode" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="scanning-on-demand.html" title="Scanning on Demand" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">15</div>
+  <h1>A Virtual Machine</h1>
+
+<blockquote>
+<p>Các ảo thuật gia giữ bí mật của họ không phải vì những bí mật đó to tát và quan trọng, mà vì chúng quá nhỏ nhặt và tầm thường. Những hiệu ứng tuyệt vời trên sân khấu thường là kết quả của một bí mật lố bịch đến mức ảo thuật gia sẽ thấy xấu hổ nếu phải thừa nhận rằng đó là cách họ làm.</p>
+<p><cite>Christopher Priest, <em>The Prestige</em></cite></p>
+</blockquote>
+<p>Chúng ta đã dành khá nhiều thời gian nói về cách biểu diễn một chương trình dưới dạng một chuỗi các bytecode instruction, nhưng cảm giác giống như đang học sinh học chỉ bằng những con vật nhồi bông đã chết. Ta biết về các instruction trên lý thuyết, nhưng chưa bao giờ thấy chúng hoạt động, nên thật khó để thực sự hiểu chúng <em>làm gì</em>. Sẽ rất khó để viết một compiler sinh ra bytecode khi ta chưa hiểu rõ bytecode đó vận hành thế nào.</p>
+<p>Vì vậy, trước khi bắt tay xây dựng front end cho interpreter mới, chúng ta sẽ bắt đầu từ back end — virtual machine execute các instruction. Nó thổi sự sống vào bytecode. Việc quan sát các instruction “nhảy múa” sẽ cho ta một hình dung rõ ràng hơn về cách một compiler có thể dịch source code của người dùng thành một chuỗi các instruction như thế.</p>
+<h2><a href="#an-instruction-execution-machine" id="an-instruction-execution-machine"><small>15&#8202;.&#8202;1</small>An Instruction Execution Machine</a></h2>
+<p>Virtual machine là một phần trong kiến trúc bên trong của interpreter. Bạn đưa cho nó một khối code — đúng nghĩa là một Chunk — và nó sẽ chạy khối đó. Code và các cấu trúc dữ liệu cho VM nằm trong một module mới.</p>
+<div class="codehilite"><div class="source-file"><em>vm.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_vm_h</span>
+<span class="a">#define clox_vm_h</span>
+
+<span class="a">#include &quot;chunk.h&quot;</span>
+
+<span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">Chunk</span>* <span class="i">chunk</span>;
+} <span class="a">VM</span>;
+
+<span class="t">void</span> <span class="i">initVM</span>();
+<span class="t">void</span> <span class="i">freeVM</span>();
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, create new file</div>
+
+<p>Như thường lệ, ta bắt đầu đơn giản. VM sẽ dần dần có thêm một đống trạng thái cần theo dõi, nên ta định nghĩa một struct ngay từ bây giờ để chứa tất cả. Hiện tại, thứ duy nhất ta lưu là chunk mà nó sẽ execute.</p>
+<p>Giống như với hầu hết các cấu trúc dữ liệu khác mà ta tạo, ta cũng định nghĩa các hàm để tạo và giải phóng VM. Đây là phần hiện thực:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+create new file</div>
+<pre><span class="a">#include &quot;common.h&quot;</span>
+<span class="a">#include &quot;vm.h&quot;</span>
+
+<span class="a">VM</span> <span class="i">vm</span>;<span name="one"> </span>
+
+<span class="t">void</span> <span class="i">initVM</span>() {
+}
+
+<span class="t">void</span> <span class="i">freeVM</span>() {
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, create new file</div>
+
+<p>OK, gọi những hàm này là “hiện thực” thì hơi quá. Chúng ta chưa có trạng thái thú vị nào để khởi tạo hay giải phóng, nên các hàm này hiện trống trơn. Tin tôi đi, rồi sẽ có.</p>
+<p>Dòng thú vị hơn một chút ở đây là khai báo <code>vm</code>. Module này cuối cùng sẽ có cả đống hàm, và sẽ thật phiền nếu phải truyền con trỏ tới VM cho tất cả chúng. Thay vào đó, ta khai báo một đối tượng VM toàn cục duy nhất. Ta chỉ cần một cái thôi, và cách này giúp code trong sách gọn gàng hơn một chút.</p>
+<aside name="one">
+<p>Việc chọn dùng một instance VM tĩnh là một nhượng bộ để phù hợp với sách, nhưng không nhất thiết là một lựa chọn kỹ thuật tốt cho một implementation ngôn ngữ thực tế. Nếu bạn xây dựng một VM được thiết kế để nhúng vào các ứng dụng host khác, sẽ linh hoạt hơn nếu bạn <em>thực sự</em> nhận một con trỏ VM và truyền nó đi.</p>
+<p>Bằng cách đó, ứng dụng host có thể kiểm soát khi nào và ở đâu bộ nhớ cho VM được cấp phát, chạy nhiều VM song song, v.v.</p>
+<p>Những gì tôi đang làm ở đây là một biến toàn cục, và <a href="http://gameprogrammingpatterns.com/singleton.html">mọi điều tệ hại bạn từng nghe về biến toàn cục</a> vẫn đúng khi lập trình ở quy mô lớn. Nhưng khi giữ mọi thứ nhỏ gọn cho một cuốn sách thì…</p>
+</aside>
+<p>Trước khi bắt đầu “bơm” code thú vị vào VM, hãy kết nối nó với entrypoint chính của interpreter.</p>
+<div class="codehilite"><pre class="insert-before">int main(int argc, const char* argv[]) {
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">  <span class="i">initVM</span>();
+
+</pre><pre class="insert-after">  Chunk chunk;
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Ta khởi động VM khi interpreter bắt đầu chạy. Rồi khi sắp thoát, ta tắt nó đi.</p>
+<div class="codehilite"><pre class="insert-before">  disassembleChunk(&amp;chunk, &quot;test chunk&quot;);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">  <span class="i">freeVM</span>();
+</pre><pre class="insert-after">  freeChunk(&amp;chunk);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Một nghi thức cuối cùng:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;debug.h&quot;
+</pre><div class="source-file"><em>main.c</em></div>
+<pre class="insert"><span class="a">#include &quot;vm.h&quot;</span>
+</pre><pre class="insert-after">
+
+int main(int argc, const char* argv[]) {
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em></div>
+
+<p>Giờ khi bạn chạy clox, nó sẽ khởi động VM trước khi tạo chunk viết tay từ <a href="chunks-of-bytecode.html#disassembling-chunks">chương trước</a>. VM đã sẵn sàng và chờ đợi, vậy hãy dạy nó làm gì đó.</p>
+<h3><a href="#executing-instructions" id="executing-instructions"><small>15&#8202;.&#8202;1&#8202;.&#8202;1</small>Executing instructions</a></h3>
+<p>VM bắt đầu hoạt động khi ta yêu cầu nó interpret một chunk bytecode.</p>
+<div class="codehilite"><pre class="insert-before">  disassembleChunk(&amp;chunk, &quot;test chunk&quot;);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">  <span class="i">interpret</span>(&amp;<span class="i">chunk</span>);
+</pre><pre class="insert-after">  freeVM();
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Hàm này là entrypoint chính vào VM. Nó được khai báo như sau:</p>
+<div class="codehilite"><pre class="insert-before">void freeVM();
+</pre><div class="source-file"><em>vm.h</em><br>
+add after <em>freeVM</em>()</div>
+<pre class="insert"><span class="t">InterpretResult</span> <span class="i">interpret</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, add after <em>freeVM</em>()</div>
+
+<p>VM chạy chunk và trả về một giá trị từ enum này:</p>
+<div class="codehilite"><pre class="insert-before">} VM;
+
+</pre><div class="source-file"><em>vm.h</em><br>
+add after struct <em>VM</em></div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">enum</span> {
+  <span class="a">INTERPRET_OK</span>,
+  <span class="a">INTERPRET_COMPILE_ERROR</span>,
+  <span class="a">INTERPRET_RUNTIME_ERROR</span>
+} <span class="t">InterpretResult</span>;
+
+</pre><pre class="insert-after">void initVM();
+void freeVM();
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, add after struct <em>VM</em></div>
+
+<p>Chúng ta chưa dùng kết quả này, nhưng khi có một compiler báo lỗi tĩnh và một VM phát hiện lỗi runtime, interpreter sẽ dùng nó để biết cách đặt exit code cho tiến trình.</p>
+<p>Chúng ta đang tiến gần hơn tới phần hiện thực thực sự.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>freeVM</em>()</div>
+<pre><span class="t">InterpretResult</span> <span class="i">interpret</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>) {
+  <span class="i">vm</span>.<span class="i">chunk</span> = <span class="i">chunk</span>;
+  <span class="i">vm</span>.<span class="i">ip</span> = <span class="i">vm</span>.<span class="i">chunk</span>-&gt;<span class="i">code</span>;
+  <span class="k">return</span> <span class="i">run</span>();
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>freeVM</em>()</div>
+
+<p>Đầu tiên, ta lưu chunk đang được execute vào VM. Sau đó gọi <code>run()</code>, một hàm nội bộ thực sự chạy các bytecode instruction. Giữa hai bước đó là một dòng khá thú vị. <code>ip</code> là gì vậy?</p>
+<p>Khi VM chạy qua bytecode, nó cần theo dõi vị trí hiện tại — tức là vị trí của instruction đang được execute. Ta không dùng một biến <span name="local">local</span> bên trong <code>run()</code> cho việc này vì sau này sẽ có những hàm khác cần truy cập nó. Thay vào đó, ta lưu nó như một field trong VM.</p>
+<aside name="local">
+<p>Nếu chúng ta muốn vắt kiệt từng chút tốc độ từ bytecode interpreter, ta sẽ lưu <code>ip</code> trong một biến local. Nó được thay đổi rất thường xuyên trong quá trình execute, nên ta muốn C compiler giữ nó trong một thanh ghi.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">typedef struct {
+  Chunk* chunk;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">uint8_t</span>* <span class="i">ip</span>;
+</pre><pre class="insert-after">} VM;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Kiểu của nó là một byte pointer. Chúng ta dùng một con trỏ C “thật” trỏ thẳng vào giữa mảng bytecode thay vì thứ gì đó như một chỉ số nguyên, vì việc dereference một con trỏ nhanh hơn so với việc truy xuất phần tử trong mảng bằng chỉ số.</p>
+<p>Tên gọi &ldquo;IP&rdquo; là truyền thống, và — không giống nhiều tên gọi truyền thống khác trong khoa học máy tính — thực sự hợp lý: nó là một <strong><a href="https://en.wikipedia.org/wiki/Program_counter">instruction pointer</a></strong>. Hầu như mọi tập lệnh instruction trên <span name="ip">thế giới</span>, dù là thật hay ảo, đều có một thanh ghi hoặc biến như thế này.</p>
+<aside name="ip">
+<p>x86, x64 và CLR gọi nó là &ldquo;IP&rdquo;. 68k, PowerPC, ARM, p-code và JVM gọi nó là &ldquo;PC&rdquo;, viết tắt của <strong>program counter</strong>.</p>
+</aside>
+<p>Chúng ta khởi tạo <code>ip</code> bằng cách trỏ nó tới byte đầu tiên của code trong chunk. Chúng ta chưa execute instruction đó, nên <code>ip</code> trỏ tới instruction <em>sắp được execute</em>. Điều này sẽ đúng trong suốt thời gian VM chạy: IP luôn trỏ tới instruction kế tiếp, không phải instruction hiện tại đang xử lý.</p>
+<p>Phần thú vị thực sự diễn ra trong <code>run()</code>.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>freeVM</em>()</div>
+<pre><span class="k">static</span> <span class="t">InterpretResult</span> <span class="i">run</span>() {
+<span class="a">#define READ_BYTE() (*vm.ip++)</span>
+
+  <span class="k">for</span> (;;) {
+    <span class="t">uint8_t</span> <span class="i">instruction</span>;
+    <span class="k">switch</span> (<span class="i">instruction</span> = <span class="a">READ_BYTE</span>()) {
+      <span class="k">case</span> <span class="a">OP_RETURN</span>: {
+        <span class="k">return</span> <span class="a">INTERPRET_OK</span>;
+      }
+    }
+  }
+
+<span class="a">#undef READ_BYTE</span>
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>freeVM</em>()</div>
+
+<p>Đây là hàm <span name="important">quan trọng</span> nhất trong toàn bộ clox, không nghi ngờ gì. Khi interpreter execute chương trình của người dùng, nó sẽ dành khoảng 90% thời gian bên trong <code>run()</code>. Đây là “trái tim” đang đập của VM.</p>
+<aside name="important">
+<p>Hoặc, ít nhất, <em>sẽ</em> là như vậy trong vài chương tới khi nó có đủ nội dung để hữu ích. Còn bây giờ thì nó chưa phải là một kiệt tác lập trình gì đâu.</p>
+</aside>
+<p>Dù phần mở đầu nghe có vẻ kịch tính, về mặt khái niệm nó khá đơn giản. Chúng ta có một vòng lặp ngoài chạy liên tục. Mỗi vòng lặp, ta đọc và execute một bytecode instruction.</p>
+<p>Để xử lý một instruction, trước tiên ta xác định loại instruction đang gặp. Macro <code>READ_BYTE</code> đọc byte hiện tại mà <code>ip</code> đang trỏ tới, rồi <span name="next">tăng</span> instruction pointer. Byte đầu tiên của bất kỳ instruction nào là opcode. Khi có một opcode dạng số, ta cần tìm đến đoạn code C hiện thực semantics của instruction đó. Quá trình này được gọi là <strong>decoding</strong> hoặc <strong>dispatching</strong> instruction.</p>
+<aside name="next">
+<p>Lưu ý rằng <code>ip</code> được tăng ngay khi ta đọc opcode, trước khi thực sự bắt đầu execute instruction. Vậy nên, một lần nữa, <code>ip</code> trỏ tới byte <em>tiếp theo</em> của code sẽ được dùng.</p>
+</aside>
+<p>Chúng ta làm quá trình này cho từng instruction, mỗi lần một instruction được execute, nên đây là phần quan trọng nhất về hiệu năng của toàn bộ virtual machine. Lịch sử lập trình ngôn ngữ đầy rẫy những kỹ thuật <span name="dispatch">khéo léo</span> để dispatch bytecode hiệu quả, từ những ngày đầu của máy tính.</p>
+<aside name="dispatch">
+<p>Nếu bạn muốn tìm hiểu một số kỹ thuật này, hãy tra các từ khóa &ldquo;direct threaded code&rdquo;, &ldquo;jump table&rdquo; và &ldquo;computed goto&rdquo;.</p>
+</aside>
+<p>Tiếc là, các giải pháp nhanh nhất lại yêu cầu hoặc là các phần mở rộng không chuẩn của C, hoặc là code assembly viết tay. Với clox, ta sẽ giữ mọi thứ đơn giản. Giống như disassembler của chúng ta, ta có một câu lệnh <code>switch</code> khổng lồ với một case cho mỗi opcode. Phần thân của mỗi case hiện thực hành vi của opcode đó.</p>
+<p>Cho đến giờ, ta mới xử lý một instruction duy nhất, <code>OP_RETURN</code>, và việc duy nhất nó làm là thoát khỏi vòng lặp hoàn toàn. Sau này, instruction đó sẽ được dùng để trả về từ hàm Lox hiện tại, nhưng vì ta chưa có hàm, nên tạm thời sẽ dùng nó để kết thúc việc execute.</p>
+<p>Giờ hãy hỗ trợ thêm instruction còn lại của chúng ta.</p>
+<div class="codehilite"><pre class="insert-before">    switch (instruction = READ_BYTE()) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_CONSTANT</span>: {
+        <span class="t">Value</span> <span class="i">constant</span> = <span class="a">READ_CONSTANT</span>();
+        <span class="i">printValue</span>(<span class="i">constant</span>);
+        <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Hiện tại, chúng ta chưa có đủ “bộ máy” để làm gì hữu ích với một constant. Trước mắt, ta sẽ chỉ in nó ra để dân “mổ xẻ” interpreter như chúng ta có thể thấy chuyện gì đang diễn ra bên trong VM. Lời gọi <code>printf()</code> đó đòi hỏi phải include thêm một thư viện.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add to top of file</div>
+<pre class="insert"><span class="a">#include &lt;stdio.h&gt;</span>
+
+</pre><pre class="insert-after">#include &quot;common.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add to top of file</div>
+
+<p>Chúng ta cũng có một macro mới cần định nghĩa.</p>
+<div class="codehilite"><pre class="insert-before">#define READ_BYTE() (*vm.ip++)
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#define READ_CONSTANT() (vm.chunk-&gt;constants.values[READ_BYTE()])</span>
+</pre><pre class="insert-after">
+
+  for (;;) {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p><code>READ_CONSTANT()</code> đọc byte tiếp theo từ bytecode, coi số nhận được là một chỉ số, rồi tra giá trị Value tương ứng trong bảng constant của chunk. Trong các chương sau, ta sẽ thêm vài instruction nữa có toán hạng tham chiếu tới constant, nên ta chuẩn bị macro tiện ích này ngay từ bây giờ.</p>
+<p>Giống như macro <code>READ_BYTE</code> trước đó, <code>READ_CONSTANT</code> chỉ được dùng bên trong <code>run()</code>. Để làm rõ phạm vi này, các macro được định nghĩa ngay trong hàm và — vì chúng ta cẩn thận — được undefine ở cuối.</p>
+<div class="codehilite"><pre class="insert-before">#undef READ_BYTE
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#undef READ_CONSTANT</span>
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<aside name="macro">
+<p>Việc undefine các macro này một cách tường minh có thể trông như quá cầu kỳ, nhưng C thường “trừng phạt” những người dùng cẩu thả, và C preprocessor thì còn gấp đôi như vậy.</p>
+</aside>
+<h3><a href="#execution-tracing" id="execution-tracing"><small>15&#8202;.&#8202;1&#8202;.&#8202;2</small>Execution tracing</a></h3>
+<p>Nếu bạn chạy clox ngay bây giờ, nó sẽ execute chunk mà chúng ta viết tay trong chương trước và in ra <code>1.2</code> trên terminal. Chúng ta thấy nó hoạt động, nhưng đó chỉ là vì phần hiện thực <code>OP_CONSTANT</code> hiện đang có đoạn code tạm thời để log giá trị. Khi instruction này thực sự làm đúng nhiệm vụ của nó và truyền constant đó cho các thao tác khác cần dùng, VM sẽ trở thành một “hộp đen”. Điều đó khiến công việc của chúng ta — những người hiện thực VM — trở nên khó khăn hơn.</p>
+<p>Để giúp bản thân, đây là lúc thích hợp để thêm một chút logging chẩn đoán cho VM, giống như chúng ta đã làm với các chunk. Thực tế, ta sẽ tái sử dụng lại chính đoạn code đó. Chúng ta không muốn logging này luôn bật — nó chỉ dành cho dân “mổ xẻ” VM như chúng ta, không phải cho người dùng Lox — nên trước tiên ta tạo một flag (flag) để bật/tắt nó.</p>
+<div class="codehilite"><pre class="insert-before">#include &lt;stdint.h&gt;
+</pre><div class="source-file"><em>common.h</em></div>
+<pre class="insert">
+
+<span class="a">#define DEBUG_TRACE_EXECUTION</span>
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>common.h</em></div>
+
+<p>Khi flag này được định nghĩa, VM sẽ disassemble và in ra từng instruction ngay trước khi execute nó. Nếu disassembler trước đây của chúng ta duyệt toàn bộ chunk một lần theo cách tĩnh, thì lần này nó disassemble instruction một cách động, ngay tại thời điểm chạy.</p>
+<div class="codehilite"><pre class="insert-before">  for (;;) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#ifdef DEBUG_TRACE_EXECUTION</span>
+    <span class="i">disassembleInstruction</span>(<span class="i">vm</span>.<span class="i">chunk</span>,
+                           (<span class="t">int</span>)(<span class="i">vm</span>.<span class="i">ip</span> - <span class="i">vm</span>.<span class="i">chunk</span>-&gt;<span class="i">code</span>));
+<span class="a">#endif</span>
+
+</pre><pre class="insert-after">    uint8_t instruction;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Vì <code>disassembleInstruction()</code> nhận vào một số nguyên là byte <em>offset</em> và chúng ta lưu vị trí instruction hiện tại dưới dạng con trỏ trực tiếp, nên trước tiên ta cần làm một chút toán học con trỏ để chuyển <code>ip</code> về offset tương đối so với đầu mảng bytecode. Sau đó, ta disassemble instruction bắt đầu tại byte đó.</p>
+<p>Như mọi khi, ta cần khai báo hàm trước khi có thể gọi nó.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>vm.c</em></div>
+<pre class="insert"><span class="a">#include &quot;debug.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;vm.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em></div>
+
+<p>Tôi biết đoạn code này tới giờ chưa có gì ấn tượng — về cơ bản chỉ là một câu lệnh switch bọc trong vòng lặp <code>for</code> — nhưng tin hay không thì đây là một trong hai thành phần chính của VM. Với nó, chúng ta có thể execute instruction theo kiểu mệnh lệnh. Sự đơn giản này là một ưu điểm — càng làm ít việc, nó càng chạy nhanh. Hãy so sánh với tất cả sự phức tạp và overhead mà chúng ta từng có trong jlox với Visitor pattern để duyệt AST.</p>
+<h2><a href="#a-value-stack-manipulator" id="a-value-stack-manipulator"><small>15&#8202;.&#8202;2</small>A Value Stack Manipulator</a></h2>
+<p>Ngoài các hiệu ứng phụ theo kiểu mệnh lệnh, Lox còn có các biểu thức sinh ra, thay đổi và tiêu thụ giá trị. Do đó, bytecode đã compile của chúng ta cần một cách để “chuyển” giá trị qua lại giữa các instruction cần chúng. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="n">3</span> - <span class="n">2</span>;
+</pre></div>
+<p>Rõ ràng ta cần các instruction cho constant 3 và 2, câu lệnh <code>print</code>, và phép trừ. Nhưng làm sao instruction trừ biết rằng 3 là <span name="word">minuend</span> và 2 là subtrahend? Làm sao instruction print biết cần in ra kết quả đó?</p>
+<aside name="word">
+<p>Vâng, tôi đã phải tra từ “subtrahend” và “minuend” trong từ điển. Nhưng chúng thật thú vị phải không? “Minuend” nghe như một điệu nhảy thời Elizabeth, còn “subtrahend” có thể là tên một công trình ngầm thời kỳ đồ đá.</p>
+</aside>
+<p>Để làm rõ hơn, hãy xem ví dụ này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">echo</span>(<span class="i">n</span>) {
+  <span class="k">print</span> <span class="i">n</span>;
+  <span class="k">return</span> <span class="i">n</span>;
+}
+
+<span class="k">print</span> <span class="i">echo</span>(<span class="i">echo</span>(<span class="n">1</span>) + <span class="i">echo</span>(<span class="n">2</span>)) + <span class="i">echo</span>(<span class="i">echo</span>(<span class="n">4</span>) + <span class="i">echo</span>(<span class="n">5</span>));
+</pre></div>
+<p>Tôi đã bọc mỗi biểu thức con trong một lời gọi <code>echo()</code> để in và trả về đối số của nó. Hiệu ứng phụ này giúp ta thấy chính xác thứ tự thực hiện các thao tác.</p>
+<p>Tạm quên VM đi một chút. Hãy nghĩ về semantics của Lox. Các toán hạng của một toán tử số học rõ ràng cần được đánh giá trước khi ta có thể thực hiện phép toán. (Khó mà cộng <code>a + b</code> nếu bạn không biết <code>a</code> và <code>b</code> là gì.) Ngoài ra, khi hiện thực biểu thức trong jlox, chúng ta đã <span name="undefined">quyết định</span> rằng toán hạng bên trái phải được đánh giá trước toán hạng bên phải.</p>
+<aside name="undefined">
+<p>Chúng ta hoàn toàn có thể để thứ tự đánh giá không được xác định và để mỗi implementation tự quyết. Điều đó mở đường cho các compiler tối ưu hóa có thể sắp xếp lại các biểu thức số học để tăng hiệu suất, ngay cả khi các toán hạng có hiệu ứng phụ có thể quan sát được. C và Scheme để thứ tự đánh giá không xác định. Java quy định đánh giá từ trái sang phải giống như chúng ta làm với Lox.</p>
+<p>Tôi nghĩ việc quy định rõ ràng những thứ như thế này thường tốt hơn cho người dùng. Khi biểu thức không được đánh giá theo thứ tự mà người dùng mong đợi — và có thể khác nhau giữa các implementation! — thì việc tìm hiểu chuyện gì đang xảy ra có thể trở thành một “địa ngục” thực sự.</p>
+</aside>
+<p>Đây là cây cú pháp (AST) cho câu lệnh <code>print</code>:</p>
+<p><img src="image/a-virtual-machine/ast.png" alt="The AST for the example
+statement, with numbers marking the order that the nodes are evaluated." /></p>
+<p>Với việc đánh giá từ trái sang phải, và cách các biểu thức được lồng nhau, bất kỳ implementation Lox đúng đắn nào <em>cũng phải</em> in ra các số theo thứ tự này:</p>
+<div class="codehilite"><pre>1  // từ echo(1)
+2  // từ echo(2)
+3  // từ echo(1 + 2)
+4  // từ echo(4)
+5  // từ echo(5)
+9  // từ echo(4 + 5)
+12 // từ print 3 + 9
+</pre></div>
+<p>Interpreter jlox cũ của chúng ta làm điều này bằng cách duyệt đệ quy AST. Nó thực hiện duyệt hậu tự (postorder traversal). Đầu tiên nó đệ quy xuống nhánh toán hạng trái, sau đó là nhánh toán hạng phải, rồi cuối cùng mới đánh giá node hiện tại.</p>
+<p>Sau khi đánh giá toán hạng trái, jlox cần lưu tạm kết quả đó ở đâu đó trong khi nó tiếp tục duyệt xuống cây toán hạng phải. Chúng ta dùng một biến local trong Java cho việc này. Interpreter tree-walk đệ quy của chúng ta tạo một Java call frame riêng cho mỗi node đang được đánh giá, nên ta có thể có bao nhiêu biến local tùy ý.</p>
+<p>Trong clox, hàm <code>run()</code> của chúng ta không đệ quy — cây biểu thức lồng nhau được “làm phẳng” thành một chuỗi instruction tuyến tính. Chúng ta không có đặc quyền dùng biến local của C, vậy ta nên lưu các giá trị tạm này ở đâu và như thế nào? Có lẽ bạn đã <span name="guess">đoán</span> được rồi, nhưng tôi muốn nhấn mạnh điều này vì đây là một khía cạnh lập trình mà ta thường coi là hiển nhiên, nhưng hiếm khi học <em>tại sao</em> máy tính lại được thiết kế theo cách đó.</p>
+<aside name="guess">
+<p>Gợi ý: nó nằm ngay trong tên của phần này, và cũng là cách Java và C quản lý các lời gọi hàm đệ quy.</p>
+</aside>
+<p>Hãy cùng làm một bài tập hơi kỳ lạ. Chúng ta sẽ đi qua quá trình execute của chương trình trên từng bước một:</p>
+<p><img src="image/a-virtual-machine/bars.png" alt="The series of instructions with
+bars showing which numbers need to be preserved across which instructions." /></p>
+<p>Bên trái là các bước code. Bên phải là các giá trị mà ta đang theo dõi. Mỗi thanh ngang đại diện cho một con số. Nó bắt đầu khi giá trị đó lần đầu được tạo ra — có thể là một hằng số hoặc kết quả của một phép cộng. Độ dài của thanh thể hiện khoảng thời gian mà giá trị đã tạo cần được giữ lại, và nó kết thúc khi giá trị đó cuối cùng bị một phép toán tiêu thụ.</p>
+<p>Khi bạn đi từng bước, bạn sẽ thấy các giá trị xuất hiện rồi sau đó bị “ăn mất”. Những giá trị sống lâu nhất là các giá trị được tạo ra từ toán hạng bên trái của một phép cộng. Chúng tồn tại trong khi ta xử lý biểu thức toán hạng bên phải.</p>
+<p>Trong sơ đồ trên, tôi đã cho mỗi con số duy nhất một cột trực quan riêng. Giờ hãy tiết kiệm hơn một chút. Khi một số đã bị tiêu thụ, ta cho phép cột của nó được tái sử dụng cho một giá trị khác xuất hiện sau đó. Nói cách khác, ta lấp đầy tất cả các khoảng trống ở trên bằng cách đẩy các số từ bên phải vào:</p>
+<p><img src="image/a-virtual-machine/bars-stacked.png" alt="Like the previous
+diagram, but with number bars pushed to the left, forming a stack." /></p>
+<p>Có vài điều thú vị ở đây. Khi ta dồn mọi thứ lại, mỗi con số vẫn nằm gọn trong một cột duy nhất suốt vòng đời của nó. Ngoài ra, không còn khoảng trống nào. Nói cách khác, bất cứ khi nào một số xuất hiện trước một số khác, thì nó sẽ sống ít nhất lâu bằng số thứ hai. Số xuất hiện đầu tiên sẽ là số cuối cùng bị tiêu thụ. Ừm… last-in, first-out… à ha, đó chính là một <span name="pancakes">stack</span>!</p>
+<aside name="pancakes">
+<p>Đây cũng là một stack:</p><img src="image/a-virtual-machine/pancakes.png" alt="A stack... of pancakes." />
+</aside>
+<p>Trong sơ đồ thứ hai, mỗi khi ta đưa vào một con số mới, ta push nó vào stack từ bên phải. Khi các số bị tiêu thụ, chúng luôn được pop ra từ phải sang trái.</p>
+<p>Bởi vì các giá trị tạm thời mà ta cần theo dõi vốn dĩ đã có hành vi giống stack, VM của chúng ta sẽ dùng một stack để quản lý chúng. Khi một instruction “tạo ra” một giá trị, nó sẽ push giá trị đó lên stack. Khi cần tiêu thụ một hoặc nhiều giá trị, nó sẽ lấy chúng bằng cách pop từ stack.</p>
+<h3><a href="#the-vms-stack" id="the-vms-stack"><small>15&#8202;.&#8202;2&#8202;.&#8202;1</small>The VM&rsquo;s Stack</a></h3>
+<p>Có thể điều này không phải là một khám phá lớn, nhưng tôi <em>rất thích</em> các stack-based VM. Khi bạn lần đầu thấy một màn ảo thuật, nó giống như có gì đó thực sự kỳ diệu. Nhưng rồi bạn biết được cách nó hoạt động — thường là một mánh cơ học hoặc đánh lạc hướng — và cảm giác kỳ diệu biến mất. Có một <span name="wonder">vài</span> ý tưởng trong khoa học máy tính mà ngay cả khi tôi đã “mổ xẻ” và hiểu hết mọi ngóc ngách, một phần cảm giác ban đầu vẫn còn. Stack-based VM là một trong số đó.</p>
+<aside name="wonder">
+<p>Heap — <a href="https://en.wikipedia.org/wiki/Heap_(data_structure)">cấu trúc dữ liệu</a>, không phải <a href="https://en.wikipedia.org/wiki/Memory_management#HEAP">cơ chế quản lý bộ nhớ</a> — là một ví dụ khác. Và còn có sơ đồ phân tích cú pháp top-down operator precedence của Vaughan Pratt, mà chúng ta sẽ tìm hiểu <a href="compiling-expressions.html">đúng lúc</a>.</p>
+</aside>
+<p>Như bạn sẽ thấy trong chương này, việc execute instruction trong một stack-based VM cực kỳ <span name="cheat">đơn giản</span>. Ở các chương sau, bạn cũng sẽ thấy rằng compile một ngôn ngữ nguồn sang một tập lệnh stack-based là chuyện dễ như ăn bánh. Thế nhưng, kiến trúc này vẫn đủ nhanh để được dùng trong các implementation ngôn ngữ ở môi trường production. Nó gần như khiến bạn cảm giác như đang “ăn gian” trong trò chơi lập trình ngôn ngữ vậy.</p>
+<aside name="cheat">
+<p>Để giảm bớt sự hào nhoáng: stack-based interpreter không phải là “viên đạn bạc”. Chúng thường <em>đủ tốt</em>, nhưng các implementation hiện đại của JVM, CLR và JavaScript đều dùng các pipeline <a href="https://en.wikipedia.org/wiki/Just-in-time_compilation">just-in-time compilation</a> tinh vi để sinh ra native code nhanh hơn <em>rất nhiều</em> ngay khi chạy.</p>
+</aside>
+<p>Được rồi, đến lúc code thôi! Đây là stack:</p>
+<div class="codehilite"><pre class="insert-before">typedef struct {
+  Chunk* chunk;
+  uint8_t* ip;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">Value</span> <span class="i">stack</span>[<span class="a">STACK_MAX</span>];
+  <span class="t">Value</span>* <span class="i">stackTop</span>;
+</pre><pre class="insert-after">} VM;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Chúng ta sẽ tự hiện thực cơ chế stack trên nền một mảng C thô. Đáy của stack — giá trị được push đầu tiên và pop cuối cùng — nằm ở phần tử số 0 trong mảng, và các giá trị được push sau sẽ nằm tiếp theo nó. Nếu ta push các chữ cái của từ &ldquo;crepe&rdquo; — món ăn sáng dạng stack yêu thích của tôi — lên stack theo thứ tự, mảng C kết quả sẽ trông như thế này:</p>
+<p><img src="image/a-virtual-machine/array.png" alt="An array containing the
+letters in 'crepe' in order starting at element 0." /></p>
+<p>Vì stack sẽ lớn lên và thu nhỏ lại khi các giá trị được push và pop, chúng ta cần theo dõi vị trí đỉnh của stack trong mảng. Giống như với <code>ip</code>, ta dùng một con trỏ trực tiếp thay vì một chỉ số nguyên, vì dereference con trỏ nhanh hơn so với việc tính toán offset từ chỉ số mỗi khi cần.</p>
+<p>Con trỏ này trỏ tới phần tử của mảng nằm ngay <em>sau</em> phần tử chứa giá trị trên đỉnh stack. Nghe có vẻ hơi lạ, nhưng hầu như mọi implementation đều làm vậy. Cách này cho phép ta biểu thị stack rỗng bằng cách trỏ tới phần tử số 0 trong mảng.</p>
+<p><img src="image/a-virtual-machine/stack-empty.png" alt="An empty array with
+stackTop pointing at the first element." /></p>
+<p>Nếu ta trỏ trực tiếp vào phần tử trên đỉnh, thì với stack rỗng, ta sẽ phải trỏ tới phần tử -1. Điều đó là <span name="defined">undefined</span> trong C. Khi ta push giá trị vào stack…</p>
+<aside name="defined">
+<p>Còn khi stack <em>đầy</em> thì sao, bạn đọc tinh ý sẽ hỏi. Tiêu chuẩn C đã đi trước bạn một bước. Nó <em>cho phép</em> và quy định rõ ràng việc có một con trỏ mảng trỏ ngay sau phần tử cuối cùng của mảng.</p>
+</aside>
+<p><img src="image/a-virtual-machine/stack-c.png" alt="An array with 'c' at element
+zero." /></p>
+<p>…<code>stackTop</code> luôn trỏ ngay sau phần tử cuối cùng.</p>
+<p><img src="image/a-virtual-machine/stack-crepe.png" alt="An array with 'c', 'r',
+'e', 'p', and 'e' in the first five elements." /></p>
+<p>Tôi nhớ nó thế này: <code>stackTop</code> trỏ tới vị trí mà giá trị tiếp theo sẽ được push vào. Số lượng giá trị tối đa mà ta có thể lưu trên stack (ít nhất là hiện tại) là:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;chunk.h&quot;
+</pre><div class="source-file"><em>vm.h</em></div>
+<pre class="insert">
+
+<span class="a">#define STACK_MAX 256</span>
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em></div>
+
+<p>Việc cho VM một kích thước stack cố định đồng nghĩa với việc có thể sẽ có một chuỗi instruction nào đó push quá nhiều giá trị và hết chỗ — tình huống kinh điển “stack overflow”. Ta có thể mở rộng stack động khi cần, nhưng hiện tại ta sẽ giữ mọi thứ đơn giản. Vì VM dùng Value, ta cần include phần khai báo của nó.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;chunk.h&quot;
+</pre><div class="source-file"><em>vm.h</em></div>
+<pre class="insert"><span class="a">#include &quot;value.h&quot;</span>
+</pre><pre class="insert-after">
+
+#define STACK_MAX 256
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em></div>
+
+<p>Giờ khi VM đã có một số trạng thái thú vị, ta sẽ khởi tạo nó.</p>
+<div class="codehilite"><pre class="insert-before">void initVM() {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">  <span class="i">resetStack</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Hàm này dùng helper function sau:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after variable <em>vm</em></div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">resetStack</span>() {
+  <span class="i">vm</span>.<span class="i">stackTop</span> = <span class="i">vm</span>.<span class="i">stack</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after variable <em>vm</em></div>
+
+<p>Vì mảng stack được khai báo trực tiếp bên trong struct của VM, ta không cần cấp phát bộ nhớ cho nó. Ta thậm chí không cần xóa các ô chưa dùng trong mảng — ta đơn giản sẽ không truy cập chúng cho đến khi có giá trị được lưu vào. Việc khởi tạo duy nhất cần làm là đặt <code>stackTop</code> trỏ tới đầu mảng để biểu thị stack rỗng.</p>
+<p>Giao thức của stack hỗ trợ hai thao tác:</p>
+<div class="codehilite"><pre class="insert-before">InterpretResult interpret(Chunk* chunk);
+</pre><div class="source-file"><em>vm.h</em><br>
+add after <em>interpret</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">push</span>(<span class="t">Value</span> <span class="i">value</span>);
+<span class="t">Value</span> <span class="i">pop</span>();
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, add after <em>interpret</em>()</div>
+
+<p>Bạn có thể push một giá trị mới lên đỉnh stack, và bạn có thể pop giá trị được push gần nhất ra. Đây là hàm đầu tiên:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>freeVM</em>()</div>
+<pre><span class="t">void</span> <span class="i">push</span>(<span class="t">Value</span> <span class="i">value</span>) {
+  *<span class="i">vm</span>.<span class="i">stackTop</span> = <span class="i">value</span>;
+  <span class="i">vm</span>.<span class="i">stackTop</span>++;
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>freeVM</em>()</div>
+
+<p>Nếu bạn đã hơi quên cú pháp và thao tác con trỏ trong C, đây là một bài khởi động tốt. Dòng đầu tiên lưu <code>value</code> vào phần tử mảng ở vị trí đỉnh stack. Nhớ rằng, <code>stackTop</code> trỏ ngay <em>sau</em> phần tử đã dùng cuối cùng, tức là phần tử trống tiếp theo. Lệnh này lưu giá trị vào ô đó. Sau đó, ta tăng chính con trỏ này để nó trỏ tới ô trống tiếp theo trong mảng, vì ô trước đó giờ đã được dùng.</p>
+<p>Pop thì ngược lại.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>push</em>()</div>
+<pre><span class="t">Value</span> <span class="i">pop</span>() {
+  <span class="i">vm</span>.<span class="i">stackTop</span>--;
+  <span class="k">return</span> *<span class="i">vm</span>.<span class="i">stackTop</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>push</em>()</div>
+
+<p>Đầu tiên, ta di chuyển con trỏ stack <em>lùi lại</em> để tới ô đã dùng gần nhất trong mảng. Sau đó, ta lấy giá trị ở ô đó và trả về. Ta không cần “xóa” nó khỏi mảng một cách tường minh — chỉ cần di chuyển <code>stackTop</code> xuống là đủ để đánh dấu ô đó không còn được sử dụng nữa.</p>
+<h3><a href="#stack-tracing" id="stack-tracing"><small>15&#8202;.&#8202;2&#8202;.&#8202;2</small>Stack tracing</a></h3>
+<p>Chúng ta đã có một stack hoạt động, nhưng thật khó để <em>nhìn thấy</em> nó đang hoạt động. Khi bắt đầu hiện thực các instruction phức tạp hơn và compile, chạy những đoạn code lớn hơn, chúng ta sẽ có rất nhiều giá trị bị “nhồi” vào mảng đó. Sẽ dễ dàng hơn cho chúng ta — những người mổ xẻ VM — nếu có thể quan sát được stack.</p>
+<p>Vì vậy, mỗi khi bật chế độ trace execution, chúng ta cũng sẽ hiển thị nội dung hiện tại của stack trước khi execute từng instruction.</p>
+<div class="codehilite"><pre class="insert-before">#ifdef DEBUG_TRACE_EXECUTION
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">    <span class="i">printf</span>(<span class="s">&quot;          &quot;</span>);
+    <span class="k">for</span> (<span class="t">Value</span>* <span class="i">slot</span> = <span class="i">vm</span>.<span class="i">stack</span>; <span class="i">slot</span> &lt; <span class="i">vm</span>.<span class="i">stackTop</span>; <span class="i">slot</span>++) {
+      <span class="i">printf</span>(<span class="s">&quot;[ &quot;</span>);
+      <span class="i">printValue</span>(*<span class="i">slot</span>);
+      <span class="i">printf</span>(<span class="s">&quot; ]&quot;</span>);
+    }
+    <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+</pre><pre class="insert-after">    disassembleInstruction(vm.chunk,
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Ta sẽ lặp qua, in ra từng giá trị trong mảng, bắt đầu từ phần tử đầu tiên (đáy stack) và kết thúc khi chạm tới đỉnh. Điều này cho phép ta quan sát tác động của từng instruction lên stack. Kết quả in ra sẽ khá dài dòng, nhưng rất hữu ích khi ta đang “mổ xẻ” một bug khó chịu nằm sâu trong lòng interpreter.</p>
+<p>Có stack trong tay, hãy quay lại với hai instruction của chúng ta. Đầu tiên là:</p>
+<div class="codehilite"><pre class="insert-before">      case OP_CONSTANT: {
+        Value constant = READ_CONSTANT();
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 2 lines</div>
+<pre class="insert">        <span class="i">push</span>(<span class="i">constant</span>);
+</pre><pre class="insert-after">        break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 2 lines</div>
+
+<p>Trong chương trước, tôi đã nói khá mơ hồ về việc instruction <code>OP_CONSTANT</code> “nạp” một constant như thế nào. Giờ khi đã có stack, bạn biết rằng việc “tạo ra” một giá trị thực sự nghĩa là: push nó lên stack.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_RETURN: {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">        <span class="i">printValue</span>(<span class="i">pop</span>());
+        <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+</pre><pre class="insert-after">        return INTERPRET_OK;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Sau đó, ta cho <code>OP_RETURN</code> pop stack và in ra giá trị trên đỉnh trước khi thoát. Khi sau này thêm hỗ trợ function thực sự cho clox, ta sẽ thay đổi đoạn code này. Nhưng hiện tại, nó cho ta một cách để VM execute các chuỗi instruction đơn giản và hiển thị kết quả.</p>
+<h2><a href="#an-arithmetic-calculator" id="an-arithmetic-calculator"><small>15&#8202;.&#8202;3</small>An Arithmetic Calculator</a></h2>
+<p>Giờ thì “trái tim” và “linh hồn” của VM đã sẵn sàng. Vòng lặp bytecode dispatch và execute instruction. Stack phình ra và thu lại khi giá trị đi qua nó. Hai phần này hoạt động, nhưng thật khó để cảm nhận được sự “ăn ý” của chúng khi ta mới chỉ có hai instruction sơ khai. Vậy nên, hãy dạy interpreter của chúng ta làm toán.</p>
+<p>Bắt đầu với phép toán đơn giản nhất: toán tử đơn ngôi (unary) phủ định.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="n">1.2</span>;
+<span class="k">print</span> -<span class="i">a</span>; <span class="c">// -1.2.</span>
+</pre></div>
+<p>Toán tử tiền tố <code>-</code> nhận một toán hạng, là giá trị cần đổi dấu. Nó tạo ra một kết quả duy nhất. Chúng ta chưa động tới parser, nhưng có thể thêm instruction bytecode mà cú pháp trên sẽ compile thành.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CONSTANT,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_NEGATE</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Ta execute nó như sau:</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_NEGATE</span>:   <span class="i">push</span>(-<span class="i">pop</span>()); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Instruction này cần một giá trị để thao tác, nó lấy bằng cách pop từ stack. Sau đó đổi dấu giá trị đó, rồi push kết quả trở lại để các instruction sau có thể dùng. Không thể đơn giản hơn. Ta cũng có thể disassemble nó.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CONSTANT:
+      return constantInstruction(&quot;OP_CONSTANT&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_NEGATE</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_NEGATE&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Và thử nó trong chunk test của chúng ta.</p>
+<div class="codehilite"><pre class="insert-before">  writeChunk(&amp;chunk, constant, 123);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_NEGATE</span>, <span class="n">123</span>);
+</pre><pre class="insert-after">
+
+  writeChunk(&amp;chunk, OP_RETURN, 123);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Sau khi nạp constant, nhưng trước khi return, ta execute instruction negate. Nó thay thế constant trên stack bằng giá trị phủ định của nó. Sau đó, instruction return in ra giá trị đó:</p>
+<div class="codehilite"><pre>-1.2
+</pre></div>
+<p>Thật “ảo diệu”!</p>
+<h3><a href="#binary-operators" id="binary-operators"><small>15&#8202;.&#8202;3&#8202;.&#8202;1</small>Binary operators</a></h3>
+<p>OK, toán tử đơn ngôi thì cũng không <em>quá</em> ấn tượng. Ta vẫn chỉ có một giá trị trên stack. Để thấy được “chiều sâu” hơn, ta cần các toán tử nhị phân (binary). Lox có bốn toán tử <span name="ops">số học</span> nhị phân: cộng, trừ, nhân và chia. Chúng ta sẽ hiện thực tất cả cùng lúc.</p>
+<aside name="ops">
+<p>Lox còn có một số toán tử nhị phân khác — so sánh và bằng — nhưng chúng không tạo ra số làm kết quả, nên ta chưa làm chúng bây giờ.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  OP_CONSTANT,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_ADD</span>,
+  <span class="a">OP_SUBTRACT</span>,
+  <span class="a">OP_MULTIPLY</span>,
+  <span class="a">OP_DIVIDE</span>,
+</pre><pre class="insert-after">  OP_NEGATE,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Quay lại vòng lặp bytecode, chúng được execute như sau:</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_ADD</span>:      <span class="a">BINARY_OP</span>(+); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_SUBTRACT</span>: <span class="a">BINARY_OP</span>(-); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_MULTIPLY</span>: <span class="a">BINARY_OP</span>(*); <span class="k">break</span>;
+      <span class="k">case</span> <span class="a">OP_DIVIDE</span>:   <span class="a">BINARY_OP</span>(/); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_NEGATE:   push(-pop()); break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Điểm khác nhau duy nhất giữa bốn instruction này là toán tử C mà chúng dùng để kết hợp hai toán hạng. Bao quanh biểu thức số học cốt lõi đó là một số đoạn code lặp để lấy giá trị từ stack và push kết quả. Sau này khi thêm dynamic typing, phần code lặp này sẽ phình ra. Để tránh lặp lại bốn lần, tôi gói nó vào một macro.</p>
+<div class="codehilite"><pre class="insert-before">#define READ_CONSTANT() (vm.chunk-&gt;constants.values[READ_BYTE()])
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#define BINARY_OP(op) \</span>
+<span class="a">    do { \</span>
+<span class="a">      double b = pop(); \</span>
+<span class="a">      double a = pop(); \</span>
+<span class="a">      push(a op b); \</span>
+<span class="a">    } while (false)</span>
+</pre><pre class="insert-after">
+
+  for (;;) {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Tôi thừa nhận đây là một cách dùng C preprocessor khá <span name="operator">“mạo hiểm”</span>. Tôi đã do dự, nhưng bạn sẽ thấy vui khi tới các chương sau, khi ta cần thêm kiểm tra kiểu cho từng toán hạng và các thứ khác. Sẽ thật mệt mỏi nếu phải dẫn bạn qua cùng một đoạn code bốn lần.</p>
+<aside name="operator">
+<p>Bạn có biết là có thể truyền một <em>toán tử</em> làm tham số cho macro không? Giờ thì bạn biết rồi đấy. Preprocessor không quan tâm việc toán tử không phải là “first class” trong C. Với nó, tất cả chỉ là token văn bản.</p>
+<p>Tôi biết, bạn có thể <em>cảm nhận</em> được sự cám dỗ muốn lạm dụng điều này, đúng không?</p>
+</aside>
+<p>Nếu bạn chưa quen với mẹo này, vòng lặp <code>do while</code> bên ngoài có thể trông rất kỳ. Macro này cần mở rộng thành một chuỗi statement. Để là tác giả macro cẩn thận, ta muốn đảm bảo các statement đó đều nằm trong cùng một scope khi macro được expand. Hãy tưởng tượng nếu bạn định nghĩa:</p>
+<div class="codehilite"><pre><span class="a">#define WAKE_UP() makeCoffee(); drinkCoffee();</span>
+</pre></div>
+<p>Rồi dùng nó như sau:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">morning</span>) <span class="a">WAKE_UP</span>();
+</pre></div>
+<p>Ý định là execute cả hai câu lệnh trong macro body chỉ khi <code>morning</code> là true. Nhưng nó expand thành:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">morning</span>) <span class="i">makeCoffee</span>(); <span class="i">drinkCoffee</span>();;
+</pre></div>
+<p>Ối. <code>if</code> chỉ gắn với <em>câu lệnh đầu tiên</em>. Bạn có thể nghĩ tới việc sửa bằng cách dùng block:</p>
+<div class="codehilite"><pre><span class="a">#define WAKE_UP() { makeCoffee(); drinkCoffee(); }</span>
+</pre></div>
+<p>Nghe có vẻ ổn hơn, nhưng bạn vẫn có nguy cơ:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">morning</span>)
+  <span class="a">WAKE_UP</span>();
+<span class="k">else</span>
+  <span class="i">sleepIn</span>();
+</pre></div>
+<p>Giờ thì bạn sẽ gặp lỗi compile ở <code>else</code> vì dấu <code>;</code> thừa sau block của macro. Việc dùng vòng lặp <code>do while</code> trong macro trông hơi buồn cười, nhưng nó cho bạn một cách để chứa nhiều câu lệnh bên trong một block <em>mà vẫn</em> cho phép có dấu chấm phẩy ở cuối.</p>
+<p>Chúng ta đang ở đâu nhỉ? À đúng rồi, phần thân của macro đó thực ra rất đơn giản. Một toán tử nhị phân nhận hai toán hạng, nên nó sẽ pop hai lần. Sau đó, nó thực hiện phép toán trên hai giá trị đó và push kết quả trở lại.</p>
+<p>Hãy chú ý kỹ đến <em>thứ tự</em> của hai lần pop. Lưu ý rằng chúng ta gán toán hạng pop đầu tiên cho <code>b</code>, không phải <code>a</code>. Trông có vẻ ngược. Khi các toán hạng được tính toán, toán hạng bên trái được đánh giá trước, rồi mới đến bên phải. Điều đó có nghĩa là toán hạng bên trái sẽ được push trước toán hạng bên phải. Vì vậy, toán hạng bên phải sẽ nằm trên đỉnh stack. Do đó, giá trị đầu tiên chúng ta pop ra sẽ là <code>b</code>.</p>
+<p>Ví dụ, nếu ta compile <code>3 - 1</code>, luồng dữ liệu giữa các instruction sẽ như sau:</p>
+<p><img src="image/a-virtual-machine/reverse.png" alt="A sequence of instructions
+with the stack for each showing how pushing and then popping values reverses
+their order." /></p>
+<p>Giống như với các macro khác bên trong <code>run()</code>, chúng ta dọn dẹp sau khi xong việc ở cuối hàm.</p>
+<div class="codehilite"><pre class="insert-before">#undef READ_CONSTANT
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#undef BINARY_OP</span>
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Cuối cùng là hỗ trợ cho disassembler.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CONSTANT:
+      return constantInstruction(&quot;OP_CONSTANT&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_ADD</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_ADD&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_SUBTRACT</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_SUBTRACT&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_MULTIPLY</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_MULTIPLY&quot;</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_DIVIDE</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_DIVIDE&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_NEGATE:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Định dạng của các instruction số học rất đơn giản, giống như <code>OP_RETURN</code>. Dù các <em>toán tử</em> số học nhận toán hạng — được lấy từ stack — nhưng các <em>instruction bytecode</em> số học thì không.</p>
+<p>Hãy thử “chạy thử” một số instruction mới của chúng ta bằng cách tính một biểu thức lớn hơn:</p>
+<p><img src="image/a-virtual-machine/chunk.png" alt="The expression being
+evaluated: -((1.2 + 3.4) / 5.6)" /></p>
+<p>Dựa trên chunk ví dụ hiện có, đây là các instruction bổ sung mà ta cần để “compile tay” AST đó thành bytecode.</p>
+<div class="codehilite"><pre class="insert-before">  int constant = addConstant(&amp;chunk, 1.2);
+  writeChunk(&amp;chunk, OP_CONSTANT, 123);
+  writeChunk(&amp;chunk, constant, 123);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">
+
+  <span class="i">constant</span> = <span class="i">addConstant</span>(&amp;<span class="i">chunk</span>, <span class="n">3.4</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_CONSTANT</span>, <span class="n">123</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="i">constant</span>, <span class="n">123</span>);
+
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_ADD</span>, <span class="n">123</span>);
+
+  <span class="i">constant</span> = <span class="i">addConstant</span>(&amp;<span class="i">chunk</span>, <span class="n">5.6</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_CONSTANT</span>, <span class="n">123</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="i">constant</span>, <span class="n">123</span>);
+
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_DIVIDE</span>, <span class="n">123</span>);
+</pre><pre class="insert-after">  writeChunk(&amp;chunk, OP_NEGATE, 123);
+
+  writeChunk(&amp;chunk, OP_RETURN, 123);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Phép cộng được thực hiện trước. Instruction cho constant bên trái, 1.2, đã có sẵn, nên ta thêm một instruction nữa cho 3.4. Sau đó, ta cộng hai số này bằng <code>OP_ADD</code>, để lại kết quả trên stack. Điều đó xử lý xong phía bên trái của phép chia. Tiếp theo, ta push 5.6, và chia kết quả của phép cộng cho nó. Cuối cùng, ta đổi dấu kết quả đó.</p>
+<p>Hãy để ý cách output của <code>OP_ADD</code> tự động trở thành toán hạng của <code>OP_DIVIDE</code> mà không cần hai instruction này phải liên kết trực tiếp với nhau. Đó chính là “phép màu” của stack. Nó cho phép ta tự do kết hợp các instruction mà không cần thêm sự phức tạp hay phải biết về luồng dữ liệu. Stack hoạt động như một vùng làm việc chung mà tất cả đều đọc và ghi vào đó.</p>
+<p>Trong chunk ví dụ nhỏ này, stack vẫn chỉ cao tối đa hai giá trị, nhưng khi ta bắt đầu compile Lox source sang bytecode, sẽ có những chunk dùng nhiều stack hơn. Trong lúc chờ, hãy thử nghịch với chunk viết tay này để tính các biểu thức số học lồng nhau khác nhau và xem cách giá trị di chuyển qua các instruction và stack.</p>
+<p>Bạn có thể “xả” hết hứng thú với việc viết chunk tay ngay bây giờ. Đây là chunk cuối cùng chúng ta sẽ tự viết. Lần tới khi quay lại với bytecode, chúng ta sẽ viết một compiler để tự sinh ra nó.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>15&#8202;.&#8202;4</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Bạn sẽ sinh ra chuỗi instruction bytecode nào cho các biểu thức sau:</p>
+<div class="codehilite"><pre><span class="n">1</span> * <span class="n">2</span> + <span class="n">3</span>
+<span class="n">1</span> + <span class="n">2</span> * <span class="n">3</span>
+<span class="n">3</span> - <span class="n">2</span> - <span class="n">1</span>
+<span class="n">1</span> + <span class="n">2</span> * <span class="n">3</span> - <span class="n">4</span> / -<span class="n">5</span>
+</pre></div>
+<p>(Nhớ rằng Lox không có cú pháp cho literal số âm, nên <code>-5</code> là đang đổi dấu số 5.)</p>
+</li>
+<li>
+<p>Nếu chúng ta thực sự muốn một tập instruction tối giản, ta có thể loại bỏ <code>OP_NEGATE</code> hoặc <code>OP_SUBTRACT</code>. Hãy cho thấy chuỗi instruction bytecode bạn sẽ sinh ra cho:</p>
+<div class="codehilite"><pre><span class="n">4</span> - <span class="n">3</span> * -<span class="n">2</span>
+</pre></div>
+<p>Đầu tiên, không dùng <code>OP_NEGATE</code>. Sau đó, không dùng <code>OP_SUBTRACT</code>.</p>
+<p>Với những gì ở trên, bạn có nghĩ rằng nên giữ cả hai instruction không? Tại sao hoặc tại sao không? Có instruction nào khác bị trùng lặp mà bạn sẽ cân nhắc đưa vào không?</p>
+</li>
+<li>
+<p>Stack của VM hiện có kích thước cố định, và chúng ta không kiểm tra việc push giá trị có gây tràn stack hay không. Điều này có nghĩa là một chuỗi instruction sai có thể khiến interpreter bị crash hoặc rơi vào hành vi undefined. Hãy tránh điều đó bằng cách mở rộng stack động khi cần.</p>
+<p>Chi phí và lợi ích của việc này là gì?</p>
+</li>
+<li>
+<p>Để interpret <code>OP_NEGATE</code>, ta pop toán hạng, đổi dấu giá trị, rồi push kết quả. Đây là cách hiện thực đơn giản, nhưng nó tăng rồi lại giảm <code>stackTop</code> một cách không cần thiết, vì cuối cùng stack vẫn cao như cũ. Có thể sẽ nhanh hơn nếu chỉ đổi dấu giá trị ngay tại chỗ trên stack và không động tới <code>stackTop</code>. Hãy thử và xem bạn có đo được sự khác biệt về hiệu năng không.</p>
+<p>Có instruction nào khác mà bạn có thể tối ưu tương tự không?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-register-based-bytecode" id="ghi-chú-thiết-kế-register-based-bytecode"><small>15&#8202;.&#8202;5</small>Ghi chú thiết kế: Register-Based Bytecode</a></h2>
+<p>Trong phần còn lại của cuốn sách, chúng ta sẽ tỉ mỉ hiện thực một interpreter xoay quanh một tập lệnh bytecode dạng stack-based. Nhưng ngoài kia còn có một “gia đình” kiến trúc bytecode khác — <em>register-based</em>. Dù tên gọi là vậy, các instruction bytecode này không khó làm việc cùng như các thanh ghi (register) trên một con chip thật như <span name="x64">x64</span>. Với các thanh ghi phần cứng thật, bạn thường chỉ có một vài cái cho toàn bộ chương trình, nên bạn phải tốn rất nhiều công sức <a href="https://en.wikipedia.org/wiki/Register_allocation">để dùng chúng hiệu quả và chuyển dữ liệu vào/ra liên tục</a>.</p>
+<aside name="x64">
+<p>Register-based bytecode có phần giống với <a href="https://en.wikipedia.org/wiki/Register_window"><em>register windows</em></a> được hỗ trợ bởi các chip SPARC.</p>
+</aside>
+<p>Trong một VM dạng register-based, bạn vẫn có một stack. Các giá trị tạm thời vẫn được push lên và pop xuống khi không còn cần nữa. Điểm khác biệt chính là các instruction có thể đọc dữ liệu đầu vào từ bất kỳ đâu trong stack và có thể lưu kết quả đầu ra vào các ô (slot) cụ thể trên stack.</p>
+<p>Hãy xem đoạn script Lox nhỏ này:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+<span class="k">var</span> <span class="i">b</span> = <span class="n">2</span>;
+<span class="k">var</span> <span class="i">c</span> = <span class="i">a</span> + <span class="i">b</span>;
+</pre></div>
+<p>Trong VM dạng stack-based của chúng ta, câu lệnh cuối sẽ được compile thành dạng như:</p>
+<div class="codehilite"><pre><span class="i">load</span> &lt;<span class="i">a</span>&gt;  <span class="c">// Đọc biến local a và push lên stack.</span>
+<span class="i">load</span> &lt;<span class="i">b</span>&gt;  <span class="c">// Đọc biến local b và push lên stack.</span>
+<span class="i">add</span>       <span class="c">// Pop hai giá trị, cộng, push kết quả.</span>
+<span class="i">store</span> &lt;<span class="i">c</span>&gt; <span class="c">// Pop giá trị và lưu vào biến local c.</span>
+</pre></div>
+<p>(Đừng lo nếu bạn chưa hiểu rõ các instruction load và store. Chúng ta sẽ tìm hiểu kỹ hơn <a href="global-variables.html">khi hiện thực biến</a>.) Ở đây ta có bốn instruction riêng biệt. Nghĩa là bốn lần chạy qua vòng lặp interpret bytecode, bốn instruction cần decode và dispatch. Ít nhất là bảy byte code — bốn byte cho opcode và thêm ba byte cho các toán hạng (operand) xác định biến local nào cần load và store. Ba lần push và ba lần pop. Khá nhiều việc!</p>
+<p>Trong một tập lệnh dạng register-based, các instruction có thể đọc và lưu trực tiếp vào biến local. Bytecode cho câu lệnh cuối ở trên sẽ trông như:</p>
+<div class="codehilite"><pre><span class="i">add</span> &lt;<span class="i">a</span>&gt; &lt;<span class="i">b</span>&gt; &lt;<span class="i">c</span>&gt; <span class="c">// Đọc giá trị từ a và b, cộng, lưu vào c.</span>
+</pre></div>
+<p>Instruction <code>add</code> này lớn hơn — nó có ba toán hạng xác định vị trí trong stack để đọc dữ liệu đầu vào và ghi kết quả ra. Nhưng vì các biến local nằm trên stack, nó có thể đọc trực tiếp từ <code>a</code> và <code>b</code>, rồi lưu kết quả thẳng vào <code>c</code>.</p>
+<p>Chỉ có một instruction cần decode và dispatch, và toàn bộ chỉ chiếm bốn byte. Việc decode phức tạp hơn vì có thêm các toán hạng, nhưng nhìn chung vẫn có lợi. Không cần push/pop hay thao tác stack khác.</p>
+<p>Implementation chính của Lua trước đây là stack-based. Tới <span name="lua">Lua 5.0</span>, nhóm phát triển đã chuyển sang tập lệnh dạng register và ghi nhận tốc độ được cải thiện. Mức cải thiện, tất nhiên, phụ thuộc nhiều vào chi tiết semantics của ngôn ngữ, tập lệnh cụ thể, và độ tinh vi của compiler, nhưng điều đó cũng đủ để bạn chú ý.</p>
+<aside name="lua">
+<p>Nhóm phát triển Lua — Roberto Ierusalimschy, Waldemar Celes, và Luiz Henrique de Figueiredo — đã viết một bài báo <em>tuyệt vời</em> về chủ đề này, một trong những bài báo khoa học máy tính tôi yêu thích nhất: &ldquo;<a href="https://www.lua.org/doc/jucs05.pdf">The Implementation of Lua 5.0</a>&rdquo; (PDF).</p>
+</aside>
+<p>Điều này dẫn đến câu hỏi hiển nhiên: tại sao tôi lại dành phần còn lại của cuốn sách để làm bytecode dạng stack-based. VM dạng register rất thú vị, nhưng việc viết compiler cho chúng khó hơn khá nhiều. Với một compiler rất có thể là <em>đầu tiên</em> của bạn, tôi muốn gắn bó với một tập lệnh dễ sinh ra và dễ execute. Stack-based bytecode thì cực kỳ đơn giản.</p>
+<p>Nó cũng <em>phổ biến hơn nhiều</em> trong tài liệu và cộng đồng. Ngay cả khi sau này bạn chuyển sang thứ gì đó tiên tiến hơn, đây vẫn là một nền tảng chung tốt để bạn chia sẻ với những “đồng đạo” yêu thích xây dựng ngôn ngữ khác.</p>
+</div>
+
+<footer>
+<a href="scanning-on-demand.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Scanning on Demand&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

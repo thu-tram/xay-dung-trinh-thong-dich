@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Chunks of Bytecode &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Chunks of Bytecode<small>14</small></a></h3>
+
+<ul>
+    <li><a href="#bytecode"><small>14.1</small> Bytecode?</a></li>
+    <li><a href="#bắt-đầu-thôi"><small>14.2</small> Bắt đầu thôi</a></li>
+    <li><a href="#các-khối-lệnh-chunks-of-instructions"><small>14.3</small> Các khối lệnh (Chunks of Instructions)</a></li>
+    <li><a href="#giải-mã-disassembling-các-chunk"><small>14.4</small> Giải mã (Disassembling) các Chunk</a></li>
+    <li><a href="#constants"><small>14.5</small> Constants</a></li>
+    <li><a href="#thông-tin-dòng-line-information"><small>14.6</small> Thông tin dòng (Line Information)</a></li>
+    <li><a href="#thử-thách"><small>14.7</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-hãy-kiểm-thử-ngôn-ngữ-của-bạn"><small>14.8</small> Ghi chú thiết kế: Hãy kiểm thử ngôn ngữ của bạn</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="a-virtual-machine.html" title="A Virtual Machine" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="prev">←</a>
+<a href="a-virtual-machine.html" title="A Virtual Machine" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Chunks of Bytecode<small>14</small></a></h3>
+
+<ul>
+    <li><a href="#bytecode"><small>14.1</small> Bytecode?</a></li>
+    <li><a href="#bắt-đầu-thôi"><small>14.2</small> Bắt đầu thôi</a></li>
+    <li><a href="#các-khối-lệnh-chunks-of-instructions"><small>14.3</small> Các khối lệnh (Chunks of Instructions)</a></li>
+    <li><a href="#giải-mã-disassembling-các-chunk"><small>14.4</small> Giải mã (Disassembling) các Chunk</a></li>
+    <li><a href="#constants"><small>14.5</small> Constants</a></li>
+    <li><a href="#thông-tin-dòng-line-information"><small>14.6</small> Thông tin dòng (Line Information)</a></li>
+    <li><a href="#thử-thách"><small>14.7</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-hãy-kiểm-thử-ngôn-ngữ-của-bạn"><small>14.8</small> Ghi chú thiết kế: Hãy kiểm thử ngôn ngữ của bạn</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="a-virtual-machine.html" title="A Virtual Machine" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">14</div>
+  <h1>Chunks of Bytecode</h1>
+
+<blockquote>
+<p>Nếu bạn thấy mình đang dành gần như toàn bộ thời gian cho lý thuyết, hãy bắt đầu dành chút sự chú ý cho những thứ thực hành; điều đó sẽ cải thiện lý thuyết của bạn. Nếu bạn thấy mình đang dành gần như toàn bộ thời gian cho thực hành, hãy bắt đầu dành chút sự chú ý cho những thứ lý thuyết; điều đó sẽ cải thiện việc thực hành của bạn.</p>
+<p><cite>Donald Knuth</cite></p>
+</blockquote>
+<p>Chúng ta đã có một bản cài đặt hoàn chỉnh của Lox với jlox, vậy tại sao cuốn sách này vẫn chưa kết thúc? Một phần là vì jlox dựa vào <span name="metal">JVM</span> để làm rất nhiều việc cho chúng ta. Nếu muốn hiểu cách một interpreter hoạt động đến tận “tầng kim loại” (hardware), chúng ta cần tự xây dựng những phần đó.</p>
+<aside name="metal">
+<p>Tất nhiên, interpreter thứ hai của chúng ta cũng dựa vào thư viện chuẩn C cho những thứ cơ bản như cấp phát bộ nhớ, và trình biên dịch C giúp chúng ta không phải bận tâm đến chi tiết của mã máy bên dưới mà nó đang chạy. Thậm chí, mã máy đó có thể còn được cài đặt dựa trên microcode trong chip. Và C runtime thì dựa vào hệ điều hành để cấp phát các trang bộ nhớ. Nhưng chúng ta phải dừng ở <em>một điểm nào đó</em> nếu muốn cuốn sách này còn vừa trên kệ sách của bạn.</p>
+</aside>
+<p>Một lý do còn cơ bản hơn khiến jlox chưa đủ là vì nó <strong>quá chậm</strong>. Một tree-walk interpreter thì ổn với một số loại ngôn ngữ bậc cao, khai báo. Nhưng với một ngôn ngữ imperative đa dụng — kể cả một ngôn ngữ “scripting” như Lox — thì không ổn chút nào. Hãy xem đoạn script nhỏ này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">fib</span>(<span class="i">n</span>) {
+  <span class="k">if</span> (<span class="i">n</span> &lt; <span class="n">2</span>) <span class="k">return</span> <span class="i">n</span>;
+  <span class="k">return</span> <span class="i">fib</span>(<span class="i">n</span> - <span class="n">1</span>) + <span class="i">fib</span>(<span class="i">n</span> - <span class="n">2</span>);<span name="fib"> </span>
+}
+
+<span class="k">var</span> <span class="i">before</span> = <span class="i">clock</span>();
+<span class="k">print</span> <span class="i">fib</span>(<span class="n">40</span>);
+<span class="k">var</span> <span class="i">after</span> = <span class="i">clock</span>();
+<span class="k">print</span> <span class="i">after</span> - <span class="i">before</span>;
+</pre></div>
+<aside name="fib">
+<p>Đây là một cách tính số Fibonacci cực kỳ kém hiệu quả. Mục tiêu của chúng ta là xem <em>interpreter</em> chạy nhanh đến đâu, chứ không phải xem chúng ta có thể viết một chương trình nhanh đến mức nào. Một chương trình chậm nhưng làm nhiều việc — dù vô nghĩa hay không — lại là một bài test tốt cho mục đích này.</p>
+</aside>
+<p>Trên laptop của tôi, jlox mất khoảng 72 giây để chạy xong. Một chương trình C tương đương chỉ mất nửa giây. Ngôn ngữ scripting kiểu dynamic typing của chúng ta sẽ không bao giờ nhanh bằng một ngôn ngữ static typing với quản lý bộ nhớ thủ công, nhưng chúng ta cũng không cần chấp nhận việc nó chậm hơn <em>hơn hai bậc độ lớn</em>.</p>
+<p>Chúng ta có thể chạy jlox qua profiler rồi bắt đầu tinh chỉnh các điểm nóng, nhưng điều đó chỉ giúp được đến một mức nào đó. Mô hình execute — đi bộ qua AST — về cơ bản là một thiết kế sai cho mục tiêu này. Chúng ta không thể “vi chỉnh” nó để đạt hiệu năng mong muốn, cũng như bạn không thể đánh bóng một chiếc AMC Gremlin thành một chiếc SR-71 Blackbird.</p>
+<p>Chúng ta cần nghĩ lại mô hình cốt lõi. Chương này sẽ giới thiệu mô hình đó — bytecode — và bắt đầu xây dựng interpreter mới của chúng ta, clox.</p>
+<h2><a href="#bytecode" id="bytecode"><small>14&#8202;.&#8202;1</small>Bytecode?</a></h2>
+<p>Trong kỹ thuật, hiếm khi có lựa chọn nào mà không phải đánh đổi. Để hiểu rõ tại sao chúng ta chọn bytecode, hãy so sánh nó với một vài phương án khác.</p>
+<h3><a href="#tại-sao-không-đi-bộ-qua-ast" id="tại-sao-không-đi-bộ-qua-ast"><small>14&#8202;.&#8202;1&#8202;.&#8202;1</small>Tại sao không đi bộ qua AST?</a></h3>
+<p>Interpreter hiện tại của chúng ta có vài điểm mạnh:</p>
+<ul>
+<li>
+<p>Trước hết, chúng ta đã viết xong nó rồi. Hoàn thành. Và lý do chính là vì kiểu interpreter này <em>rất dễ cài đặt</em>. Biểu diễn runtime của code ánh xạ trực tiếp với cú pháp. Từ parser sang cấu trúc dữ liệu cần cho runtime gần như không tốn công sức.</p>
+</li>
+<li>
+<p>Nó <em>portable</em>. Interpreter hiện tại được viết bằng Java và chạy trên bất kỳ nền tảng nào Java hỗ trợ. Chúng ta hoàn toàn có thể viết một bản mới bằng C với cùng cách tiếp cận, rồi biên dịch và chạy ngôn ngữ của mình trên hầu như mọi nền tảng.</p>
+</li>
+</ul>
+<p>Đó là những lợi thế thật sự. Nhưng, ngược lại, nó <em>không tiết kiệm bộ nhớ</em>. Mỗi mẩu cú pháp trở thành một node AST. Một biểu thức Lox nhỏ như <code>1 + 2</code> lại biến thành một đống object với hàng loạt con trỏ liên kết, trông như thế này:</p>
+<p><span name="header"></span></p>
+<aside name="header">
+<p>Phần “(header)” là thông tin quản lý mà Java virtual machine dùng để hỗ trợ quản lý bộ nhớ và lưu kiểu của object. Chúng cũng chiếm dung lượng!</p>
+</aside><img src="image/chunks-of-bytecode/ast.png" alt="The tree of Java objects created to represent '1 + 2'." />
+<p>Mỗi con trỏ như vậy lại thêm 32 hoặc 64 bit overhead vào object. Tệ hơn, việc rải dữ liệu khắp heap trong một mạng lưới object lỏng lẻo gây ra vấn đề nghiêm trọng cho <span name="locality"><em>spatial locality</em></span>.</p>
+<aside name="locality">
+<p>Tôi đã viết <a href="http://gameprogrammingpatterns.com/data-locality.html">một chương riêng</a> về chính vấn đề này trong cuốn sách đầu tiên của mình, <em>Game Programming Patterns</em>, nếu bạn muốn tìm hiểu sâu hơn.</p>
+</aside>
+<p>CPU hiện đại xử lý dữ liệu nhanh hơn nhiều so với tốc độ lấy dữ liệu từ RAM. Để bù lại, chip có nhiều tầng cache. Nếu một vùng nhớ đã có sẵn trong cache, nó có thể được nạp nhanh hơn rất nhiều — nhanh hơn tới 100 <em>lần</em>.</p>
+<p>Dữ liệu vào cache bằng cách nào? Bộ xử lý sẽ “đoán” và nạp sẵn cho bạn. Nguyên tắc khá đơn giản: mỗi khi CPU đọc một chút dữ liệu từ RAM, nó sẽ lấy luôn một cụm byte liền kề và đưa vào cache.</p>
+<p>Nếu chương trình của chúng ta tiếp theo cần dữ liệu nằm trong cùng cache line đó, CPU sẽ chạy mượt như một dây chuyền sản xuất trơn tru. Chúng ta <em>rất</em> muốn tận dụng điều này. Để dùng cache hiệu quả, cách chúng ta biểu diễn code trong bộ nhớ nên đặc và có thứ tự giống như khi nó được đọc.</p>
+<p>Giờ hãy nhìn lại cái cây ở trên. Những sub-object đó có thể nằm <span name="anywhere"><em>bất cứ đâu</em></span>. Mỗi bước mà tree-walker đi theo một tham chiếu đến node con có thể vượt ra ngoài phạm vi cache và buộc CPU phải chờ cho đến khi một cụm dữ liệu mới được nạp từ RAM. Chỉ riêng <em>overhead</em> của các node trong cây với tất cả các trường con trỏ và header object đã đủ để đẩy chúng ra xa nhau và ra khỏi cache.</p>
+<aside name="anywhere">
+<p>Ngay cả khi các object tình flag được cấp phát liên tiếp trong bộ nhớ khi parser vừa tạo ra chúng, thì sau vài vòng garbage collection — vốn có thể di chuyển object trong bộ nhớ — cũng chẳng thể biết chúng sẽ nằm ở đâu.</p>
+</aside>
+<p>AST walker của chúng ta còn có overhead khác như interface dispatch và Visitor pattern, nhưng chỉ riêng vấn đề locality cũng đã đủ để biện minh cho một cách biểu diễn code tốt hơn.</p>
+<h3><a href="#tại-sao-không-biên-dịch-thẳng-sang-native-code" id="tại-sao-không-biên-dịch-thẳng-sang-native-code"><small>14&#8202;.&#8202;1&#8202;.&#8202;2</small>Tại sao không biên dịch thẳng sang native code?</a></h3>
+<p>Nếu bạn muốn chạy <em>thật</em> nhanh, bạn sẽ muốn loại bỏ tất cả những tầng gián tiếp đó. Xuống tận “tầng kim loại”. Machine code. Nghe thôi cũng đã thấy nhanh rồi. <em>Machine code.</em></p>
+<p>Biên dịch trực tiếp sang tập lệnh gốc mà chip hỗ trợ là cách mà các ngôn ngữ nhanh nhất vẫn làm. Nhắm tới native code đã là lựa chọn hiệu quả nhất từ những ngày đầu, khi các kỹ sư thực sự <span name="hand">viết tay</span> chương trình bằng machine code.</p>
+<aside name="hand">
+<p>Vâng, họ thực sự viết machine code bằng tay. Trên thẻ đục lỗ. Và có lẽ, họ đục lỗ <em>bằng nắm đấm</em>.</p>
+</aside>
+<p>Nếu bạn chưa từng viết machine code, hoặc “người anh em” dễ đọc hơn một chút là assembly code, thì tôi sẽ giới thiệu nhẹ nhàng nhất có thể. Native code là một chuỗi dày đặc các thao tác, được mã hóa trực tiếp ở dạng nhị phân. Mỗi lệnh dài từ một đến vài byte, và gần như ở mức thấp đến mức… tê liệt não. “Chuyển một giá trị từ địa chỉ này sang thanh ghi kia.” “Cộng hai số nguyên trong hai thanh ghi này.” Đại loại như vậy.</p>
+<p>CPU sẽ chạy qua các lệnh đó, giải mã và execute từng lệnh theo thứ tự. Không có cấu trúc cây như AST của chúng ta, và luồng điều khiển được xử lý bằng cách nhảy từ điểm này sang điểm khác trong code. Không gián tiếp, không overhead, không nhảy lung tung hay lần theo con trỏ.</p>
+<p>Nhanh như chớp, nhưng hiệu năng đó phải trả giá. Trước hết, biên dịch sang native code không hề dễ. Hầu hết các chip phổ biến ngày nay đều có kiến trúc phức tạp kiểu Byzantine với hàng đống lệnh tích tụ qua nhiều thập kỷ. Chúng đòi hỏi kỹ thuật phân bổ thanh ghi tinh vi, pipelining, và sắp xếp lệnh.</p>
+<p>Và tất nhiên, bạn đã vứt bỏ <span name="back">tính portable</span>. Dành vài năm để thành thạo một kiến trúc nào đó thì bạn cũng chỉ mới chạy được trên <em>một</em> trong số nhiều tập lệnh phổ biến. Muốn ngôn ngữ của mình chạy trên tất cả, bạn phải học tất cả các tập lệnh đó và viết một back end riêng cho từng cái.</p>
+<aside name="back">
+<p>Tình hình cũng không hoàn toàn bi đát. Một compiler được thiết kế tốt cho phép bạn chia sẻ front end và hầu hết các bước tối ưu hóa ở tầng giữa giữa các kiến trúc khác nhau. Chủ yếu chỉ có phần sinh code và một số chi tiết về chọn lệnh là bạn phải viết lại mỗi lần.</p>
+<p>Dự án <a href="https://llvm.org/">LLVM</a> cung cấp sẵn cho bạn một phần việc này. Nếu compiler của bạn xuất ra ngôn ngữ trung gian đặc biệt của LLVM, thì LLVM sẽ biên dịch nó sang native code cho hàng loạt kiến trúc.</p>
+</aside>
+<h3><a href="#bytecode-l&agrave;-gì" id="bytecode-l&agrave;-gì"><small>14&#8202;.&#8202;1&#8202;.&#8202;3</small>Bytecode l&agrave; gì?</a></h3>
+<p>Hãy ghi nhớ hai điểm này. Ở một đầu, tree-walk interpreter thì đơn giản, portable, nhưng chậm. Ở đầu kia, native code thì phức tạp, phụ thuộc nền tảng nhưng nhanh. Bytecode nằm ở giữa. Nó giữ được tính portable của tree-walker — trong cuốn sách này, chúng ta sẽ không phải đụng tay vào assembly code. Nó hy sinh <em>một chút</em> sự đơn giản để đổi lấy hiệu năng cao hơn, dù vẫn không nhanh bằng native code hoàn toàn.</p>
+<p>Về cấu trúc, bytecode giống machine code. Nó là một chuỗi tuyến tính, dày đặc các lệnh nhị phân. Điều này giúp giảm overhead và tận dụng cache tốt hơn. Tuy nhiên, nó là một tập lệnh đơn giản hơn nhiều, ở mức trừu tượng cao hơn bất kỳ con chip thực nào. (Trong nhiều định dạng bytecode, mỗi lệnh chỉ dài đúng một byte, vì thế mới gọi là “bytecode”.)</p>
+<p>Hãy tưởng tượng bạn đang viết một native compiler từ một ngôn ngữ nguồn nào đó và được toàn quyền thiết kế kiến trúc dễ nhắm tới nhất. Bytecode gần giống như vậy. Nó là một tập lệnh lý tưởng hóa, giúp cuộc sống của người viết compiler dễ dàng hơn.</p>
+<p>Vấn đề của một kiến trúc “ảo tưởng” là… nó không tồn tại. Chúng ta giải quyết điều đó bằng cách viết một <em>emulator</em> — một con chip giả lập bằng phần mềm, đọc và execute bytecode từng lệnh một. Hay nói cách khác là một <em>virtual machine (VM)</em>.</p>
+<p>Lớp giả lập này thêm <span name="p-code">overhead</span>, đây là lý do chính khiến bytecode chậm hơn native code. Nhưng đổi lại, nó cho chúng ta tính portable. Viết VM bằng một ngôn ngữ như C — vốn đã được hỗ trợ trên mọi máy mà ta quan tâm — và ta có thể chạy emulator đó trên bất kỳ phần cứng nào mình muốn.</p>
+<aside name="p-code">
+<p>Một trong những định dạng bytecode đầu tiên là <a href="https://en.wikipedia.org/wiki/P-code_machine">p-code</a>, được phát triển cho ngôn ngữ Pascal của Niklaus Wirth. Bạn có thể nghĩ rằng một PDP-11 chạy ở 15MHz thì không thể chịu nổi overhead của việc giả lập một virtual machine. Nhưng thời đó, máy tính đang trong thời kỳ “bùng nổ Cambrian” và kiến trúc mới xuất hiện liên tục. Bắt kịp chip mới quan trọng hơn là vắt kiệt hiệu năng từ từng con chip. Đó là lý do chữ “p” trong p-code không phải là “Pascal” mà là “portable”.</p>
+</aside>
+<p>Đây chính là con đường chúng ta sẽ đi với interpreter mới, clox. Chúng ta sẽ theo bước các bản cài đặt chính của Python, Ruby, Lua, OCaml, Erlang, và nhiều ngôn ngữ khác. Ở nhiều khía cạnh, thiết kế VM của chúng ta sẽ song song với cấu trúc của interpreter trước:</p>
+<p><img src="image/chunks-of-bytecode/phases.png" alt="Phases of the two
+implementations. jlox is Parser to Syntax Trees to Interpreter. clox is Compiler
+to Bytecode to Virtual Machine." /></p>
+<p>Tất nhiên, chúng ta sẽ không cài đặt các giai đoạn này theo đúng thứ tự. Giống như interpreter trước, chúng ta sẽ “nhảy qua nhảy lại”, xây dựng từng tính năng ngôn ngữ một. Trong chương này, chúng ta sẽ dựng bộ khung của ứng dụng và tạo các cấu trúc dữ liệu cần thiết để lưu trữ và biểu diễn một chunk bytecode.</p>
+<h2><a href="#bắt-đầu-thôi" id="bắt-đầu-thôi"><small>14&#8202;.&#8202;2</small>Bắt đầu thôi</a></h2>
+<p>Còn bắt đầu từ đâu nữa, nếu không phải là <code>main()</code>? <span name="ready">Mở</span> trình soạn thảo quen thuộc của bạn và bắt đầu gõ.</p>
+<aside name="ready">
+<p>Đây là lúc thích hợp để vươn vai, bẻ khớp ngón tay. Thêm chút nhạc nền kiểu montage cũng không tệ.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>main.c</em><br>
+create new file</div>
+<pre><span class="a">#include &quot;common.h&quot;</span>
+
+<span class="t">int</span> <span class="i">main</span>(<span class="t">int</span> <span class="i">argc</span>, <span class="k">const</span> <span class="t">char</span>* <span class="i">argv</span>[]) {
+  <span class="k">return</span> <span class="n">0</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, create new file</div>
+
+<p>Từ hạt giống nhỏ bé này, chúng ta sẽ phát triển toàn bộ VM. Vì C cung cấp cho chúng ta quá ít, nên trước tiên ta cần “bón đất” một chút. Một phần việc đó nằm trong file header này:</p>
+<div class="codehilite"><div class="source-file"><em>common.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_common_h</span>
+<span class="a">#define clox_common_h</span>
+
+<span class="a">#include &lt;stdbool.h&gt;</span>
+<span class="a">#include &lt;stddef.h&gt;</span>
+<span class="a">#include &lt;stdint.h&gt;</span>
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>common.h</em>, create new file</div>
+
+<p>Có một vài kiểu dữ liệu và hằng số mà chúng ta sẽ dùng xuyên suốt interpreter, và đây là nơi tiện lợi để đặt chúng. Hiện tại, đó là <code>NULL</code> quen thuộc, <code>size_t</code>, kiểu Boolean <code>bool</code> của C99, và các kiểu số nguyên có kích thước rõ ràng — <code>uint8_t</code> và các “người bạn” của nó.</p>
+<h2><a href="#các-khối-lệnh-chunks-of-instructions" id="các-khối-lệnh-chunks-of-instructions"><small>14&#8202;.&#8202;3</small>Các khối lệnh (Chunks of Instructions)</a></h2>
+<p>Tiếp theo, chúng ta cần một module để định nghĩa cách biểu diễn code. Tôi đã dùng từ “chunk” để chỉ các chuỗi bytecode, vậy nên hãy chính thức dùng nó làm tên cho module này.</p>
+<div class="codehilite"><div class="source-file"><em>chunk.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_chunk_h</span>
+<span class="a">#define clox_chunk_h</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, create new file</div>
+
+<p>Trong định dạng bytecode của chúng ta, mỗi instruction có một byte <strong>operation code</strong> (thường được viết tắt là <strong>opcode</strong>). Con số này quyết định loại instruction mà chúng ta đang xử lý — cộng, trừ, tra cứu biến, v.v. Chúng ta sẽ định nghĩa chúng ở đây:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>chunk.h</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">enum</span> {
+  <span class="a">OP_RETURN</span>,
+} <span class="t">OpCode</span>;
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em></div>
+
+<p>Hiện tại, ta bắt đầu với một instruction duy nhất, <code>OP_RETURN</code>. Khi VM của chúng ta đầy đủ tính năng, instruction này sẽ có nghĩa là “trả về từ hàm hiện tại”. Tôi thừa nhận là nó chưa hữu ích lắm, nhưng ta phải bắt đầu từ đâu đó, và đây là một instruction đặc biệt đơn giản, vì những lý do mà ta sẽ nói đến sau.</p>
+<h3><a href="#mảng-động-chứa-các-instruction" id="mảng-động-chứa-các-instruction"><small>14&#8202;.&#8202;3&#8202;.&#8202;1</small>Mảng động chứa các instruction</a></h3>
+<p>Bytecode là một chuỗi các instruction. Sau này, chúng ta sẽ lưu thêm một số dữ liệu khác cùng với các instruction, nên hãy tạo luôn một struct để chứa tất cả.</p>
+<div class="codehilite"><pre class="insert-before">} OpCode;
+</pre><div class="source-file"><em>chunk.h</em><br>
+add after enum <em>OpCode</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">uint8_t</span>* <span class="i">code</span>;
+} <span class="t">Chunk</span>;
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, add after enum <em>OpCode</em></div>
+
+<p>Hiện tại, nó chỉ đơn giản là một lớp bọc quanh một mảng byte. Vì chúng ta không biết trước kích thước mảng cần bao nhiêu trước khi bắt đầu compile một chunk, nên nó phải là mảng động. Mảng động là một trong những cấu trúc dữ liệu tôi yêu thích nhất. Nghe có vẻ giống như việc nói “vanilla là vị kem yêu thích của tôi” <span name="flavor">vậy</span>, nhưng hãy nghe tôi giải thích. Mảng động mang lại:</p>
+<aside name="flavor">
+<p>Thực ra, butter pecan mới là vị tôi thích nhất.</p>
+</aside>
+<ul>
+<li>Lưu trữ dày đặc, thân thiện với cache  </li>
+<li>Truy cập phần tử theo chỉ số trong thời gian hằng số  </li>
+<li>Thêm phần tử vào cuối mảng trong thời gian hằng số  </li>
+</ul>
+<p>Chính những đặc điểm này là lý do chúng ta dùng mảng động liên tục trong jlox, dưới dạng lớp ArrayList của Java. Giờ đây khi ở trong C, chúng ta sẽ tự viết lấy. Nếu bạn đã quên cách mảng động hoạt động, ý tưởng khá đơn giản: ngoài mảng dữ liệu, ta giữ thêm hai con số — số phần tử đã được cấp phát (“capacity”) và số phần tử thực sự đang dùng (“count”).</p>
+<div class="codehilite"><pre class="insert-before">typedef struct {
+</pre><div class="source-file"><em>chunk.h</em><br>
+in struct <em>Chunk</em></div>
+<pre class="insert">  <span class="t">int</span> <span class="i">count</span>;
+  <span class="t">int</span> <span class="i">capacity</span>;
+</pre><pre class="insert-after">  uint8_t* code;
+} Chunk;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in struct <em>Chunk</em></div>
+
+<p>Khi thêm một phần tử, nếu <code>count</code> nhỏ hơn <code>capacity</code>, tức là mảng vẫn còn chỗ trống. Ta chỉ cần lưu phần tử mới vào đó và tăng <code>count</code>.</p><img src="image/chunks-of-bytecode/insert.png" alt="Storing an element in an array that has enough capacity." />
+<p>Nếu không còn chỗ trống, quá trình sẽ phức tạp hơn một chút.</p><img src="image/chunks-of-bytecode/grow.png" alt="Growing the dynamic array before storing an element." class="wide" />
+<ol>
+<li><span name="amortized">Cấp phát</span> một mảng mới với dung lượng lớn hơn.  </li>
+<li>Sao chép các phần tử hiện có từ mảng cũ sang mảng mới.  </li>
+<li>Lưu <code>capacity</code> mới.  </li>
+<li>Giải phóng mảng cũ.  </li>
+<li>Cập nhật <code>code</code> để trỏ tới mảng mới.  </li>
+<li>Lưu phần tử mới vào mảng mới khi đã có chỗ.  </li>
+<li>Cập nhật <code>count</code>.  </li>
+</ol>
+<aside name="amortized">
+<p>Việc sao chép các phần tử khi mở rộng mảng khiến nó có vẻ như thao tác thêm phần tử là <em>O(n)</em>, chứ không phải <em>O(1)</em> như tôi vừa nói. Tuy nhiên, bạn chỉ cần sao chép ở <em>một số</em> lần thêm. Phần lớn thời gian, mảng đã có sẵn chỗ trống nên không cần sao chép.</p>
+<p>Để hiểu điều này, chúng ta cần <a href="https://en.wikipedia.org/wiki/Amortized_analysis"><strong>amortized analysis</strong></a>. Phân tích này cho thấy miễn là ta mở rộng mảng theo bội số của kích thước hiện tại, khi tính trung bình chi phí của <em>một chuỗi</em> thao tác thêm, mỗi lần thêm vẫn là <em>O(1)</em>.</p>
+</aside>
+<p>Chúng ta đã có struct, giờ hãy viết các hàm để làm việc với nó. C không có constructor, nên ta khai báo một hàm để khởi tạo một chunk mới.</p>
+<div class="codehilite"><pre class="insert-before">} Chunk;
+</pre><div class="source-file"><em>chunk.h</em><br>
+add after struct <em>Chunk</em></div>
+<pre class="insert">
+
+<span class="t">void</span> <span class="i">initChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, add after struct <em>Chunk</em></div>
+
+<p>Và cài đặt nó như sau:</p>
+<div class="codehilite"><div class="source-file"><em>chunk.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdlib.h&gt;</span>
+
+<span class="a">#include &quot;chunk.h&quot;</span>
+
+<span class="t">void</span> <span class="i">initChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>) {
+  <span class="i">chunk</span>-&gt;<span class="i">count</span> = <span class="n">0</span>;
+  <span class="i">chunk</span>-&gt;<span class="i">capacity</span> = <span class="n">0</span>;
+  <span class="i">chunk</span>-&gt;<span class="i">code</span> = <span class="a">NULL</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, create new file</div>
+
+<p>Mảng động bắt đầu hoàn toàn rỗng. Ta thậm chí chưa cấp phát mảng thô. Để thêm một byte vào cuối chunk, ta dùng một hàm mới.</p>
+<div class="codehilite"><pre class="insert-before">void initChunk(Chunk* chunk);
+</pre><div class="source-file"><em>chunk.h</em><br>
+add after <em>initChunk</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">writeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">uint8_t</span> <span class="i">byte</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, add after <em>initChunk</em>()</div>
+
+<p>Đây là nơi công việc thú vị diễn ra.</p>
+<div class="codehilite"><div class="source-file"><em>chunk.c</em><br>
+add after <em>initChunk</em>()</div>
+<pre><span class="t">void</span> <span class="i">writeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">uint8_t</span> <span class="i">byte</span>) {
+  <span class="k">if</span> (<span class="i">chunk</span>-&gt;<span class="i">capacity</span> &lt; <span class="i">chunk</span>-&gt;<span class="i">count</span> + <span class="n">1</span>) {
+    <span class="t">int</span> <span class="i">oldCapacity</span> = <span class="i">chunk</span>-&gt;<span class="i">capacity</span>;
+    <span class="i">chunk</span>-&gt;<span class="i">capacity</span> = <span class="a">GROW_CAPACITY</span>(<span class="i">oldCapacity</span>);
+    <span class="i">chunk</span>-&gt;<span class="i">code</span> = <span class="a">GROW_ARRAY</span>(<span class="t">uint8_t</span>, <span class="i">chunk</span>-&gt;<span class="i">code</span>,
+        <span class="i">oldCapacity</span>, <span class="i">chunk</span>-&gt;<span class="i">capacity</span>);
+  }
+
+  <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">chunk</span>-&gt;<span class="i">count</span>] = <span class="i">byte</span>;
+  <span class="i">chunk</span>-&gt;<span class="i">count</span>++;
+}
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, add after <em>initChunk</em>()</div>
+
+<p>Việc đầu tiên là kiểm tra xem mảng hiện tại đã đủ chỗ cho byte mới chưa. Nếu chưa, ta cần mở rộng mảng để có chỗ. (Trường hợp này cũng xảy ra ngay lần ghi đầu tiên khi mảng là <code>NULL</code> và <code>capacity</code> bằng 0.)</p>
+<p>Để mở rộng mảng, trước tiên ta tính toán <code>capacity</code> mới và mở rộng mảng tới kích thước đó. Cả hai thao tác cấp phát bộ nhớ cấp thấp này được định nghĩa trong một module mới.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;chunk.h&quot;
+</pre><div class="source-file"><em>chunk.c</em></div>
+<pre class="insert"><span class="a">#include &quot;memory.h&quot;</span>
+</pre><pre class="insert-after">
+
+void initChunk(Chunk* chunk) {
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em></div>
+
+<p>Vậy là đủ để bắt đầu.</p>
+<div class="codehilite"><div class="source-file"><em>memory.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_memory_h</span>
+<span class="a">#define clox_memory_h</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+
+<span class="a">#define GROW_CAPACITY(capacity) \</span>
+<span class="a">    ((capacity) &lt; 8 ? 8 : (capacity) * 2)</span>
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em>, create new file</div>
+
+<p>Macro này tính toán <code>capacity</code> mới dựa trên <code>capacity</code> hiện tại. Để đạt hiệu năng mong muốn, điều quan trọng là nó phải <em>tăng theo tỷ lệ</em> so với kích thước cũ. Chúng ta tăng gấp đôi, đây là cách khá phổ biến. 1.5× cũng là một lựa chọn thường gặp.</p>
+<p>Ta cũng xử lý trường hợp <code>capacity</code> hiện tại bằng 0. Khi đó, ta nhảy thẳng lên 8 phần tử thay vì bắt đầu từ 1. Điều này <span name="profile">tránh</span> việc cấp phát lại quá nhiều khi mảng còn rất nhỏ, đổi lại là lãng phí vài byte cho các chunk rất nhỏ.</p>
+<aside name="profile">
+<p>Tôi chọn số 8 khá tùy ý cho cuốn sách này. Hầu hết các cài đặt mảng động đều có một ngưỡng tối thiểu như vậy. Cách đúng đắn để chọn giá trị là đo đạc trên dữ liệu thực tế và tìm hằng số cho hiệu năng tốt nhất giữa số lần mở rộng và dung lượng lãng phí.</p>
+</aside>
+<p>Khi đã biết <code>capacity</code> mong muốn, ta tạo mới hoặc mở rộng mảng tới kích thước đó bằng <code>GROW_ARRAY()</code>.</p>
+<div class="codehilite"><pre class="insert-before">#define GROW_CAPACITY(capacity) \
+    ((capacity) &lt; 8 ? 8 : (capacity) * 2)
+</pre><div class="source-file"><em>memory.h</em></div>
+<pre class="insert">
+
+<span class="a">#define GROW_ARRAY(type, pointer, oldCount, newCount) \</span>
+<span class="a">    (type*)reallocate(pointer, sizeof(type) * (oldCount), \</span>
+<span class="a">        sizeof(type) * (newCount))</span>
+
+<span class="t">void</span>* <span class="i">reallocate</span>(<span class="t">void</span>* <span class="i">pointer</span>, <span class="t">size_t</span> <span class="i">oldSize</span>, <span class="t">size_t</span> <span class="i">newSize</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em></div>
+
+<p>Macro này giúp lời gọi hàm <code>reallocate()</code> trông gọn gàng hơn. Nó lo việc lấy kích thước phần tử của mảng và ép kiểu con trỏ <code>void*</code> trả về thành đúng kiểu con trỏ cần dùng.</p>
+<p>Hàm <code>reallocate()</code> này là hàm duy nhất chúng ta sẽ dùng cho mọi thao tác quản lý bộ nhớ động trong clox — cấp phát, giải phóng, và thay đổi kích thước vùng nhớ đã cấp phát. Gom tất cả các thao tác này qua một hàm duy nhất sẽ rất quan trọng sau này khi ta thêm garbage collector để theo dõi lượng bộ nhớ đang dùng.</p>
+<p>Hai tham số kích thước truyền vào <code>reallocate()</code> quyết định thao tác sẽ thực hiện:</p><table>
+  <thead>
+    <tr>
+      <td>oldSize</td>
+      <td>newSize</td>
+      <td>Thao tác</td>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>Khác&nbsp;0</td>
+      <td>Cấp phát block mới.</td>
+    </tr>
+    <tr>
+      <td>Khác&nbsp;0</td>
+      <td>0</td>
+      <td>Giải phóng vùng nhớ.</td>
+    </tr>
+    <tr>
+      <td>Khác&nbsp;0</td>
+      <td>Nhỏ&nbsp;hơn&nbsp;<code>oldSize</code></td>
+      <td>Thu nhỏ vùng nhớ hiện có.</td>
+    </tr>
+    <tr>
+      <td>Khác&nbsp;0</td>
+      <td>Lớn&nbsp;hơn&nbsp;<code>oldSize</code></td>
+      <td>Mở rộng vùng nhớ hiện có.</td>
+    </tr>
+  </tbody>
+</table>
+<p>Nghe có vẻ như phải xử lý khá nhiều trường hợp, nhưng đây là phần cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdlib.h&gt;</span>
+
+<span class="a">#include &quot;memory.h&quot;</span>
+
+<span class="t">void</span>* <span class="i">reallocate</span>(<span class="t">void</span>* <span class="i">pointer</span>, <span class="t">size_t</span> <span class="i">oldSize</span>, <span class="t">size_t</span> <span class="i">newSize</span>) {
+  <span class="k">if</span> (<span class="i">newSize</span> == <span class="n">0</span>) {
+    <span class="i">free</span>(<span class="i">pointer</span>);
+    <span class="k">return</span> <span class="a">NULL</span>;
+  }
+
+  <span class="t">void</span>* <span class="i">result</span> = <span class="i">realloc</span>(<span class="i">pointer</span>, <span class="i">newSize</span>);
+  <span class="k">return</span> <span class="i">result</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, create new file</div>
+
+<p>Khi <code>newSize</code> bằng 0, chúng ta tự xử lý việc giải phóng bộ nhớ bằng cách gọi <code>free()</code>. Ngược lại, ta dựa vào hàm <code>realloc()</code> của thư viện chuẩn C. Hàm này tiện lợi ở chỗ nó hỗ trợ luôn ba trường hợp còn lại trong “chính sách” của chúng ta. Khi <code>oldSize</code> bằng 0, <code>realloc()</code> tương đương với việc gọi <code>malloc()</code>.</p>
+<p>Các trường hợp thú vị là khi cả <code>oldSize</code> và <code>newSize</code> đều khác 0. Khi đó, <code>realloc()</code> sẽ thay đổi kích thước của block bộ nhớ đã được cấp phát trước đó. Nếu kích thước mới nhỏ hơn block hiện tại, nó chỉ đơn giản <span name="shrink">cập nhật</span> kích thước của block và trả về cùng con trỏ bạn đã đưa vào. Nếu kích thước mới lớn hơn, nó sẽ cố gắng mở rộng block bộ nhớ hiện có.</p>
+<p>Điều này chỉ thực hiện được nếu vùng nhớ ngay sau block đó chưa được sử dụng. Nếu không còn chỗ để mở rộng, <code>realloc()</code> sẽ cấp phát một block bộ nhớ <em>mới</em> với kích thước mong muốn, sao chép dữ liệu cũ sang, giải phóng block cũ, rồi trả về con trỏ tới block mới. Hãy nhớ rằng, đây chính xác là hành vi mà chúng ta muốn cho mảng động của mình.</p>
+<p>Vì máy tính là những khối vật chất hữu hạn chứ không phải các mô hình toán học hoàn hảo như lý thuyết khoa học máy tính thường giả định, việc cấp phát có thể thất bại nếu không đủ bộ nhớ, và <code>realloc()</code> sẽ trả về <code>NULL</code>. Chúng ta cần xử lý tình huống này.</p>
+<div class="codehilite"><pre class="insert-before">  void* result = realloc(pointer, newSize);
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>reallocate</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">result</span> == <span class="a">NULL</span>) <span class="i">exit</span>(<span class="n">1</span>);
+</pre><pre class="insert-after">  return result;
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>reallocate</em>()</div>
+
+<p>Thực ra, nếu VM không thể lấy được bộ nhớ cần thiết thì cũng chẳng còn gì <em>hữu ích</em> để làm, nhưng ít nhất ta sẽ phát hiện ra và dừng chương trình ngay lập tức, thay vì trả về con trỏ <code>NULL</code> và để mọi thứ “trật đường ray” về sau.</p>
+<aside name="shrink">
+<p>Vì tất cả những gì ta truyền vào chỉ là một con trỏ trần trụi tới byte đầu tiên của vùng nhớ, vậy “cập nhật” kích thước block nghĩa là gì? Ẩn bên dưới, bộ cấp phát bộ nhớ duy trì thêm thông tin quản lý cho mỗi block bộ nhớ trên heap, bao gồm cả kích thước của nó.</p>
+<p>Khi có một con trỏ tới vùng nhớ đã được cấp phát, bộ cấp phát có thể tìm thấy thông tin quản lý này, vốn cần thiết để giải phóng bộ nhớ một cách an toàn. Chính metadata về kích thước này là thứ mà <code>realloc()</code> cập nhật.</p>
+<p>Nhiều cài đặt của <code>malloc()</code> lưu kích thước đã cấp phát ngay <em>trước</em> địa chỉ trả về.</p>
+</aside>
+<p>OK, giờ chúng ta có thể tạo các chunk mới và ghi instruction vào đó. Xong chưa? Chưa đâu! Chúng ta đang ở trong C, nhớ chứ, nên phải tự quản lý bộ nhớ, như “thời xưa”, và điều đó có nghĩa là cũng phải <em>giải phóng</em> nó.</p>
+<div class="codehilite"><pre class="insert-before">void initChunk(Chunk* chunk);
+</pre><div class="source-file"><em>chunk.h</em><br>
+add after <em>initChunk</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">freeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>);
+</pre><pre class="insert-after">void writeChunk(Chunk* chunk, uint8_t byte);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, add after <em>initChunk</em>()</div>
+
+<p>Phần cài đặt như sau:</p>
+<div class="codehilite"><div class="source-file"><em>chunk.c</em><br>
+add after <em>initChunk</em>()</div>
+<pre><span class="t">void</span> <span class="i">freeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>) {
+  <span class="a">FREE_ARRAY</span>(<span class="t">uint8_t</span>, <span class="i">chunk</span>-&gt;<span class="i">code</span>, <span class="i">chunk</span>-&gt;<span class="i">capacity</span>);
+  <span class="i">initChunk</span>(<span class="i">chunk</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, add after <em>initChunk</em>()</div>
+
+<p>Chúng ta giải phóng toàn bộ bộ nhớ, rồi gọi <code>initChunk()</code> để đặt lại các trường về trạng thái rỗng, rõ ràng. Để giải phóng bộ nhớ, ta thêm một macro nữa.</p>
+<div class="codehilite"><pre class="insert-before">#define GROW_ARRAY(type, pointer, oldCount, newCount) \
+    (type*)reallocate(pointer, sizeof(type) * (oldCount), \
+        sizeof(type) * (newCount))
+</pre><div class="source-file"><em>memory.h</em></div>
+<pre class="insert">
+
+<span class="a">#define FREE_ARRAY(type, pointer, oldCount) \</span>
+<span class="a">    reallocate(pointer, sizeof(type) * (oldCount), 0)</span>
+</pre><pre class="insert-after">
+
+void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em></div>
+
+<p>Giống như <code>GROW_ARRAY()</code>, macro này là một lớp bọc quanh lời gọi <code>reallocate()</code>. Macro này giải phóng bộ nhớ bằng cách truyền vào giá trị 0 cho kích thước mới. Tôi biết, đây là khá nhiều chi tiết cấp thấp nhàm chán. Nhưng đừng lo, chúng ta sẽ dùng chúng rất nhiều ở các chương sau và sẽ được lập trình ở mức cao hơn. Trước khi làm được điều đó, ta phải tự xây nền móng đã.</p>
+<h2><a href="#giải-mã-disassembling-các-chunk" id="giải-mã-disassembling-các-chunk"><small>14&#8202;.&#8202;4</small>Giải mã (Disassembling) các Chunk</a></h2>
+<p>Giờ chúng ta đã có một module nhỏ để tạo các chunk bytecode. Hãy thử nó bằng cách tự tay tạo một chunk mẫu.</p>
+<div class="codehilite"><pre class="insert-before">int main(int argc, const char* argv[]) {
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">  <span class="t">Chunk</span> <span class="i">chunk</span>;
+  <span class="i">initChunk</span>(&amp;<span class="i">chunk</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_RETURN</span>);
+  <span class="i">freeChunk</span>(&amp;<span class="i">chunk</span>);
+</pre><pre class="insert-after">  return 0;
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Đừng quên include.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>main.c</em></div>
+<pre class="insert"><span class="a">#include &quot;chunk.h&quot;</span>
+</pre><pre class="insert-after">
+
+int main(int argc, const char* argv[]) {
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em></div>
+
+<p>Chạy thử và xem kết quả. Nó có hoạt động không? Ờ… ai mà biết được? Tất cả những gì ta làm là đẩy vài byte vào bộ nhớ. Chúng ta chưa có cách nào thân thiện với con người để xem bên trong chunk vừa tạo.</p>
+<p>Để khắc phục, chúng ta sẽ tạo một <strong>disassembler</strong>. Một <strong>assembler</strong> là chương trình “cổ điển” nhận một file chứa các tên mnemonic dễ đọc của con người cho các lệnh CPU như “ADD” và “MULT” rồi dịch chúng sang mã máy nhị phân tương ứng. Một <em>dis</em>assembler thì đi theo hướng ngược lại — nhận một khối mã máy và xuất ra danh sách các instruction ở dạng văn bản.</p>
+<p>Chúng ta sẽ cài đặt một thứ <span name="printer">tương tự</span>. Cho một chunk, nó sẽ in ra tất cả các instruction trong đó. Người <em>dùng</em> Lox sẽ không dùng công cụ này, nhưng chúng ta — những người <em>duy trì</em> Lox — sẽ thấy nó cực kỳ hữu ích vì nó cho ta một “cửa sổ” nhìn vào cách interpreter biểu diễn code bên trong.</p>
+<aside name="printer">
+<p>Trong jlox, công cụ tương tự của chúng ta là <a href="representing-code.html#a-not-very-pretty-printer">AstPrinter class</a>.</p>
+</aside>
+<p>Trong <code>main()</code>, sau khi tạo chunk, ta truyền nó vào disassembler.</p>
+<div class="codehilite"><pre class="insert-before">  initChunk(&amp;chunk);
+  writeChunk(&amp;chunk, OP_RETURN);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">
+
+  <span class="i">disassembleChunk</span>(&amp;<span class="i">chunk</span>, <span class="s">&quot;test chunk&quot;</span>);
+</pre><pre class="insert-after">  freeChunk(&amp;chunk);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Và lại tạo thêm <span name="module">một module nữa</span>.</p>
+<aside name="module">
+<p>Tôi hứa là ở các chương sau sẽ không tạo nhiều file mới như thế này nữa.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">#include &quot;chunk.h&quot;
+</pre><div class="source-file"><em>main.c</em></div>
+<pre class="insert"><span class="a">#include &quot;debug.h&quot;</span>
+</pre><pre class="insert-after">
+
+int main(int argc, const char* argv[]) {
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em></div>
+
+<p>Đây là phần header:</p>
+<div class="codehilite"><div class="source-file"><em>debug.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_debug_h</span>
+<span class="a">#define clox_debug_h</span>
+
+<span class="a">#include &quot;chunk.h&quot;</span>
+
+<span class="t">void</span> <span class="i">disassembleChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>);
+<span class="t">int</span> <span class="i">disassembleInstruction</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">int</span> <span class="i">offset</span>);
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>debug.h</em>, create new file</div>
+
+<p>Trong <code>main()</code>, chúng ta gọi <code>disassembleChunk()</code> để giải mã (disassemble) toàn bộ các instruction trong cả chunk. Hàm này được cài đặt dựa trên một hàm khác, chỉ giải mã một instruction duy nhất. Nó xuất hiện ở phần header vì sau này chúng ta sẽ gọi nó từ VM trong các chương tiếp theo.</p>
+<p>Dưới đây là phần khởi đầu của file cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdio.h&gt;</span>
+
+<span class="a">#include &quot;debug.h&quot;</span>
+
+<span class="t">void</span> <span class="i">disassembleChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>) {
+  <span class="i">printf</span>(<span class="s">&quot;== %s ==</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">name</span>);
+
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">offset</span> = <span class="n">0</span>; <span class="i">offset</span> &lt; <span class="i">chunk</span>-&gt;<span class="i">count</span>;) {
+    <span class="i">offset</span> = <span class="i">disassembleInstruction</span>(<span class="i">chunk</span>, <span class="i">offset</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, create new file</div>
+
+<p>Để giải mã một chunk, chúng ta in ra một tiêu đề nhỏ (để biết <em>chunk nào</em> đang được xem), rồi duyệt qua bytecode, giải mã từng instruction. Cách chúng ta lặp qua code hơi khác thường: thay vì tăng <code>offset</code> ngay trong vòng lặp, ta để <code>disassembleInstruction()</code> làm việc đó. Khi gọi hàm này, sau khi giải mã instruction tại offset cho trước, nó sẽ trả về offset của instruction <em>tiếp theo</em>. Lý do là vì, như ta sẽ thấy sau, các instruction có thể có kích thước khác nhau.</p>
+<p>Trung tâm của module &ldquo;debug&rdquo; là hàm này:</p>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+add after <em>disassembleChunk</em>()</div>
+<pre><span class="t">int</span> <span class="i">disassembleInstruction</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">int</span> <span class="i">offset</span>) {
+  <span class="i">printf</span>(<span class="s">&quot;%04d &quot;</span>, <span class="i">offset</span>);
+
+  <span class="t">uint8_t</span> <span class="i">instruction</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span>];
+  <span class="k">switch</span> (<span class="i">instruction</span>) {
+    <span class="k">case</span> <span class="a">OP_RETURN</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_RETURN&quot;</span>, <span class="i">offset</span>);
+    <span class="k">default</span>:
+      <span class="i">printf</span>(<span class="s">&quot;Unknown opcode %d</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">instruction</span>);
+      <span class="k">return</span> <span class="i">offset</span> + <span class="n">1</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, add after <em>disassembleChunk</em>()</div>
+
+<p>Đầu tiên, nó in ra byte offset của instruction — cho ta biết instruction này nằm ở đâu trong chunk. Đây sẽ là một “cột mốc” hữu ích khi ta bắt đầu xử lý control flow và nhảy qua lại trong bytecode.</p>
+<p>Tiếp theo, nó đọc một byte từ bytecode tại offset cho trước. Đây chính là opcode. Chúng ta <span name="switch">switch</span> trên giá trị đó. Với mỗi loại instruction, ta gọi một hàm tiện ích nhỏ để hiển thị nó. Trong trường hợp byte đó hoàn toàn không giống một instruction hợp lệ — tức là có bug trong compiler — ta cũng sẽ in ra. Với instruction duy nhất hiện tại là <code>OP_RETURN</code>, hàm hiển thị sẽ là:</p>
+<aside name="switch">
+<p>Hiện giờ chúng ta chỉ có một instruction, nhưng phần switch này sẽ được mở rộng dần trong suốt cuốn sách.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+add after <em>disassembleChunk</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">simpleInstruction</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>, <span class="t">int</span> <span class="i">offset</span>) {
+  <span class="i">printf</span>(<span class="s">&quot;%s</span><span class="e">\n</span><span class="s">&quot;</span>, <span class="i">name</span>);
+  <span class="k">return</span> <span class="i">offset</span> + <span class="n">1</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, add after <em>disassembleChunk</em>()</div>
+
+<p>Một return instruction thì chẳng có gì nhiều, nên nó chỉ in ra tên opcode, rồi trả về offset của byte tiếp theo sau instruction này. Các instruction khác sẽ phức tạp hơn.</p>
+<p>Nếu chạy interpreter “sơ sinh” của chúng ta bây giờ, nó sẽ in ra:</p>
+<div class="codehilite"><pre>== test chunk ==
+0000 OP_RETURN
+</pre></div>
+<p>Hoạt động rồi! Đây giống như “Hello, world!” của cách biểu diễn code. Chúng ta có thể tạo một chunk, ghi một instruction vào đó, rồi đọc lại instruction đó. Việc mã hóa và giải mã bytecode nhị phân của chúng ta đang chạy tốt.</p>
+<h2><a href="#constants" id="constants"><small>14&#8202;.&#8202;5</small>Constants</a></h2>
+<p>Giờ khi đã có một cấu trúc chunk cơ bản hoạt động, hãy bắt đầu làm nó hữu ích hơn. Chúng ta có thể lưu <em>code</em> trong chunk, nhưng còn <em>data</em> thì sao? Nhiều giá trị mà interpreter xử lý được tạo ra tại runtime như kết quả của các phép toán.</p>
+<div class="codehilite"><pre><span class="n">1</span> + <span class="n">2</span>;
+</pre></div>
+<p>Giá trị 3 không hề xuất hiện trực tiếp trong code. Tuy nhiên, các literal <code>1</code> và <code>2</code> thì có. Để compile câu lệnh này thành bytecode, chúng ta cần một loại instruction có nghĩa là “tạo ra một hằng số” và các literal này cần được lưu ở đâu đó trong chunk. Trong jlox, node AST <code>Expr.Literal</code> giữ giá trị này. Giờ khi không còn syntax tree, ta cần một giải pháp khác.</p>
+<h3><a href="#biểu-diễn-giá-trị" id="biểu-diễn-giá-trị"><small>14&#8202;.&#8202;5&#8202;.&#8202;1</small>Biểu diễn giá trị</a></h3>
+<p>Chúng ta sẽ chưa <em>chạy</em> code trong chương này, nhưng vì constants liên quan đến cả phần tĩnh và động của interpreter, chúng buộc ta phải bắt đầu nghĩ về cách VM sẽ biểu diễn giá trị.</p>
+<p>Trước mắt, ta sẽ bắt đầu đơn giản nhất có thể — chỉ hỗ trợ số thực dấu chấm động double-precision. Dĩ nhiên, điều này sẽ được mở rộng sau, nên ta sẽ tạo một module mới để có chỗ phát triển.</p>
+<div class="codehilite"><div class="source-file"><em>value.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_value_h</span>
+<span class="a">#define clox_value_h</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+
+<span class="k">typedef</span> <span class="t">double</span> <span class="t">Value</span>;
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, create new file</div>
+
+<p><code>typedef</code> này trừu tượng hóa cách giá trị Lox được biểu diễn cụ thể trong C. Nhờ vậy, ta có thể thay đổi cách biểu diễn mà không phải sửa lại code hiện có đang truyền các giá trị này.</p>
+<p>Quay lại câu hỏi: lưu constants ở đâu trong chunk? Với các giá trị nhỏ, kích thước cố định như số nguyên, nhiều tập lệnh lưu giá trị trực tiếp trong luồng code ngay sau opcode. Đây được gọi là <strong>immediate instructions</strong> vì các bit của giá trị nằm ngay sau opcode.</p>
+<p>Cách này không phù hợp với các constants lớn hoặc có kích thước thay đổi như chuỗi. Trong compiler native sang machine code, các constants lớn hơn sẽ được lưu ở một vùng “constant data” riêng trong file execute nhị phân. Khi đó, instruction để load một constant sẽ chứa địa chỉ hoặc offset trỏ tới vị trí giá trị đó trong vùng này.</p>
+<p>Hầu hết các virtual machine cũng làm tương tự. Ví dụ, Java Virtual Machine <a href="https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4">gắn một <strong>constant pool</strong></a> với mỗi class đã compile. Điều này nghe cũng hợp lý cho clox. Mỗi chunk sẽ mang theo một danh sách các giá trị xuất hiện dưới dạng literal trong chương trình. Để <span name="immediate">đơn giản</span> hơn, ta sẽ cho <em>tất cả</em> constants vào đây, kể cả số nguyên đơn giản.</p>
+<aside name="immediate">
+<p>Ngoài việc cần hai loại instruction constant — một cho immediate values và một cho constants trong bảng constant — immediate còn buộc ta phải quan tâm đến alignment, padding, và endianness. Một số kiến trúc không “vui vẻ” nếu bạn cố nhét một số nguyên 4 byte vào một địa chỉ lẻ.</p>
+</aside>
+<h3><a href="#mảng-giá-trị-value-arrays" id="mảng-giá-trị-value-arrays"><small>14&#8202;.&#8202;5&#8202;.&#8202;2</small>Mảng giá trị (Value arrays)</a></h3>
+<p>Constant pool là một mảng các giá trị. Instruction để load một constant sẽ tra cứu giá trị đó theo chỉ số trong mảng. Giống như mảng <span name="generic">bytecode</span> của chúng ta, compiler không biết trước mảng này cần lớn đến mức nào. Vậy nên, một lần nữa, chúng ta cần một mảng động. Vì C không có cấu trúc dữ liệu generic, chúng ta sẽ viết một cấu trúc mảng động khác, lần này dành cho Value.</p>
+<aside name="generic">
+<p>Việc phải định nghĩa một struct mới và các hàm thao tác mỗi khi cần một mảng động cho kiểu dữ liệu khác nhau khá là phiền. Chúng ta có thể ghép vài macro của preprocessor để giả lập generic, nhưng như vậy là quá mức cần thiết cho clox. Chúng ta sẽ không cần nhiều mảng động kiểu này đâu.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">typedef double Value;
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">int</span> <span class="i">capacity</span>;
+  <span class="t">int</span> <span class="i">count</span>;
+  <span class="t">Value</span>* <span class="i">values</span>;
+} <span class="t">ValueArray</span>;
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<p>Giống như mảng bytecode trong Chunk, struct này bọc một con trỏ tới mảng cùng với dung lượng đã cấp phát và số phần tử đang sử dụng. Chúng ta cũng cần ba hàm tương tự để làm việc với mảng giá trị.</p>
+<div class="codehilite"><pre class="insert-before">} ValueArray;
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>ValueArray</em></div>
+<pre class="insert">
+
+<span class="t">void</span> <span class="i">initValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>);
+<span class="t">void</span> <span class="i">writeValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>, <span class="t">Value</span> <span class="i">value</span>);
+<span class="t">void</span> <span class="i">freeValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>ValueArray</em></div>
+
+<p>Phần cài đặt có thể sẽ khiến bạn thấy “quen quen”. Đầu tiên, để tạo một mảng mới:</p>
+<div class="codehilite"><div class="source-file"><em>value.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdio.h&gt;</span>
+
+<span class="a">#include &quot;memory.h&quot;</span>
+<span class="a">#include &quot;value.h&quot;</span>
+
+<span class="t">void</span> <span class="i">initValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>) {
+  <span class="i">array</span>-&gt;<span class="i">values</span> = <span class="a">NULL</span>;
+  <span class="i">array</span>-&gt;<span class="i">capacity</span> = <span class="n">0</span>;
+  <span class="i">array</span>-&gt;<span class="i">count</span> = <span class="n">0</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, create new file</div>
+
+<p>Khi đã có một mảng được khởi tạo, ta có thể bắt đầu <span name="add">thêm</span> giá trị vào nó.</p>
+<aside name="add">
+<p>May mắn là chúng ta không cần các thao tác khác như chèn hoặc xóa.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>value.c</em><br>
+add after <em>initValueArray</em>()</div>
+<pre><span class="t">void</span> <span class="i">writeValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>, <span class="t">Value</span> <span class="i">value</span>) {
+  <span class="k">if</span> (<span class="i">array</span>-&gt;<span class="i">capacity</span> &lt; <span class="i">array</span>-&gt;<span class="i">count</span> + <span class="n">1</span>) {
+    <span class="t">int</span> <span class="i">oldCapacity</span> = <span class="i">array</span>-&gt;<span class="i">capacity</span>;
+    <span class="i">array</span>-&gt;<span class="i">capacity</span> = <span class="a">GROW_CAPACITY</span>(<span class="i">oldCapacity</span>);
+    <span class="i">array</span>-&gt;<span class="i">values</span> = <span class="a">GROW_ARRAY</span>(<span class="t">Value</span>, <span class="i">array</span>-&gt;<span class="i">values</span>,
+                               <span class="i">oldCapacity</span>, <span class="i">array</span>-&gt;<span class="i">capacity</span>);
+  }
+
+  <span class="i">array</span>-&gt;<span class="i">values</span>[<span class="i">array</span>-&gt;<span class="i">count</span>] = <span class="i">value</span>;
+  <span class="i">array</span>-&gt;<span class="i">count</span>++;
+}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, add after <em>initValueArray</em>()</div>
+
+<p>Các macro quản lý bộ nhớ mà ta đã viết trước đó cho phép tái sử dụng một phần logic từ mảng code, nên việc này cũng không quá tệ. Cuối cùng, để giải phóng toàn bộ bộ nhớ mà mảng sử dụng:</p>
+<div class="codehilite"><div class="source-file"><em>value.c</em><br>
+add after <em>writeValueArray</em>()</div>
+<pre><span class="t">void</span> <span class="i">freeValueArray</span>(<span class="t">ValueArray</span>* <span class="i">array</span>) {
+  <span class="a">FREE_ARRAY</span>(<span class="t">Value</span>, <span class="i">array</span>-&gt;<span class="i">values</span>, <span class="i">array</span>-&gt;<span class="i">capacity</span>);
+  <span class="i">initValueArray</span>(<span class="i">array</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, add after <em>writeValueArray</em>()</div>
+
+<p>Giờ khi đã có mảng giá trị có thể mở rộng, chúng ta có thể thêm một mảng như vậy vào Chunk để lưu constants của chunk.</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t* code;
+</pre><div class="source-file"><em>chunk.h</em><br>
+in struct <em>Chunk</em></div>
+<pre class="insert">  <span class="t">ValueArray</span> <span class="i">constants</span>;
+</pre><pre class="insert-after">} Chunk;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in struct <em>Chunk</em></div>
+
+<p>Đừng quên include.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>chunk.h</em></div>
+<pre class="insert"><span class="a">#include &quot;value.h&quot;</span>
+</pre><pre class="insert-after">
+
+typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em></div>
+
+<p>Ôi C, và câu chuyện modularity thời “đồ đá” của nó. Chúng ta đang ở đâu rồi nhỉ? À đúng, khi khởi tạo một chunk mới, ta cũng khởi tạo luôn danh sách constants của nó.</p>
+<div class="codehilite"><pre class="insert-before">  chunk-&gt;code = NULL;
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>initChunk</em>()</div>
+<pre class="insert">  <span class="i">initValueArray</span>(&amp;<span class="i">chunk</span>-&gt;<span class="i">constants</span>);
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>initChunk</em>()</div>
+
+<p>Tương tự, ta giải phóng constants khi giải phóng chunk.</p>
+<div class="codehilite"><pre class="insert-before">  FREE_ARRAY(uint8_t, chunk-&gt;code, chunk-&gt;capacity);
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>freeChunk</em>()</div>
+<pre class="insert">  <span class="i">freeValueArray</span>(&amp;<span class="i">chunk</span>-&gt;<span class="i">constants</span>);
+</pre><pre class="insert-after">  initChunk(chunk);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>freeChunk</em>()</div>
+
+<p>Tiếp theo, chúng ta định nghĩa một hàm tiện lợi để thêm một constant mới vào chunk. Compiler (chưa được viết) của chúng ta hoàn toàn có thể ghi trực tiếp vào mảng constant bên trong Chunk — vì C đâu có khái niệm private field — nhưng sẽ gọn gàng hơn nếu có một hàm rõ ràng cho việc này.</p>
+<div class="codehilite"><pre class="insert-before">void writeChunk(Chunk* chunk, uint8_t byte);
+</pre><div class="source-file"><em>chunk.h</em><br>
+add after <em>writeChunk</em>()</div>
+<pre class="insert"><span class="t">int</span> <span class="i">addConstant</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">Value</span> <span class="i">value</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, add after <em>writeChunk</em>()</div>
+
+<p>Rồi ta cài đặt nó.</p>
+<div class="codehilite"><div class="source-file"><em>chunk.c</em><br>
+add after <em>writeChunk</em>()</div>
+<pre><span class="t">int</span> <span class="i">addConstant</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">Value</span> <span class="i">value</span>) {
+  <span class="i">writeValueArray</span>(&amp;<span class="i">chunk</span>-&gt;<span class="i">constants</span>, <span class="i">value</span>);
+  <span class="k">return</span> <span class="i">chunk</span>-&gt;<span class="i">constants</span>.<span class="i">count</span> - <span class="n">1</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, add after <em>writeChunk</em>()</div>
+
+<p>Sau khi thêm constant, ta trả về chỉ số nơi constant được thêm vào để có thể tìm lại constant đó sau này.</p>
+<h3><a href="#constant-instructions" id="constant-instructions"><small>14&#8202;.&#8202;5&#8202;.&#8202;3</small>Constant instructions</a></h3>
+<p>Chúng ta có thể <em>lưu</em> constants trong chunk, nhưng cũng cần <em>execute</em> chúng. Trong một đoạn code như:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="n">1</span>;
+<span class="k">print</span> <span class="n">2</span>;
+</pre></div>
+<p>Chunk đã compile không chỉ cần chứa giá trị 1 và 2, mà còn phải biết <em>khi nào</em> tạo ra chúng để in ra đúng thứ tự. Vì vậy, chúng ta cần một instruction tạo ra một constant cụ thể.</p>
+<div class="codehilite"><pre class="insert-before">typedef enum {
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_CONSTANT</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Khi VM execute một constant instruction, nó sẽ <span name="load">&ldquo;load&rdquo;</span> constant đó để sử dụng. Instruction mới này phức tạp hơn một chút so với <code>OP_RETURN</code>. Trong ví dụ trên, chúng ta load hai constant khác nhau. Một opcode trần trụi là không đủ để biết <em>constant nào</em> cần load.</p>
+<aside name="load">
+<p>Tôi đang cố tình nói mơ hồ về việc “load” hay “tạo ra” một constant vì chúng ta chưa học cách virtual machine thực sự chạy code tại runtime. Để biết điều đó, bạn sẽ phải đợi đến (hoặc nhảy ngay tới, nếu muốn) <a href="a-virtual-machine.html">chương tiếp theo</a>.</p>
+</aside>
+<p>Để xử lý các trường hợp như vậy, bytecode của chúng ta — giống như hầu hết các bytecode khác — cho phép instruction có <span name="operand"><strong>operand</strong></span>. Chúng được lưu dưới dạng dữ liệu nhị phân ngay sau opcode trong luồng instruction và cho phép chúng ta truyền tham số để điều khiển hành vi của instruction.</p><img src="image/chunks-of-bytecode/format.png" alt="OP_CONSTANT là một byte cho opcode theo sau bởi một byte cho chỉ số constant." />
+<p>Mỗi opcode sẽ quyết định nó có bao nhiêu byte operand và ý nghĩa của chúng. Ví dụ, một thao tác đơn giản như “return” có thể không có operand nào, trong khi một instruction “load local variable” cần một operand để xác định biến nào sẽ được load. Mỗi khi thêm một opcode mới vào clox, chúng ta sẽ chỉ định operand của nó trông như thế nào — tức <strong>instruction format</strong> của nó.</p>
+<aside name="operand">
+<p>Operand của bytecode instruction <em>không</em> giống với operand của toán tử số học. Bạn sẽ thấy khi chúng ta đến phần biểu thức rằng các giá trị operand của phép toán số học được theo dõi riêng. Operand của instruction là một khái niệm cấp thấp hơn, dùng để điều chỉnh cách mà chính instruction bytecode đó hoạt động.</p>
+</aside>
+<p>Trong trường hợp này, <code>OP_CONSTANT</code> nhận một operand dài một byte, chỉ ra constant nào sẽ được load từ mảng constant của chunk. Vì chúng ta chưa có compiler, nên ta sẽ “tự biên dịch bằng tay” một instruction trong chunk thử nghiệm.</p>
+<div class="codehilite"><pre class="insert-before">  initChunk(&amp;chunk);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()</div>
+<pre class="insert">
+
+  <span class="t">int</span> <span class="i">constant</span> = <span class="i">addConstant</span>(&amp;<span class="i">chunk</span>, <span class="n">1.2</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_CONSTANT</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="i">constant</span>);
+
+</pre><pre class="insert-after">  writeChunk(&amp;chunk, OP_RETURN);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>()</div>
+
+<p>Chúng ta thêm chính giá trị constant đó vào constant pool của chunk. Lệnh này trả về chỉ số của constant trong mảng. Sau đó, ta ghi instruction constant, bắt đầu với opcode của nó. Tiếp theo, ta ghi operand là chỉ số constant dài một byte. Lưu ý rằng <code>writeChunk()</code> có thể ghi cả opcode lẫn operand — với hàm này, tất cả đều chỉ là các byte thô.</p>
+<p>Nếu chạy thử ngay bây giờ, disassembler sẽ “la” lên vì nó chưa biết cách giải mã instruction mới này. Hãy sửa điều đó.</p>
+<div class="codehilite"><pre class="insert-before">  switch (instruction) {
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_CONSTANT</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_CONSTANT&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Instruction này có định dạng khác, nên ta viết một hàm trợ giúp mới để giải mã nó.</p>
+<div class="codehilite"><div class="source-file"><em>debug.c</em><br>
+add after <em>disassembleChunk</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">constantInstruction</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">name</span>, <span class="t">Chunk</span>* <span class="i">chunk</span>,
+                               <span class="t">int</span> <span class="i">offset</span>) {
+  <span class="t">uint8_t</span> <span class="i">constant</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span> + <span class="n">1</span>];
+  <span class="i">printf</span>(<span class="s">&quot;%-16s %4d &#39;&quot;</span>, <span class="i">name</span>, <span class="i">constant</span>);
+  <span class="i">printValue</span>(<span class="i">chunk</span>-&gt;<span class="i">constants</span>.<span class="i">values</span>[<span class="i">constant</span>]);
+  <span class="i">printf</span>(<span class="s">&quot;&#39;</span><span class="e">\n</span><span class="s">&quot;</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, add after <em>disassembleChunk</em>()</div>
+
+<p>Có nhiều việc hơn một chút ở đây. Giống như với <code>OP_RETURN</code>, ta in ra tên opcode. Sau đó, ta lấy chỉ số constant từ byte tiếp theo trong chunk. Ta in ra chỉ số đó, nhưng điều này không mấy hữu ích cho người đọc. Vì vậy, ta cũng tra luôn giá trị constant thực tế — vì constants <em>được</em> biết tại thời điểm compile — và hiển thị cả giá trị đó.</p>
+<p>Điều này đòi hỏi một cách để in ra một clox Value. Hàm này sẽ nằm trong module &ldquo;value&rdquo;, nên ta include nó.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;debug.h&quot;
+</pre><div class="source-file"><em>debug.c</em></div>
+<pre class="insert"><span class="a">#include &quot;value.h&quot;</span>
+</pre><pre class="insert-after">
+
+void disassembleChunk(Chunk* chunk, const char* name) {
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em></div>
+
+<p>Trong header đó, ta khai báo:</p>
+<div class="codehilite"><pre class="insert-before">void freeValueArray(ValueArray* array);
+</pre><div class="source-file"><em>value.h</em><br>
+add after <em>freeValueArray</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">printValue</span>(<span class="t">Value</span> <span class="i">value</span>);
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after <em>freeValueArray</em>()</div>
+
+<p>Và đây là phần cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>value.c</em><br>
+add after <em>freeValueArray</em>()</div>
+<pre><span class="t">void</span> <span class="i">printValue</span>(<span class="t">Value</span> <span class="i">value</span>) {
+  <span class="i">printf</span>(<span class="s">&quot;%g&quot;</span>, <span class="i">value</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, add after <em>freeValueArray</em>()</div>
+
+<p>Tuyệt vời, đúng không? Bạn có thể tưởng tượng rằng phần này sẽ phức tạp hơn nhiều khi chúng ta thêm dynamic typing vào Lox và có các giá trị thuộc nhiều kiểu khác nhau.</p>
+<p>Quay lại <code>constantInstruction()</code>, phần còn lại duy nhất là giá trị trả về.</p>
+<div class="codehilite"><pre class="insert-before">  printf(&quot;'\n&quot;);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>constantInstruction</em>()</div>
+<pre class="insert">  <span class="k">return</span> <span class="i">offset</span> + <span class="n">2</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>constantInstruction</em>()</div>
+
+<p>Hãy nhớ rằng <code>disassembleInstruction()</code> cũng trả về một số để báo cho hàm gọi biết offset của instruction <em>tiếp theo</em>. Nếu <code>OP_RETURN</code> chỉ dài một byte, thì <code>OP_CONSTANT</code> dài hai byte — một cho opcode và một cho operand.</p>
+<h2><a href="#thông-tin-dòng-line-information" id="thông-tin-dòng-line-information"><small>14&#8202;.&#8202;6</small>Thông tin dòng (Line Information)</a></h2>
+<p>Chunk chứa gần như toàn bộ thông tin mà runtime cần từ mã nguồn của người dùng. Thật điên rồ khi nghĩ rằng chúng ta có thể rút gọn tất cả các lớp AST đã tạo trong jlox xuống chỉ còn một mảng byte và một mảng constants. Chỉ còn một mẩu dữ liệu chúng ta chưa có. Chúng ta cần nó, dù người dùng hy vọng sẽ không bao giờ thấy nó.</p>
+<p>Khi xảy ra runtime error, chúng ta hiển thị cho người dùng số dòng của đoạn mã nguồn gây lỗi. Trong jlox, các số dòng này nằm trong token, và token lại được lưu trong các node AST. Giờ đây, khi đã bỏ syntax tree để dùng bytecode, chúng ta cần một giải pháp khác cho clox. Với bất kỳ instruction bytecode nào, ta cần xác định được nó được compile từ dòng nào trong mã nguồn của người dùng.</p>
+<p>Có nhiều cách thông minh để mã hóa thông tin này. Tôi đã chọn cách <span name="side">đơn giản</span> nhất mà tôi nghĩ ra được, dù nó cực kỳ kém hiệu quả về bộ nhớ. Trong chunk, ta lưu một mảng số nguyên riêng biệt song song với bytecode. Mỗi số trong mảng là số dòng tương ứng với byte ở cùng vị trí trong bytecode. Khi xảy ra runtime error, ta tra số dòng ở cùng chỉ số với offset của instruction hiện tại trong mảng code.</p>
+<aside name="side">
+<p>Cách mã hóa “ngớ ngẩn” này lại có một điểm đúng: nó giữ thông tin dòng trong một mảng <em>riêng biệt</em> thay vì trộn vào bytecode. Vì thông tin dòng chỉ được dùng khi xảy ra runtime error, ta không muốn nó chen giữa các instruction, chiếm chỗ quý giá trong CPU cache và gây thêm cache miss khi interpreter phải bỏ qua chúng để đến opcode và operand cần thiết.</p>
+</aside>
+<p>Để cài đặt, ta thêm một mảng nữa vào Chunk.</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t* code;
+</pre><div class="source-file"><em>chunk.h</em><br>
+in struct <em>Chunk</em></div>
+<pre class="insert">  <span class="t">int</span>* <span class="i">lines</span>;
+</pre><pre class="insert-after">  ValueArray constants;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in struct <em>Chunk</em></div>
+
+<p>Vì nó song song hoàn toàn với mảng bytecode, ta không cần count hay capacity riêng. Mỗi khi thay đổi mảng code, ta cũng thay đổi tương ứng mảng số dòng, bắt đầu từ lúc khởi tạo.</p>
+<div class="codehilite"><pre class="insert-before">  chunk-&gt;code = NULL;
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>initChunk</em>()</div>
+<pre class="insert">  <span class="i">chunk</span>-&gt;<span class="i">lines</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">  initValueArray(&amp;chunk-&gt;constants);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>initChunk</em>()</div>
+
+<p>Và tương tự khi giải phóng:</p>
+<div class="codehilite"><pre class="insert-before">  FREE_ARRAY(uint8_t, chunk-&gt;code, chunk-&gt;capacity);
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>freeChunk</em>()</div>
+<pre class="insert">  <span class="a">FREE_ARRAY</span>(<span class="t">int</span>, <span class="i">chunk</span>-&gt;<span class="i">lines</span>, <span class="i">chunk</span>-&gt;<span class="i">capacity</span>);
+</pre><pre class="insert-after">  freeValueArray(&amp;chunk-&gt;constants);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>freeChunk</em>()</div>
+
+<p>Khi ghi một byte code vào chunk, ta cần biết nó đến từ dòng nào trong mã nguồn, nên ta thêm một tham số nữa vào khai báo <code>writeChunk()</code>.</p>
+<div class="codehilite"><pre class="insert-before">void freeChunk(Chunk* chunk);
+</pre><div class="source-file"><em>chunk.h</em><br>
+function <em>writeChunk</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="t">void</span> <span class="i">writeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">uint8_t</span> <span class="i">byte</span>, <span class="t">int</span> <span class="i">line</span>);
+</pre><pre class="insert-after">int addConstant(Chunk* chunk, Value value);
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, function <em>writeChunk</em>(), replace 1 line</div>
+
+<p>Và trong phần cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>chunk.c</em><br>
+function <em>writeChunk</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="t">void</span> <span class="i">writeChunk</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">uint8_t</span> <span class="i">byte</span>, <span class="t">int</span> <span class="i">line</span>) {
+</pre><pre class="insert-after">  if (chunk-&gt;capacity &lt; chunk-&gt;count + 1) {
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, function <em>writeChunk</em>(), replace 1 line</div>
+
+<p>Khi cấp phát hoặc mở rộng mảng code, ta cũng làm tương tự với mảng thông tin dòng.</p>
+<div class="codehilite"><pre class="insert-before">    chunk-&gt;code = GROW_ARRAY(uint8_t, chunk-&gt;code,
+        oldCapacity, chunk-&gt;capacity);
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>writeChunk</em>()</div>
+<pre class="insert">    <span class="i">chunk</span>-&gt;<span class="i">lines</span> = <span class="a">GROW_ARRAY</span>(<span class="t">int</span>, <span class="i">chunk</span>-&gt;<span class="i">lines</span>,
+        <span class="i">oldCapacity</span>, <span class="i">chunk</span>-&gt;<span class="i">capacity</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>writeChunk</em>()</div>
+
+<p>Cuối cùng, ta lưu số dòng vào mảng.</p>
+<div class="codehilite"><pre class="insert-before">  chunk-&gt;code[chunk-&gt;count] = byte;
+</pre><div class="source-file"><em>chunk.c</em><br>
+in <em>writeChunk</em>()</div>
+<pre class="insert">  <span class="i">chunk</span>-&gt;<span class="i">lines</span>[<span class="i">chunk</span>-&gt;<span class="i">count</span>] = <span class="i">line</span>;
+</pre><pre class="insert-after">  chunk-&gt;count++;
+</pre></div>
+<div class="source-file-narrow"><em>chunk.c</em>, in <em>writeChunk</em>()</div>
+
+<h3><a href="#giải-mã-thông-tin-dòng-disassembling-line-information" id="giải-mã-thông-tin-dòng-disassembling-line-information"><small>14&#8202;.&#8202;6&#8202;.&#8202;1</small>Giải mã thông tin dòng (Disassembling line information)</a></h3>
+<p>Rồi, hãy thử áp dụng với cái chunk… thủ công của chúng ta. Trước hết, vì ta đã thêm một tham số mới vào <code>writeChunk()</code>, nên cần sửa các lời gọi hàm đó để truyền vào một số dòng — tạm thời thì cứ chọn ngẫu nhiên.</p>
+<div class="codehilite"><pre class="insert-before">  int constant = addConstant(&amp;chunk, 1.2);
+</pre><div class="source-file"><em>main.c</em><br>
+in <em>main</em>()<br>
+replace 4 lines</div>
+<pre class="insert">  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_CONSTANT</span>, <span class="n">123</span>);
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="i">constant</span>, <span class="n">123</span>);
+
+  <span class="i">writeChunk</span>(&amp;<span class="i">chunk</span>, <span class="a">OP_RETURN</span>, <span class="n">123</span>);
+</pre><pre class="insert-after">
+
+  disassembleChunk(&amp;chunk, &quot;test chunk&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>main.c</em>, in <em>main</em>(), replace 4 lines</div>
+
+<p>Khi có một front end thực sự, tất nhiên compiler sẽ theo dõi dòng hiện tại khi parse và truyền giá trị đó vào.</p>
+<p>Giờ khi đã có thông tin dòng cho từng instruction, hãy tận dụng nó. Trong disassembler, việc hiển thị dòng mã nguồn mà mỗi instruction được compile từ đó sẽ rất hữu ích. Điều này giúp ta truy ngược lại code gốc khi cần tìm hiểu một đoạn bytecode nào đó đang làm gì. Sau khi in ra offset của instruction — tức số byte tính từ đầu chunk — ta sẽ hiển thị số dòng nguồn.</p>
+<div class="codehilite"><pre class="insert-before">int disassembleInstruction(Chunk* chunk, int offset) {
+  printf(&quot;%04d &quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">offset</span> &gt; <span class="n">0</span> &amp;&amp;
+      <span class="i">chunk</span>-&gt;<span class="i">lines</span>[<span class="i">offset</span>] == <span class="i">chunk</span>-&gt;<span class="i">lines</span>[<span class="i">offset</span> - <span class="n">1</span>]) {
+    <span class="i">printf</span>(<span class="s">&quot;   | &quot;</span>);
+  } <span class="k">else</span> {
+    <span class="i">printf</span>(<span class="s">&quot;%4d &quot;</span>, <span class="i">chunk</span>-&gt;<span class="i">lines</span>[<span class="i">offset</span>]);
+  }
+</pre><pre class="insert-after">
+
+  uint8_t instruction = chunk-&gt;code[offset];
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Các instruction bytecode thường khá chi tiết. Một dòng mã nguồn có thể compile thành cả một chuỗi instruction. Để làm rõ điều này về mặt trực quan, ta hiển thị ký tự <code>|</code> cho bất kỳ instruction nào đến từ cùng một dòng nguồn với instruction trước đó. Kết quả cho chunk viết tay của chúng ta sẽ như sau:</p>
+<div class="codehilite"><pre>== test chunk ==
+0000  123 OP_CONSTANT         0 '1.2'
+0002    | OP_RETURN
+</pre></div>
+<p>Chúng ta có một chunk dài ba byte. Hai byte đầu là một constant instruction load giá trị 1.2 từ constant pool của chunk. Byte đầu tiên là opcode <code>OP_CONSTANT</code> và byte thứ hai là chỉ số trong constant pool. Byte thứ ba (ở offset 2) là một return instruction dài một byte.</p>
+<p>Trong các chương tiếp theo, chúng ta sẽ bổ sung thêm nhiều loại instruction khác. Nhưng cấu trúc cơ bản đã có, và giờ ta đã có đủ mọi thứ để biểu diễn hoàn chỉnh một đoạn code có thể execute tại runtime trong virtual machine. Nhớ cả “gia đình” các lớp AST mà ta định nghĩa trong jlox chứ? Trong clox, ta đã rút gọn xuống chỉ còn ba mảng: mảng byte code, mảng constant values, và mảng thông tin dòng để debug.</p>
+<p>Sự rút gọn này là một lý do quan trọng khiến interpreter mới của chúng ta sẽ nhanh hơn jlox. Bạn có thể coi bytecode như một dạng “nén” gọn gàng của AST, được tối ưu mạnh mẽ cho cách interpreter sẽ giải nén và execute theo đúng thứ tự cần thiết. Trong <a href="a-virtual-machine.html">chương tiếp theo</a>, chúng ta sẽ thấy virtual machine thực hiện điều đó như thế nào.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>14&#8202;.&#8202;7</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Cách mã hóa thông tin dòng hiện tại cực kỳ lãng phí bộ nhớ. Vì một loạt instruction thường tương ứng với cùng một dòng mã nguồn, giải pháp tự nhiên là dùng một kỹ thuật tương tự <a href="https://en.wikipedia.org/wiki/Run-length_encoding">run-length encoding</a> cho số dòng.</p>
+<p>Hãy nghĩ ra một cách mã hóa để nén thông tin dòng cho một loạt instruction trên cùng một dòng. Thay đổi <code>writeChunk()</code> để ghi dạng nén này, và cài đặt hàm <code>getLine()</code> sao cho, khi nhận vào chỉ số của một instruction, nó trả về số dòng chứa instruction đó.</p>
+<p><em>Gợi ý: Không cần thiết để <code>getLine()</code> quá tối ưu. Vì nó chỉ được gọi khi xảy ra runtime error, nên nó nằm ngoài đường chạy quan trọng về hiệu năng.</em></p>
+</li>
+<li>
+<p>Vì <code>OP_CONSTANT</code> chỉ dùng một byte cho operand, một chunk chỉ có thể chứa tối đa 256 constant khác nhau. Giới hạn này đủ nhỏ để code thực tế có thể chạm tới. Ta có thể dùng hai byte hoặc nhiều hơn để lưu operand, nhưng như vậy <em>mọi</em> constant instruction sẽ tốn thêm dung lượng. Hầu hết các chunk sẽ không cần nhiều constant như vậy, nên điều đó sẽ lãng phí bộ nhớ và giảm locality trong trường hợp phổ biến chỉ để hỗ trợ trường hợp hiếm.</p>
+<p>Để cân bằng hai mục tiêu này, nhiều tập lệnh có nhiều instruction thực hiện cùng một thao tác nhưng với operand có kích thước khác nhau. Giữ nguyên instruction <code>OP_CONSTANT</code> một byte operand, và định nghĩa thêm một instruction <code>OP_CONSTANT_LONG</code>. Nó lưu operand dưới dạng số 24-bit, đủ thoải mái.</p>
+<p>Cài đặt hàm sau:</p>
+<div class="codehilite"><pre><span class="t">void</span> <span class="i">writeConstant</span>(<span class="t">Chunk</span>* <span class="i">chunk</span>, <span class="t">Value</span> <span class="i">value</span>, <span class="t">int</span> <span class="i">line</span>) {
+  <span class="c">// Implement me...</span>
+}
+</pre></div>
+<p>Hàm này thêm <code>value</code> vào mảng constant của <code>chunk</code> rồi ghi một instruction phù hợp để load constant đó. Đồng thời thêm hỗ trợ cho disassembler để xử lý instruction <code>OP_CONSTANT_LONG</code>.</p>
+<p>Việc định nghĩa hai instruction dường như là “tốt cả đôi đường”. Nhưng nó có buộc ta phải hy sinh điều gì không?</p>
+</li>
+<li>
+<p>Hàm <code>reallocate()</code> của chúng ta dựa vào thư viện chuẩn C để cấp phát và giải phóng bộ nhớ động. <code>malloc()</code> và <code>free()</code> không phải là phép màu. Hãy tìm một vài cài đặt mã nguồn mở của chúng và giải thích cách chúng hoạt động. Chúng theo dõi byte nào đã được cấp phát và byte nào còn trống như thế nào? Cần gì để cấp phát một block bộ nhớ? Giải phóng nó? Làm sao để tối ưu hiệu năng? Chúng xử lý phân mảnh ra sao?</p>
+<p><em>Chế độ hardcore:</em> Cài đặt <code>reallocate()</code> mà không gọi <code>realloc()</code>, <code>malloc()</code>, hoặc <code>free()</code>. Bạn được phép gọi <code>malloc()</code> <em>một lần</em> khi interpreter khởi động để cấp phát một block bộ nhớ lớn duy nhất, và hàm <code>reallocate()</code> của bạn sẽ quản lý vùng nhớ này. Nó sẽ chia nhỏ vùng nhớ đó thành các khối, chính là heap riêng của bạn. Nhiệm vụ của bạn là định nghĩa cách nó làm điều đó.</p>
+</li>
+</ol>
+</div>
+<h2><a href="#ghi-chú-thiết-kế-hãy-kiểm-thử-ngôn-ngữ-của-bạn" id="ghi-chú-thiết-kế-hãy-kiểm-thử-ngôn-ngữ-của-bạn"><small>14&#8202;.&#8202;8</small>Ghi chú thiết kế: Hãy kiểm thử ngôn ngữ của bạn</a></h2>
+<p>Chúng ta đã đi được gần nửa cuốn sách, và có một điều mà tôi vẫn chưa đề cập đến: <em>kiểm thử</em> (testing) bản cài đặt ngôn ngữ của bạn. Không phải vì kiểm thử không quan trọng. Tôi không thể nhấn mạnh đủ rằng việc có một bộ kiểm thử (test suite) tốt và toàn diện cho ngôn ngữ của bạn là cực kỳ quan trọng.</p>
+<p>Tôi đã viết <a href="https://github.com/munificent/craftinginterpreters/tree/master/test">một bộ test cho Lox</a> (bạn hoàn toàn có thể dùng cho bản cài đặt Lox của riêng mình) trước cả khi viết một chữ nào cho cuốn sách này. Những bài test đó đã tìm ra vô số lỗi trong các bản cài đặt của tôi.</p>
+<p>Kiểm thử quan trọng với mọi phần mềm, nhưng với một ngôn ngữ lập trình thì nó còn quan trọng hơn, ít nhất là vì vài lý do sau:</p>
+<ul>
+<li>
+<p><strong>Người dùng kỳ vọng ngôn ngữ lập trình của họ phải cực kỳ ổn định.</strong> Chúng ta đã quá quen với các compiler và interpreter trưởng thành, ổn định, đến mức câu “Lỗi là do code của bạn, không phải do compiler” đã trở thành <a href="https://blog.codinghorror.com/the-first-rule-of-programming-its-always-your-fault/">một phần ăn sâu trong văn hóa lập trình</a>. Nếu bản cài đặt ngôn ngữ của bạn có bug, người dùng sẽ phải trải qua đủ cả năm giai đoạn của sự “đau buồn” trước khi hiểu chuyện gì đang xảy ra — và bạn chắc chắn không muốn họ phải chịu đựng điều đó.</p>
+</li>
+<li>
+<p><strong>Bản cài đặt ngôn ngữ là một phần mềm có mức độ liên kết nội bộ rất cao.</strong> Một số codebase thì rộng nhưng nông. Nếu code tải file trong trình soạn thảo văn bản của bạn bị hỏng, thì — hy vọng là vậy! — nó sẽ không gây lỗi trong phần hiển thị văn bản trên màn hình. Nhưng bản cài đặt ngôn ngữ thì hẹp và sâu hơn nhiều, đặc biệt là phần lõi của interpreter xử lý ngữ nghĩa thực sự của ngôn ngữ. Điều này khiến các bug tinh vi dễ len lỏi vào do những tương tác kỳ quặc giữa các phần khác nhau của hệ thống. Cần có những bài test tốt mới “lôi” được chúng ra.</p>
+</li>
+<li>
+<p><strong>Đầu vào của một bản cài đặt ngôn ngữ, theo thiết kế, là mang tính tổ hợp.</strong> Có vô số chương trình mà người dùng có thể viết, và bản cài đặt của bạn cần chạy đúng tất cả chúng. Bạn rõ ràng không thể kiểm thử hết, nhưng bạn cần nỗ lực bao phủ càng nhiều không gian đầu vào càng tốt.</p>
+</li>
+<li>
+<p><strong>Bản cài đặt ngôn ngữ thường phức tạp, thay đổi liên tục và chứa đầy tối ưu hóa.</strong> Điều này dẫn đến code rối rắm với nhiều “góc tối” nơi bug có thể ẩn náu.</p>
+</li>
+</ul>
+<p>Tất cả những điều đó có nghĩa là bạn sẽ cần rất nhiều bài test. Nhưng <em>test gì</em>? Những dự án tôi từng thấy thường tập trung vào các “bài test ngôn ngữ” end-to-end. Mỗi bài test là một chương trình viết bằng chính ngôn ngữ đó, kèm theo output hoặc lỗi mong đợi. Sau đó, bạn có một test runner để đưa chương trình test qua bản cài đặt ngôn ngữ của mình và kiểm tra xem nó có hoạt động đúng như mong đợi không. Viết test bằng chính ngôn ngữ đó có vài lợi thế:</p>
+<ul>
+<li>
+<p>Các bài test không phụ thuộc vào bất kỳ API hay quyết định kiến trúc nội bộ nào của bản cài đặt. Điều này cho phép bạn tái cấu trúc hoặc viết lại các phần của interpreter hoặc compiler mà không cần sửa hàng loạt bài test.</p>
+</li>
+<li>
+<p>Bạn có thể dùng cùng một bộ test cho nhiều bản cài đặt khác nhau của ngôn ngữ.</p>
+</li>
+<li>
+<p>Các bài test thường ngắn gọn, dễ đọc và dễ bảo trì vì chúng chỉ là các script trong ngôn ngữ của bạn.</p>
+</li>
+</ul>
+<p>Tất nhiên, không phải mọi thứ đều “màu hồng”:</p>
+<ul>
+<li>
+<p>Test end-to-end giúp bạn xác định <em>có</em> bug hay không, nhưng không cho biết <em>bug ở đâu</em>. Sẽ khó hơn để tìm ra đoạn code gây lỗi trong bản cài đặt, vì tất cả những gì test nói với bạn là output không đúng.</p>
+</li>
+<li>
+<p>Việc tạo ra một chương trình hợp lệ để “chạm” tới một góc khuất nào đó của bản cài đặt có thể rất mất công. Điều này đặc biệt đúng với các compiler tối ưu hóa cao, nơi bạn có thể phải viết code vòng vèo để đảm bảo rơi đúng vào nhánh tối ưu hóa mà bug đang ẩn.</p>
+</li>
+<li>
+<p>Chi phí khởi động interpreter, parse, compile và chạy mỗi script test có thể cao. Với một bộ test lớn — mà bạn <em>nên</em> có, nhớ nhé — điều đó có thể đồng nghĩa với việc phải chờ rất lâu để chạy xong toàn bộ.</p>
+</li>
+</ul>
+<p>Tôi có thể nói tiếp nữa, nhưng không muốn biến phần này thành một bài thuyết giảng. Tôi cũng không giả vờ là chuyên gia về <em>cách</em> kiểm thử ngôn ngữ. Tôi chỉ muốn bạn thật sự ghi nhớ tầm quan trọng của việc <em>phải</em> kiểm thử ngôn ngữ của mình. Nghiêm túc đấy. Hãy kiểm thử ngôn ngữ của bạn. Sau này bạn sẽ cảm ơn tôi.</p>
+
+<footer>
+<a href="a-virtual-machine.html" class="next">
+  Đọc tiếp Chapter: &ldquo;A Virtual Machine&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

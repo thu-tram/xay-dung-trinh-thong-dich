@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Representing Code &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Representing Code<small>5</small></a></h3>
+
+<ul>
+    <li><a href="#ngữ-pháp-phi-ngữ-cảnh-context-free-grammars"><small>5.1</small> Ngữ pháp phi ngữ cảnh (Context-Free Grammars)</a></li>
+    <li><a href="#hiện-thực-syntax-tree"><small>5.2</small> Hiện thực Syntax Tree</a></li>
+    <li><a href="#l&amp;agrave;m-việc-với-cây"><small>5.3</small> L&amp;agrave;m việc với cây</a></li>
+    <li><a href="#một-bộ-in-không-mấy-đẹp"><small>5.4</small> Một bộ in (không mấy) đẹp</a></li>
+    <li><a href="#thử-thách"><small>5.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="scanning.html" title="Scanning" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="parsing-expressions.html" title="Parsing Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="scanning.html" title="Scanning" class="prev">←</a>
+<a href="parsing-expressions.html" title="Parsing Expressions" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Representing Code<small>5</small></a></h3>
+
+<ul>
+    <li><a href="#ngữ-pháp-phi-ngữ-cảnh-context-free-grammars"><small>5.1</small> Ngữ pháp phi ngữ cảnh (Context-Free Grammars)</a></li>
+    <li><a href="#hiện-thực-syntax-tree"><small>5.2</small> Hiện thực Syntax Tree</a></li>
+    <li><a href="#l&amp;agrave;m-việc-với-cây"><small>5.3</small> L&amp;agrave;m việc với cây</a></li>
+    <li><a href="#một-bộ-in-không-mấy-đẹp"><small>5.4</small> Một bộ in (không mấy) đẹp</a></li>
+    <li><a href="#thử-thách"><small>5.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="scanning.html" title="Scanning" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="parsing-expressions.html" title="Parsing Expressions" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">5</div>
+  <h1>Representing Code</h1>
+
+<blockquote>
+<p>Với những người sống trong rừng, hầu như mỗi loài cây đều có giọng nói cũng như hình dáng riêng của nó.<br />
+<cite>Thomas Hardy, <em>Under the Greenwood Tree</em></cite></p>
+</blockquote>
+<p>Trong <a href="scanning.html">chương trước</a>, ta đã lấy mã nguồn thô dưới dạng một chuỗi và biến đổi nó thành một dạng biểu diễn ở mức cao hơn một chút: một chuỗi các token. Parser mà ta sẽ viết trong <a href="parsing-expressions.html">chương tiếp theo</a> sẽ tiếp tục biến đổi các token đó, thành một dạng biểu diễn còn phong phú và phức tạp hơn nữa.</p>
+<p>Trước khi có thể tạo ra dạng biểu diễn đó, ta cần định nghĩa nó. Đó chính là chủ đề của chương này. Trên đường đi, ta sẽ <span name="boring">đề cập</span> đến một chút lý thuyết về ngữ pháp hình thức, cảm nhận sự khác biệt giữa lập trình hàm và lập trình hướng đối tượng, điểm qua một vài mẫu thiết kế, và làm một chút metaprogramming.</p>
+<aside name="boring">
+<p>Tôi đã lo lắng rằng đây sẽ là một trong những chương nhàm chán nhất của cuốn sách, đến mức tôi cứ nhồi thêm các ý tưởng thú vị vào cho đến khi… hết chỗ.</p>
+</aside>
+<p>Trước khi làm tất cả những điều đó, hãy tập trung vào mục tiêu chính — một dạng biểu diễn cho code. Nó cần đơn giản để parser tạo ra và dễ dàng để interpreter tiêu thụ. Nếu bạn chưa từng viết parser hay interpreter, những yêu cầu này có thể chưa rõ ràng lắm. Có lẽ trực giác của bạn sẽ giúp được. Bộ não bạn làm gì khi đóng vai một <em>interpreter</em>… bằng xương bằng thịt? Bạn sẽ đánh giá một biểu thức số học như thế này trong đầu ra sao:</p>
+<div class="codehilite"><pre><span class="n">1</span> + <span class="n">2</span> * <span class="n">3</span> - <span class="n">4</span>
+</pre></div>
+<p>Bởi vì bạn hiểu thứ tự thực hiện phép toán — kiểu “<a href="https://en.wikipedia.org/wiki/Order_of_operations#Mnemonics">Please Excuse My Dear Aunt Sally</a>” — bạn biết rằng phép nhân sẽ được tính trước phép cộng hoặc trừ. Một cách để hình dung precedence đó là dùng một cây. Các node lá là số, và các node bên trong là toán tử với các nhánh trỏ tới từng toán hạng của chúng.</p>
+<p>Để tính giá trị của một node phép toán, bạn cần biết giá trị số của các cây con, nên bạn phải tính chúng trước. Điều đó có nghĩa là làm việc từ lá lên gốc — một phép duyệt <em>hậu tự</em> (post-order):</p>
+<p><span name="tree-steps"></span></p><img src="image/representing-code/tree-evaluate.png" alt="Đánh giá cây từ dưới lên." />
+<aside name="tree-steps">
+<p>A. Bắt đầu với toàn bộ cây, tính phép toán ở đáy nhất, <code>2 * 3</code>.</p>
+<p>B. Giờ ta có thể tính phép <code>+</code>.</p>
+<p>C. Tiếp theo, phép <code>-</code>.</p>
+<p>D. Kết quả cuối cùng.</p>
+</aside>
+<p>Nếu tôi đưa cho bạn một biểu thức số học, bạn có thể dễ dàng vẽ ra một trong những cây này. Và khi đã có cây, bạn có thể tính toán nó một cách nhẹ nhàng. Vậy nên, một cách trực giác, có vẻ như một dạng biểu diễn hợp lý cho code của ta là một <span name="only">cây</span> khớp với cấu trúc ngữ pháp — sự lồng nhau của các toán tử — của ngôn ngữ.</p>
+<aside name="only">
+<p>Điều này không có nghĩa là cây là cách biểu diễn <em>duy nhất</em> cho code của ta. Trong <a href="a-bytecode-virtual-machine.html">Phần III</a>, ta sẽ sinh ra bytecode, một dạng biểu diễn khác không thân thiện với con người bằng nhưng lại gần hơn với máy.</p>
+</aside>
+<p>Vậy ta cần xác định chính xác hơn ngữ pháp đó là gì. Giống như ngữ pháp từ vựng ở chương trước, có cả một “núi” lý thuyết xoay quanh ngữ pháp cú pháp. Ta sẽ đi sâu vào lý thuyết này hơn một chút so với khi làm phần scanning, vì nó hóa ra lại là một công cụ hữu ích trong nhiều phần của interpreter. Ta bắt đầu bằng cách tiến lên một bậc trong <a href="https://en.wikipedia.org/wiki/Chomsky_hierarchy">phân cấp Chomsky</a><span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<h2><a href="#ngữ-pháp-phi-ngữ-cảnh-context-free-grammars" id="ngữ-pháp-phi-ngữ-cảnh-context-free-grammars"><small>5&#8202;.&#8202;1</small>Ngữ pháp phi ngữ cảnh (Context-Free Grammars)</a></h2>
+<p>Trong chương trước, hình thức mà ta dùng để định nghĩa ngữ pháp từ vựng — các quy tắc về cách ký tự được nhóm thành token — được gọi là <em>ngôn ngữ chính quy</em> (regular language). Điều đó là đủ cho scanner của ta, vốn tạo ra một chuỗi token phẳng. Nhưng ngôn ngữ chính quy không đủ mạnh để xử lý các biểu thức có thể lồng nhau sâu tùy ý.</p>
+<p>Ta cần một “cây búa” to hơn, và cây búa đó là <strong>ngữ pháp phi ngữ cảnh</strong> (<strong>CFG</strong>). Đây là công cụ nặng ký tiếp theo trong hộp đồ nghề của <strong><a href="https://en.wikipedia.org/wiki/Formal_grammar">ngữ pháp hình thức</a></strong>. Một ngữ pháp hình thức lấy một tập hợp các thành phần nguyên tử gọi là “bảng chữ cái” (alphabet). Sau đó nó định nghĩa một tập hợp (thường là vô hạn) các “chuỗi” thuộc ngữ pháp. Mỗi chuỗi là một dãy “chữ cái” trong bảng chữ cái.</p>
+<p>Tôi để tất cả những từ đó trong dấu ngoặc kép vì các thuật ngữ này có thể gây nhầm lẫn khi bạn chuyển từ ngữ pháp từ vựng sang ngữ pháp cú pháp. Trong ngữ pháp của scanner, bảng chữ cái gồm các ký tự riêng lẻ và các chuỗi là những lexeme hợp lệ — gần giống như “từ”. Trong ngữ pháp cú pháp mà ta đang nói tới bây giờ, ta ở một mức độ chi tiết khác. Giờ mỗi “chữ cái” trong bảng chữ cái là cả một token, và một “chuỗi” là một dãy <em>token</em> — tức là cả một biểu thức.</p>
+<p>Ôi. Có lẽ một bảng so sánh sẽ giúp:</p><table>
+<thead>
+<tr>
+  <td>Terminology</td>
+  <td></td>
+  <td>Lexical grammar</td>
+  <td>Syntactic grammar</td>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>The &ldquo;alphabet&rdquo; is<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.</span></td>
+  <td>&rarr;&ensp;</td>
+  <td>Characters</td>
+  <td>Tokens</td>
+</tr>
+<tr>
+  <td>A &ldquo;string&rdquo; is<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.</span></td>
+  <td>&rarr;&ensp;</td>
+  <td>Lexeme or token</td>
+  <td>Expression</td>
+</tr>
+<tr>
+  <td>It&rsquo;s implemented by the<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.</span></td>
+  <td>&rarr;&ensp;</td>
+  <td>Scanner</td>
+  <td>Parser</td>
+</tr>
+</tbody>
+</table>
+<p>Nhiệm vụ của một ngữ pháp hình thức là xác định chuỗi nào là hợp lệ và chuỗi nào thì không. Nếu ta đang định nghĩa một ngữ pháp cho câu tiếng Anh, “eggs are tasty for breakfast” sẽ thuộc ngữ pháp, nhưng “tasty breakfast for are eggs” thì có lẽ không.</p>
+<h3><a href="#quy-tắc-cho-ngữ-pháp" id="quy-tắc-cho-ngữ-pháp"><small>5&#8202;.&#8202;1&#8202;.&#8202;1</small>Quy tắc cho ngữ pháp</a></h3>
+<p>Làm sao để ta viết ra một ngữ pháp chứa vô hạn chuỗi hợp lệ? Rõ ràng ta không thể liệt kê hết tất cả. Thay vào đó, ta tạo ra một tập hữu hạn các quy tắc. Bạn có thể hình dung chúng như một trò chơi mà bạn có thể “chơi” theo một trong hai hướng.</p>
+<p>Nếu bắt đầu từ các quy tắc, bạn có thể dùng chúng để <em>tạo ra</em> các chuỗi thuộc ngữ pháp. Các chuỗi được tạo theo cách này được gọi là <strong>derivation</strong> vì mỗi chuỗi được <em>suy ra</em> từ các quy tắc của ngữ pháp. Ở mỗi bước của trò chơi, bạn chọn một quy tắc và làm theo những gì nó yêu cầu. Phần lớn thuật ngữ xoay quanh ngữ pháp hình thức xuất phát từ cách “chơi” này. Các quy tắc được gọi là <strong>production</strong> vì chúng <em>sinh ra</em> các chuỗi trong ngữ pháp.</p>
+<p>Mỗi production trong một ngữ pháp phi ngữ cảnh có một <strong>head</strong> — <span name="name">tên</span> của nó — và một <strong>body</strong>, mô tả những gì nó sinh ra. Ở dạng thuần túy, body chỉ đơn giản là một danh sách các ký hiệu. Các ký hiệu này có hai “hương vị” hấp dẫn:</p>
+<aside name="name">
+<p>Việc giới hạn head chỉ gồm một ký hiệu là một đặc điểm xác định của ngữ pháp phi ngữ cảnh. Các hình thức mạnh hơn như <strong><a href="https://en.wikipedia.org/wiki/Unrestricted_grammar">unrestricted grammars</a></strong> cho phép một dãy ký hiệu ở cả head lẫn body.</p>
+</aside>
+<ul>
+<li>
+<p><strong>Terminal</strong> là một ký tự trong bảng chữ cái của ngữ pháp. Bạn có thể coi nó như một giá trị literal. Trong ngữ pháp cú pháp mà ta đang định nghĩa, các terminal là những lexeme riêng lẻ — các token đến từ scanner như <code>if</code> hoặc <code>1234</code>.</p>
+<p>Chúng được gọi là “terminal” theo nghĩa “điểm kết thúc” vì chúng không dẫn đến bất kỳ “nước đi” nào khác trong trò chơi. Bạn chỉ đơn giản sinh ra ký hiệu đó.</p>
+</li>
+<li>
+<p><strong>Nonterminal</strong> là một tham chiếu có tên tới một quy tắc khác trong ngữ pháp. Nó có nghĩa là “chơi” quy tắc đó và chèn bất cứ thứ gì nó sinh ra vào đây. Theo cách này, ngữ pháp được ghép thành.</p>
+</li>
+</ul>
+<p>Có một tinh chỉnh cuối cùng: bạn có thể có nhiều quy tắc cùng tên. Khi gặp một nonterminal với tên đó, bạn được phép chọn bất kỳ quy tắc nào trong số đó, tùy ý bạn.</p>
+<p>Để cụ thể hơn, ta cần một <span name="turtles">cách</span> để viết ra các production rule này. Con người đã cố gắng “kết tinh” ngữ pháp từ thời <em>Ashtadhyayi</em> của Pāṇini, bộ sách đã hệ thống hóa ngữ pháp tiếng Phạn cách đây chỉ vài nghìn năm. Không có nhiều tiến triển cho đến khi John Backus và cộng sự cần một ký hiệu để đặc tả ALGOL 58 và nghĩ ra <a href="https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form"><strong>Backus-Naur form</strong></a> (<strong>BNF</strong>). Kể từ đó, gần như ai cũng dùng một biến thể nào đó của BNF, được chỉnh sửa theo sở thích riêng.</p>
+<p>Tôi đã cố gắng nghĩ ra một dạng ký hiệu gọn gàng. Mỗi quy tắc gồm một tên, theo sau là một mũi tên (<code>→</code>), tiếp đến là một chuỗi ký hiệu, và kết thúc bằng dấu chấm phẩy (<code>;</code>). Terminal là các chuỗi được đặt trong dấu nháy, còn nonterminal là các từ viết thường.</p>
+<aside name="turtles">
+<p>Đúng vậy, ta cần định nghĩa một cú pháp để dùng cho các quy tắc định nghĩa cú pháp của chính ta. Ta có nên đặc tả cả <em>metasyntax</em> đó không? Ta sẽ dùng ký hiệu gì cho <em>nó</em>? Ngôn ngữ chồng lên ngôn ngữ, cứ thế mãi!</p>
+</aside>
+<p>Dùng cách này, đây là một ngữ pháp cho thực đơn <span name="breakfast">bữa sáng</span>:</p>
+<aside name="breakfast">
+<p>Đúng gòi, tôi sẽ dùng ví dụ về bữa sáng xuyên suốt cả cuốn sách này. Nếu đói thì cứ đi làm bát phở cũng được.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">breakfast</span>  → <span class="i">protein</span> <span class="s">&quot;with&quot;</span> <span class="i">breakfast</span> <span class="s">&quot;on the side&quot;</span> ;
+<span class="i">breakfast</span>  → <span class="i">protein</span> ;
+<span class="i">breakfast</span>  → <span class="i">bread</span> ;
+
+<span class="i">protein</span>    → <span class="i">crispiness</span> <span class="s">&quot;crispy&quot;</span> <span class="s">&quot;bacon&quot;</span> ;
+<span class="i">protein</span>    → <span class="s">&quot;sausage&quot;</span> ;
+<span class="i">protein</span>    → <span class="i">cooked</span> <span class="s">&quot;eggs&quot;</span> ;
+
+<span class="i">crispiness</span> → <span class="s">&quot;really&quot;</span> ;
+<span class="i">crispiness</span> → <span class="s">&quot;really&quot;</span> <span class="i">crispiness</span> ;
+
+<span class="i">cooked</span>     → <span class="s">&quot;scrambled&quot;</span> ;
+<span class="i">cooked</span>     → <span class="s">&quot;poached&quot;</span> ;
+<span class="i">cooked</span>     → <span class="s">&quot;fried&quot;</span> ;
+
+<span class="i">bread</span>      → <span class="s">&quot;toast&quot;</span> ;
+<span class="i">bread</span>      → <span class="s">&quot;biscuits&quot;</span> ;
+<span class="i">bread</span>      → <span class="s">&quot;English muffin&quot;</span> ;
+</pre></div>
+<p>Ta có thể dùng ngữ pháp này để tạo ra các bữa sáng ngẫu nhiên. Hãy “chơi” một ván để xem nó hoạt động thế nào. Theo thông lệ lâu đời, trò chơi bắt đầu với quy tắc đầu tiên trong ngữ pháp, ở đây là <code>breakfast</code>. Có ba production cho quy tắc này, và ta ngẫu nhiên chọn cái đầu tiên. Chuỗi kết quả của ta trông như sau:</p>
+<div class="codehilite"><pre>protein &quot;with&quot; breakfast &quot;on the side&quot;
+</pre></div>
+<p>Ta cần mở rộng nonterminal đầu tiên, <code>protein</code>, nên ta chọn một production cho nó. Chọn:</p>
+<div class="codehilite"><pre><span class="i">protein</span> → <span class="i">cooked</span> <span class="s">&quot;eggs&quot;</span> ;
+</pre></div>
+<p>Tiếp theo, ta cần một production cho <code>cooked</code>, và ta chọn <code>"poached"</code>. Đây là một terminal, nên ta thêm nó vào. Giờ chuỗi của ta trông như:</p>
+<div class="codehilite"><pre>&quot;poached&quot; &quot;eggs&quot; &quot;with&quot; breakfast &quot;on the side&quot;
+</pre></div>
+<p>Nonterminal tiếp theo lại là <code>breakfast</code>. Production <code>breakfast</code> đầu tiên mà ta chọn tham chiếu đệ quy trở lại quy tắc <code>breakfast</code>. Sự xuất hiện của đệ quy trong ngữ pháp là một dấu hiệu tốt cho thấy ngôn ngữ đang được định nghĩa là phi ngữ cảnh (context-free) thay vì chính quy (regular). Đặc biệt, đệ quy mà nonterminal đệ quy có production ở <span name="nest">cả hai</span> phía cho thấy ngôn ngữ đó không phải là chính quy.</p>
+<aside name="nest">
+<p>Hãy tưởng tượng ta đã mở rộng đệ quy quy tắc <code>breakfast</code> ở đây nhiều lần, như “bacon with bacon with bacon with…”. Để hoàn thành chuỗi một cách chính xác, ta cần thêm <em>số lượng bằng nhau</em> các phần “on the side” vào cuối. Việc theo dõi số lượng phần đuôi cần thiết vượt quá khả năng của ngữ pháp chính quy. Ngữ pháp chính quy có thể biểu diễn <em>lặp lại</em>, nhưng không thể <em>đếm</em> số lần lặp, điều này là cần thiết để đảm bảo chuỗi có cùng số phần <code>with</code> và <code>on the side</code>.</p>
+</aside>
+<p>Ta có thể cứ chọn production đầu tiên cho <code>breakfast</code> lặp đi lặp lại, tạo ra đủ loại bữa sáng như “bacon with sausage with scrambled eggs with bacon…”. Nhưng ta sẽ không làm vậy. Lần này ta sẽ chọn <code>bread</code>. Có ba quy tắc cho nó, mỗi quy tắc chỉ chứa một terminal. Ta sẽ chọn “English muffin”.</p>
+<p>Với lựa chọn đó, mọi nonterminal trong chuỗi đã được mở rộng cho đến khi cuối cùng chỉ còn lại các terminal và ta thu được:</p><img src="image/representing-code/breakfast.png" alt='"Chơi" ngữ pháp để tạo ra một chuỗi.' />
+<p>Thêm chút thịt nguội và sốt Hollandaise, bạn sẽ có món eggs Benedict.</p>
+<p>Bất cứ khi nào ta gặp một quy tắc có nhiều production, ta chỉ việc chọn một cái bất kỳ. Chính sự linh hoạt này cho phép một số lượng nhỏ quy tắc ngữ pháp mã hóa được một tập hợp chuỗi lớn hơn theo cấp số nhân. Việc một quy tắc có thể tham chiếu tới chính nó — trực tiếp hoặc gián tiếp — còn nâng tầm hơn nữa, cho phép ta “nhét” một số lượng vô hạn chuỗi vào một ngữ pháp hữu hạn.</p>
+<h3><a href="#nâng-cấp-ký-pháp-của-chúng-ta" id="nâng-cấp-ký-pháp-của-chúng-ta"><small>5&#8202;.&#8202;1&#8202;.&#8202;2</small>Nâng cấp ký pháp của chúng ta</a></h3>
+<p>Nhét một tập hợp vô hạn chuỗi vào chỉ vài quy tắc là khá tuyệt, nhưng hãy tiến xa hơn. Ký pháp của ta hoạt động, nhưng hơi tẻ nhạt. Vậy nên, như bất kỳ nhà thiết kế ngôn ngữ giỏi nào, ta sẽ rắc thêm chút “đường cú pháp” — một vài ký pháp tiện lợi bổ sung. Ngoài terminal và nonterminal, ta sẽ cho phép một vài loại biểu thức khác trong phần thân của quy tắc:</p>
+<ul>
+<li>
+<p>Thay vì lặp lại tên quy tắc mỗi khi muốn thêm một production mới cho nó, ta sẽ cho phép một chuỗi các production được phân tách bằng dấu gạch đứng (<code>|</code>).</p>
+<div class="codehilite"><pre><span class="i">bread</span> → <span class="s">&quot;toast&quot;</span> | <span class="s">&quot;biscuits&quot;</span> | <span class="s">&quot;English muffin&quot;</span> ;
+</pre></div>
+</li>
+<li>
+<p>Hơn nữa, ta sẽ cho phép dấu ngoặc đơn để nhóm, và cho phép <code>|</code> bên trong đó để chọn một trong nhiều tùy chọn ở giữa một production.</p>
+<div class="codehilite"><pre><span class="i">protein</span> → ( <span class="s">&quot;scrambled&quot;</span> | <span class="s">&quot;poached&quot;</span> | <span class="s">&quot;fried&quot;</span> ) <span class="s">&quot;eggs&quot;</span> ;
+</pre></div>
+</li>
+<li>
+<p>Dùng đệ quy để hỗ trợ chuỗi ký hiệu lặp lại có một nét <span name="purity">“thuần khiết”</span> nhất định, nhưng khá mất công khi phải tạo một quy tắc con đặt tên riêng mỗi khi muốn lặp. Vì vậy, ta cũng dùng hậu tố <code>*</code> để cho phép ký hiệu hoặc nhóm trước đó lặp lại từ 0 lần trở lên.</p>
+<div class="codehilite"><pre><span class="i">crispiness</span> → <span class="s">&quot;really&quot;</span> <span class="s">&quot;really&quot;</span>* ;
+</pre></div>
+</li>
+</ul>
+<aside name="purity">
+<p>Đây chính là cách ngôn ngữ lập trình Scheme hoạt động. Nó hoàn toàn không có chức năng lặp tích hợp sẵn. Thay vào đó, <em>mọi</em> sự lặp lại đều được biểu diễn thông qua đệ quy.</p>
+</aside>
+<ul>
+<li>
+<p>Hậu tố <code>+</code> tương tự như vậy, nhưng yêu cầu production đứng trước nó phải xuất hiện ít nhất một lần.</p>
+<div class="codehilite"><pre><span class="i">crispiness</span> → <span class="s">&quot;really&quot;</span>+ ;
+</pre></div>
+</li>
+<li>
+<p>Hậu tố <code>?</code> dùng cho một production tùy chọn. Thành phần đứng trước nó có thể xuất hiện 0 hoặc 1 lần, nhưng không hơn.</p>
+<div class="codehilite"><pre><span class="i">breakfast</span> → <span class="i">protein</span> ( <span class="s">&quot;with&quot;</span> <span class="i">breakfast</span> <span class="s">&quot;on the side&quot;</span> )? ;
+</pre></div>
+</li>
+</ul>
+<p>Với tất cả những “đường cú pháp” này, ngữ pháp bữa sáng của ta được rút gọn thành:</p>
+<div class="codehilite"><pre><span class="i">breakfast</span> → <span class="i">protein</span> ( <span class="s">&quot;with&quot;</span> <span class="i">breakfast</span> <span class="s">&quot;on the side&quot;</span> )?
+          | <span class="i">bread</span> ;
+
+<span class="i">protein</span>   → <span class="s">&quot;really&quot;</span>+ <span class="s">&quot;crispy&quot;</span> <span class="s">&quot;bacon&quot;</span>
+          | <span class="s">&quot;sausage&quot;</span>
+          | ( <span class="s">&quot;scrambled&quot;</span> | <span class="s">&quot;poached&quot;</span> | <span class="s">&quot;fried&quot;</span> ) <span class="s">&quot;eggs&quot;</span> ;
+
+<span class="i">bread</span>     → <span class="s">&quot;toast&quot;</span> | <span class="s">&quot;biscuits&quot;</span> | <span class="s">&quot;English muffin&quot;</span> ;
+</pre></div>
+<p>Cũng không tệ lắm, nhỉ. Nếu bạn quen dùng grep hoặc <a href="https://en.wikipedia.org/wiki/Regular_expression#Standards">regular expressions</a> trong trình soạn thảo văn bản, hầu hết các ký hiệu này sẽ khá quen thuộc. Khác biệt chính là ở đây, các ký hiệu đại diện cho cả một token, chứ không phải một ký tự đơn lẻ.</p>
+<p>Ta sẽ dùng ký pháp này xuyên suốt phần còn lại của cuốn sách để mô tả chính xác ngữ pháp của Lox. Khi bạn làm việc với ngôn ngữ lập trình, bạn sẽ thấy rằng ngữ pháp phi ngữ cảnh (dùng ký pháp này, hoặc <a href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">EBNF</a>, hoặc ký pháp khác) giúp bạn “kết tinh” các ý tưởng thiết kế cú pháp còn mơ hồ. Chúng cũng là một phương tiện hữu ích để trao đổi với những người “vọc” ngôn ngữ khác về cú pháp.</p>
+<p>Các quy tắc và production mà ta định nghĩa cho Lox cũng sẽ là kim chỉ nam cho cấu trúc dữ liệu dạng cây mà ta sẽ hiện thực để biểu diễn code trong bộ nhớ. Trước khi làm điều đó, ta cần một ngữ pháp thực sự cho Lox, hoặc ít nhất là đủ để bắt đầu.</p>
+<h3><a href="#ngữ-pháp-cho-các-biểu-thức-lox" id="ngữ-pháp-cho-các-biểu-thức-lox"><small>5&#8202;.&#8202;1&#8202;.&#8202;3</small>Ngữ pháp cho các biểu thức Lox</a></h3>
+<p>Trong chương trước, ta đã hoàn thành toàn bộ ngữ pháp từ vựng của Lox trong một lần. Mọi từ khóa và ký hiệu đều đã có. Ngữ pháp cú pháp thì lớn hơn, và sẽ thật nhàm chán nếu phải cày qua toàn bộ trước khi interpreter của ta chạy được.</p>
+<p>Thay vào đó, trong vài chương tới, ta sẽ xử lý một tập con của ngôn ngữ. Khi ta đã biểu diễn, parse và chạy được mini-language này, các chương sau sẽ dần dần bổ sung thêm tính năng mới, bao gồm cú pháp mới. Hiện tại, ta chỉ quan tâm đến một vài loại biểu thức:</p>
+<ul>
+<li>
+<p><strong>Literal.</strong> Số, chuỗi, Boolean và <code>nil</code>.</p>
+</li>
+<li>
+<p><strong>Unary expression.</strong> Toán tử tiền tố <code>!</code> để phủ định logic, và <code>-</code> để đổi dấu số.</p>
+</li>
+<li>
+<p><strong>Binary expression.</strong> Các toán tử số học trung tố (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>) và toán tử logic (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>) quen thuộc.</p>
+</li>
+<li>
+<p><strong>Ngoặc đơn.</strong> Một cặp <code>(</code> và <code>)</code> bao quanh một biểu thức.</p>
+</li>
+</ul>
+<p>Như vậy là đủ cú pháp để viết các biểu thức như:</p>
+<div class="codehilite"><pre><span class="n">1</span> - (<span class="n">2</span> * <span class="n">3</span>) &lt; <span class="n">4</span> == <span class="k">false</span>
+</pre></div>
+<p>Dùng ký pháp mới tiện lợi này, đây là ngữ pháp cho các biểu thức đó:</p>
+<div class="codehilite"><pre><span class="i">expression</span>     → <span class="i">literal</span>
+               | <span class="i">unary</span>
+               | <span class="i">binary</span>
+               | <span class="i">grouping</span> ;
+
+<span class="i">literal</span>        → <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span> ;
+<span class="i">grouping</span>       → <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span> ;
+<span class="i">unary</span>          → ( <span class="s">&quot;-&quot;</span> | <span class="s">&quot;!&quot;</span> ) <span class="i">expression</span> ;
+<span class="i">binary</span>         → <span class="i">expression</span> <span class="i">operator</span> <span class="i">expression</span> ;
+<span class="i">operator</span>       → <span class="s">&quot;==&quot;</span> | <span class="s">&quot;!=&quot;</span> | <span class="s">&quot;&lt;&quot;</span> | <span class="s">&quot;&lt;=&quot;</span> | <span class="s">&quot;&gt;&quot;</span> | <span class="s">&quot;&gt;=&quot;</span>
+               | <span class="s">&quot;+&quot;</span>  | <span class="s">&quot;-&quot;</span>  | <span class="s">&quot;*&quot;</span> | <span class="s">&quot;/&quot;</span> ;
+</pre></div>
+<p>Có một chút <span name="play">metasyntax</span> bổ sung ở đây. Ngoài các chuỗi đặt trong dấu nháy cho terminal khớp chính xác với lexeme, ta viết HOA các terminal là một lexeme duy nhất nhưng phần văn bản có thể thay đổi. <code>NUMBER</code> là bất kỳ literal số nào, và <code>STRING</code> là bất kỳ literal chuỗi nào. Sau này, ta sẽ làm tương tự với <code>IDENTIFIER</code>.</p>
+<p>Ngữ pháp này thực ra là mơ hồ, điều mà ta sẽ thấy khi parse nó. Nhưng hiện tại, như vậy là đủ.</p>
+<aside name="play">
+<p>Nếu bạn muốn, hãy thử dùng ngữ pháp này để tạo ra vài biểu thức giống như ta đã làm với ngữ pháp bữa sáng trước đó. Các biểu thức kết quả có trông hợp lý với bạn không? Bạn có thể khiến nó sinh ra thứ gì sai như <code>1 + / 3</code> không?</p>
+</aside>
+<h2><a href="#hiện-thực-syntax-tree" id="hiện-thực-syntax-tree"><small>5&#8202;.&#8202;2</small>Hiện thực Syntax Tree</a></h2>
+<p>Cuối cùng thì ta cũng được viết code. Ngữ pháp biểu thức nhỏ kia chính là bộ khung của ta. Vì ngữ pháp này là đệ quy — để ý xem <code>grouping</code>, <code>unary</code> và <code>binary</code> đều tham chiếu ngược lại <code>expression</code> — nên cấu trúc dữ liệu của ta sẽ tạo thành một cây. Vì cấu trúc này biểu diễn cú pháp của ngôn ngữ, nó được gọi là <span name="ast"><strong>syntax tree</strong></span>.</p>
+<aside name="ast">
+<p>Cụ thể hơn, ta đang định nghĩa một <strong>abstract syntax tree</strong> (<strong>AST</strong>). Trong một <strong>parse tree</strong>, mỗi production của ngữ pháp đều trở thành một node trong cây. AST sẽ lược bỏ những production không cần thiết cho các giai đoạn sau.</p>
+</aside>
+<p>Scanner của ta dùng một class <code>Token</code> duy nhất để biểu diễn mọi loại lexeme. Để phân biệt các loại khác nhau — ví dụ số <code>123</code> so với chuỗi <code>"123"</code> — ta dùng một enum <code>TokenType</code> đơn giản. Syntax tree thì không <span name="token-data">đồng nhất</span> như vậy. Biểu thức unary có một toán hạng, binary có hai, còn literal thì không có toán hạng nào.</p>
+<p>Ta <em>có thể</em> nhồi tất cả vào một class <code>Expression</code> duy nhất với một danh sách con tùy ý. Một số compiler làm vậy. Nhưng tôi muốn tận dụng tối đa hệ thống kiểu của Java. Vậy nên ta sẽ định nghĩa một class cơ sở cho các biểu thức. Sau đó, với mỗi loại biểu thức — mỗi production dưới <code>expression</code> — ta tạo một subclass có các field cho các nonterminal đặc thù của quy tắc đó. Cách này giúp ta nhận lỗi biên dịch nếu, chẳng hạn, cố truy cập toán hạng thứ hai của một biểu thức unary.</p>
+<aside name="token-data">
+<p>Token cũng không hoàn toàn đồng nhất. Token cho literal lưu giá trị, nhưng các loại lexeme khác thì không cần trạng thái đó. Tôi từng thấy các scanner dùng class khác nhau cho literal và các loại lexeme khác, nhưng tôi chọn cách giữ mọi thứ đơn giản hơn.</p>
+</aside>
+<p>Ví dụ như thế này:</p>
+<div class="codehilite"><pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">abstract</span> <span class="k">class</span> <span class="t">Expr</span> {<span name="expr"> </span>
+  <span class="k">static</span> <span class="k">class</span> <span class="t">Binary</span> <span class="k">extends</span> <span class="t">Expr</span> {
+    <span class="t">Binary</span>(<span class="t">Expr</span> <span class="i">left</span>, <span class="t">Token</span> <span class="i">operator</span>, <span class="t">Expr</span> <span class="i">right</span>) {
+      <span class="k">this</span>.<span class="i">left</span> = <span class="i">left</span>;
+      <span class="k">this</span>.<span class="i">operator</span> = <span class="i">operator</span>;
+      <span class="k">this</span>.<span class="i">right</span> = <span class="i">right</span>;
+    }
+
+    <span class="k">final</span> <span class="t">Expr</span> <span class="i">left</span>;
+    <span class="k">final</span> <span class="t">Token</span> <span class="i">operator</span>;
+    <span class="k">final</span> <span class="t">Expr</span> <span class="i">right</span>;
+  }
+
+  <span class="c">// Other expressions...</span>
+}
+</pre></div>
+<aside name="expr">
+<p>Tôi tránh viết tắt trong code vì nó dễ gây khó hiểu cho người đọc không biết nó nghĩa là gì. Nhưng trong các compiler tôi từng xem, “Expr” và “Stmt” xuất hiện nhiều đến mức tôi nghĩ tốt nhất là làm bạn quen với chúng ngay từ bây giờ.</p>
+</aside>
+<p><code>Expr</code> là class cơ sở mà tất cả các class biểu thức kế thừa. Như bạn thấy ở <code>Binary</code>, các subclass được lồng bên trong nó. Không có lý do kỹ thuật bắt buộc, nhưng cách này cho phép ta nhét tất cả class vào một file Java duy nhất.</p>
+<h3><a href="#những-object-“mất-phương-hướng”" id="những-object-“mất-phương-hướng”"><small>5&#8202;.&#8202;2&#8202;.&#8202;1</small>Những object “mất phương hướng”</a></h3>
+<p>Bạn sẽ thấy rằng, giống như class <code>Token</code>, ở đây không có method nào cả. Đây là một cấu trúc “ngu ngốc”. Kiểu dữ liệu rõ ràng, nhưng chỉ là một túi dữ liệu. Điều này nghe có vẻ lạ trong một ngôn ngữ hướng đối tượng như Java. Chẳng phải class <em>nên làm gì đó</em> sao?</p>
+<p>Vấn đề là các class cây này không thuộc về một miền (domain) cụ thể nào. Chúng có nên có method để parse vì đó là nơi chúng được tạo ra? Hay method để interpret vì đó là nơi chúng được sử dụng? Cây trải dài qua ranh giới giữa hai “lãnh thổ” đó, nghĩa là thực ra chúng không thuộc hẳn về bên nào.</p>
+<p>Thực tế, các kiểu dữ liệu này tồn tại để cho parser và interpreter <em>giao tiếp</em> với nhau. Điều đó dẫn đến các kiểu dữ liệu chỉ đơn thuần chứa dữ liệu, không có hành vi đi kèm. Phong cách này rất tự nhiên trong các ngôn ngữ lập trình hàm như Lisp và ML, nơi <em>mọi</em> dữ liệu đều tách biệt với hành vi, nhưng trong Java thì cảm giác hơi lạ.</p>
+<p>Những người yêu lập trình hàm lúc này hẳn đang nhảy lên và nói “Thấy chưa! Ngôn ngữ hướng đối tượng không hợp để viết interpreter!”. Tôi thì không đi xa đến vậy. Bạn còn nhớ scanner của ta rất hợp với hướng đối tượng chứ. Nó có đầy đủ trạng thái thay đổi để theo dõi vị trí trong source code, một tập hợp method public rõ ràng, và một vài helper private.</p>
+<p>Cảm nhận của tôi là mỗi giai đoạn hoặc phần của interpreter đều hoạt động tốt với phong cách hướng đối tượng. Chỉ là các cấu trúc dữ liệu truyền giữa chúng thì bị “tước” hết hành vi mà thôi.</p>
+<h3><a href="#metaprogramming-cho-cây" id="metaprogramming-cho-cây"><small>5&#8202;.&#8202;2&#8202;.&#8202;2</small>Metaprogramming cho cây</a></h3>
+<p>Java có thể biểu diễn các class không có hành vi, nhưng tôi sẽ không nói rằng nó làm việc đó một cách đặc biệt tốt. Viết 11 dòng code chỉ để nhét ba field vào một object thì khá là tẻ nhạt, và khi xong xuôi, chúng ta sẽ có tới 21 class kiểu này.</p>
+<p>Tôi không muốn lãng phí thời gian của bạn hay mực của tôi để viết hết đống đó. Thực ra, bản chất của mỗi subclass là gì? Một cái tên, và một danh sách các field có kiểu. Hết. Chúng ta là những kẻ “vọc” ngôn ngữ thông minh, đúng không? Hãy <span name="automate">tự động hóa</span> thôi.</p>
+<aside name="automate">
+<p>Hãy tưởng tượng tôi đang nhảy một điệu robot vụng về khi bạn đọc đến đây. “AU-TO-MATE.”</p>
+</aside>
+<p>Thay vì cặm cụi viết tay từng định nghĩa class, khai báo field, constructor và initializer, ta sẽ “chế” một <span name="python">script</span> để làm việc đó cho mình. Script này chứa mô tả của từng loại cây — tên và các field — và in ra code Java cần thiết để định nghĩa một class với tên và trạng thái đó.</p>
+<p>Script này là một ứng dụng Java dòng lệnh nhỏ, tạo ra một file tên là <code>Expr.java</code>:</p>
+<aside name="python">
+<p>Tôi lấy ý tưởng viết script sinh ra các class syntax tree từ Jim Hugunin, người tạo ra Jython và IronPython.</p>
+<p>Một ngôn ngữ script thực thụ sẽ hợp hơn cho việc này so với Java, nhưng tôi đang cố không “ném” quá nhiều ngôn ngữ vào bạn.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>tool/GenerateAst.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.tool</span>;
+
+<span class="k">import</span> <span class="i">java.io.IOException</span>;
+<span class="k">import</span> <span class="i">java.io.PrintWriter</span>;
+<span class="k">import</span> <span class="i">java.util.Arrays</span>;
+<span class="k">import</span> <span class="i">java.util.List</span>;
+
+<span class="k">public</span> <span class="k">class</span> <span class="t">GenerateAst</span> {
+  <span class="k">public</span> <span class="k">static</span> <span class="t">void</span> <span class="i">main</span>(<span class="t">String</span>[] <span class="i">args</span>) <span class="k">throws</span> <span class="t">IOException</span> {
+    <span class="k">if</span> (<span class="i">args</span>.<span class="i">length</span> != <span class="n">1</span>) {
+      <span class="t">System</span>.<span class="i">err</span>.<span class="i">println</span>(<span class="s">&quot;Usage: generate_ast &lt;output directory&gt;&quot;</span>);
+      <span class="t">System</span>.<span class="i">exit</span>(<span class="n">64</span>);
+    }
+    <span class="t">String</span> <span class="i">outputDir</span> = <span class="i">args</span>[<span class="n">0</span>];
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, create new file</div>
+
+<p>Lưu ý rằng file này nằm trong một package khác, <code>.tool</code> thay vì <code>.lox</code>. Script này không phải là một phần của interpreter. Đây là công cụ mà <em>chúng ta</em>, những người đang “vọc” interpreter, tự chạy để sinh ra các class syntax tree. Khi xong, ta coi <code>Expr.java</code> như bất kỳ file nào khác trong phần hiện thực. Ta chỉ đơn giản là tự động hóa cách file đó được tạo ra.</p>
+<p>Để sinh ra các class, nó cần có mô tả của từng loại và các field của chúng.</p>
+<div class="codehilite"><pre class="insert-before">    String outputDir = args[0];
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">    <span class="i">defineAst</span>(<span class="i">outputDir</span>, <span class="s">&quot;Expr&quot;</span>, <span class="t">Arrays</span>.<span class="i">asList</span>(
+      <span class="s">&quot;Binary   : Expr left, Token operator, Expr right&quot;</span>,
+      <span class="s">&quot;Grouping : Expr expression&quot;</span>,
+      <span class="s">&quot;Literal  : Object value&quot;</span>,
+      <span class="s">&quot;Unary    : Token operator, Expr right&quot;</span>
+    ));
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<p>Để ngắn gọn, tôi nhét mô tả các loại biểu thức vào trong chuỗi. Mỗi chuỗi là tên class, theo sau là <code>:</code> và danh sách các field, phân tách bằng dấu phẩy. Mỗi field có một kiểu và một tên.</p>
+<p>Việc đầu tiên <code>defineAst()</code> cần làm là xuất ra class cơ sở <code>Expr</code>.</p>
+<div class="codehilite"><div class="source-file"><em>tool/GenerateAst.java</em><br>
+add after <em>main</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">defineAst</span>(
+      <span class="t">String</span> <span class="i">outputDir</span>, <span class="t">String</span> <span class="i">baseName</span>, <span class="t">List</span>&lt;<span class="t">String</span>&gt; <span class="i">types</span>)
+      <span class="k">throws</span> <span class="t">IOException</span> {
+    <span class="t">String</span> <span class="i">path</span> = <span class="i">outputDir</span> + <span class="s">&quot;/&quot;</span> + <span class="i">baseName</span> + <span class="s">&quot;.java&quot;</span>;
+    <span class="t">PrintWriter</span> <span class="i">writer</span> = <span class="k">new</span> <span class="t">PrintWriter</span>(<span class="i">path</span>, <span class="s">&quot;UTF-8&quot;</span>);
+
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;package com.craftinginterpreters.lox;&quot;</span>);
+    <span class="i">writer</span>.<span class="i">println</span>();
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;import java.util.List;&quot;</span>);
+    <span class="i">writer</span>.<span class="i">println</span>();
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;abstract class &quot;</span> + <span class="i">baseName</span> + <span class="s">&quot; {&quot;</span>);
+
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;}&quot;</span>);
+    <span class="i">writer</span>.<span class="i">close</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, add after <em>main</em>()</div>
+
+<p>Khi ta gọi hàm này, <code>baseName</code> là <code>"Expr"</code>, vừa là tên class vừa là tên file được xuất ra. Ta truyền nó như một tham số thay vì hardcode tên, vì sau này ta sẽ thêm một nhóm class riêng cho statement.</p>
+<p>Bên trong class cơ sở, ta định nghĩa từng subclass.</p>
+<div class="codehilite"><pre class="insert-before">    writer.println(&quot;abstract class &quot; + baseName + &quot; {&quot;);
+
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>defineAst</em>()</div>
+<pre class="insert">    <span class="c">// The AST classes.</span>
+    <span class="k">for</span> (<span class="t">String</span> <span class="i">type</span> : <span class="i">types</span>) {
+      <span class="t">String</span> <span class="i">className</span> = <span class="i">type</span>.<span class="i">split</span>(<span class="s">&quot;:&quot;</span>)[<span class="n">0</span>].<span class="i">trim</span>();
+      <span class="t">String</span> <span class="i">fields</span> = <span class="i">type</span>.<span class="i">split</span>(<span class="s">&quot;:&quot;</span>)[<span class="n">1</span>].<span class="i">trim</span>();<span name="robust"> </span>
+      <span class="i">defineType</span>(<span class="i">writer</span>, <span class="i">baseName</span>, <span class="i">className</span>, <span class="i">fields</span>);
+    }
+</pre><pre class="insert-after">    writer.println(&quot;}&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>defineAst</em>()</div>
+
+<aside name="robust">
+<p>Đây không phải là đoạn code xử lý chuỗi “thanh lịch” nhất thế giới, nhưng không sao. Nó chỉ chạy trên đúng tập định nghĩa class mà ta đưa vào. Tính “robust” không phải là ưu tiên ở đây.</p>
+</aside>
+<p>Đoạn code đó lại gọi tới:</p>
+<div class="codehilite"><div class="source-file"><em>tool/GenerateAst.java</em><br>
+add after <em>defineAst</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">defineType</span>(
+      <span class="t">PrintWriter</span> <span class="i">writer</span>, <span class="t">String</span> <span class="i">baseName</span>,
+      <span class="t">String</span> <span class="i">className</span>, <span class="t">String</span> <span class="i">fieldList</span>) {
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;  static class &quot;</span> + <span class="i">className</span> + <span class="s">&quot; extends &quot;</span> +
+        <span class="i">baseName</span> + <span class="s">&quot; {&quot;</span>);
+
+    <span class="c">// Constructor.</span>
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    &quot;</span> + <span class="i">className</span> + <span class="s">&quot;(&quot;</span> + <span class="i">fieldList</span> + <span class="s">&quot;) {&quot;</span>);
+
+    <span class="c">// Store parameters in fields.</span>
+    <span class="t">String</span>[] <span class="i">fields</span> = <span class="i">fieldList</span>.<span class="i">split</span>(<span class="s">&quot;, &quot;</span>);
+    <span class="k">for</span> (<span class="t">String</span> <span class="i">field</span> : <span class="i">fields</span>) {
+      <span class="t">String</span> <span class="i">name</span> = <span class="i">field</span>.<span class="i">split</span>(<span class="s">&quot; &quot;</span>)[<span class="n">1</span>];
+      <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;      this.&quot;</span> + <span class="i">name</span> + <span class="s">&quot; = &quot;</span> + <span class="i">name</span> + <span class="s">&quot;;&quot;</span>);
+    }
+
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    }&quot;</span>);
+
+    <span class="c">// Fields.</span>
+    <span class="i">writer</span>.<span class="i">println</span>();
+    <span class="k">for</span> (<span class="t">String</span> <span class="i">field</span> : <span class="i">fields</span>) {
+      <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    final &quot;</span> + <span class="i">field</span> + <span class="s">&quot;;&quot;</span>);
+    }
+
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;  }&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, add after <em>defineAst</em>()</div>
+
+<p>Vậy là xong. Tất cả phần Java boilerplate “huy hoàng” đó đã được xử lý. Nó khai báo từng field trong thân class. Nó định nghĩa constructor cho class với các tham số tương ứng với từng field và khởi tạo chúng trong thân hàm.</p>
+<p>Biên dịch và chạy chương trình Java này ngay bây giờ và nó sẽ <span name="longer">“bắn”</span> ra một file <code>.java</code> mới chứa vài chục dòng code. File đó sẽ còn dài hơn nữa.</p>
+<aside name="longer">
+<p><a href="appendix-ii.html">Phụ lục II</a> chứa code được generated bởi script này sau khi ta hoàn tất hiện thực jlox và định nghĩa tất cả các node syntax tree của nó.</p>
+</aside>
+<h2><a href="#l&agrave;m-việc-với-cây" id="l&agrave;m-việc-với-cây"><small>5&#8202;.&#8202;3</small>L&agrave;m việc với cây</a></h2>
+<p>Hãy đội chiếc “mũ tưởng tượng” của bạn lên một chút. Dù ta chưa đến bước đó, hãy thử hình dung interpreter sẽ làm gì với các syntax tree. Mỗi loại biểu thức trong Lox có hành vi khác nhau khi chạy. Điều đó có nghĩa là interpreter cần chọn một đoạn code khác nhau để xử lý từng loại biểu thức. Với token, ta chỉ cần <code>switch</code> trên <code>TokenType</code>. Nhưng với syntax tree, ta không có một enum “type” nào, mà chỉ có mỗi loại là một class Java riêng.</p>
+<p>Ta có thể viết một chuỗi dài các phép kiểm tra kiểu:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">expr</span> <span class="k">instanceof</span> <span class="t">Expr</span>.<span class="t">Binary</span>) {
+  <span class="c">// ...</span>
+} <span class="k">else</span> <span class="k">if</span> (<span class="i">expr</span> <span class="k">instanceof</span> <span class="t">Expr</span>.<span class="t">Grouping</span>) {
+  <span class="c">// ...</span>
+} <span class="k">else</span> <span class="c">// ...</span>
+</pre></div>
+<p>Nhưng tất cả các phép kiểm tra tuần tự này đều chậm. Các loại biểu thức có tên đứng sau trong bảng chữ cái sẽ mất nhiều thời gian hơn để execute vì chúng phải “rơi” qua nhiều nhánh <code>if</code> hơn trước khi tìm đúng loại. Đây không phải là giải pháp “thanh lịch” mà tôi muốn.</p>
+<p>Ta có một “gia đình” các class và cần gắn một đoạn hành vi với mỗi class. Giải pháp tự nhiên trong một ngôn ngữ hướng đối tượng như Java là đặt các hành vi đó vào các method ngay trong class. Ta có thể thêm một method trừu tượng <span name="interpreter-pattern"><code>interpret()</code></span> vào <code>Expr</code>, và mỗi subclass sẽ tự hiện thực nó để tự diễn giải chính nó.</p>
+<aside name="interpreter-pattern">
+<p>Điều này đúng nghĩa là cái gọi là <a href="https://en.wikipedia.org/wiki/Interpreter_pattern">&ldquo;Interpreter pattern&rdquo;</a> trong <em>Design Patterns: Elements of Reusable Object-Oriented Software</em> của Erich Gamma và cộng sự.</p>
+</aside>
+<p>Cách này ổn với các dự án nhỏ, nhưng mở rộng kém. Như tôi đã nói trước đó, các class cây này trải qua nhiều “miền” khác nhau. Ít nhất thì cả parser và interpreter đều sẽ “đụng” vào chúng. Như <a href="resolving-and-binding.html">bạn sẽ thấy sau này</a>, ta cần thực hiện name resolution trên chúng. Nếu ngôn ngữ của ta là kiểu tĩnh, ta sẽ có thêm một bước kiểm tra kiểu.</p>
+<p>Nếu ta thêm method instance vào các class biểu thức cho từng thao tác như vậy, ta sẽ trộn lẫn nhiều miền khác nhau vào cùng một chỗ. Điều đó vi phạm nguyên tắc <a href="https://en.wikipedia.org/wiki/Separation_of_concerns">separation of concerns</a> và dẫn đến code khó bảo trì.</p>
+<h3><a href="#vấn-đề-“expression-problem”" id="vấn-đề-“expression-problem”"><small>5&#8202;.&#8202;3&#8202;.&#8202;1</small>Vấn đề “expression problem”</a></h3>
+<p>Vấn đề này thực ra cơ bản hơn bạn tưởng. Ta có một số loại (type), và một số thao tác cấp cao như “interpret”. Với mỗi cặp loại và thao tác, ta cần một hiện thực cụ thể. Hãy hình dung một bảng:</p><img src="image/representing-code/table.png" alt="Một bảng với các hàng là class biểu thức, và các cột là tên hàm." />
+<p>Các hàng là type, và các cột là thao tác. Mỗi ô biểu diễn một đoạn code duy nhất để hiện thực thao tác đó trên type đó.</p>
+<p>Một ngôn ngữ hướng đối tượng như Java giả định rằng tất cả code trong một hàng tự nhiên thuộc về nhau. Nó cho rằng mọi thứ bạn làm với một type có liên quan đến nhau, và ngôn ngữ giúp bạn dễ dàng định nghĩa chúng cùng nhau dưới dạng method trong cùng một class.</p><img src="image/representing-code/rows.png" alt="Bảng được chia thành các hàng cho mỗi class." />
+<p>Điều này giúp dễ dàng mở rộng bảng bằng cách thêm hàng mới. Chỉ cần định nghĩa một class mới. Không cần chạm vào code hiện có. Nhưng hãy tưởng tượng nếu bạn muốn thêm một <em>thao tác</em> mới — một cột mới. Trong Java, điều đó có nghĩa là phải mở từng class hiện có và thêm một method vào đó.</p>
+<p>Các ngôn ngữ thuộc họ lập trình hàm <span name="ml">ML</span> thì đảo ngược điều này. Ở đó, bạn không có class với method. Type và function hoàn toàn tách biệt. Để hiện thực một thao tác cho nhiều type khác nhau, bạn định nghĩa một hàm duy nhất. Trong thân hàm đó, bạn dùng <em>pattern matching</em> — kiểu như một <code>switch</code> dựa trên type nhưng “nâng cấp” — để hiện thực thao tác cho từng type ngay tại một chỗ.</p>
+<aside name="ml">
+<p>ML, viết tắt của “metalanguage”, được tạo ra bởi Robin Milner và các cộng sự, là một trong những nhánh chính của “cây gia phả” ngôn ngữ lập trình. Con cháu của nó bao gồm SML, Caml, OCaml, Haskell và F#. Ngay cả Scala, Rust và Swift cũng mang nhiều nét tương đồng.</p>
+<p>Giống như Lisp, đây là một trong những ngôn ngữ chứa đầy ý tưởng hay đến mức các nhà thiết kế ngôn ngữ ngày nay vẫn tiếp tục “tái khám phá” chúng sau hơn bốn mươi năm.</p>
+</aside>
+<p>Cách này giúp việc thêm thao tác mới trở nên đơn giản — chỉ cần định nghĩa thêm một hàm khác, pattern match trên tất cả các type.</p><img src="image/representing-code/columns.png" alt="The table split into columns for each function." />
+<p>Nhưng ngược lại, việc thêm một type mới lại khó. Bạn phải quay lại và thêm một case mới vào tất cả các pattern match trong mọi hàm hiện có.</p>
+<p>Mỗi phong cách lập trình đều có một “thớ” riêng. Đó cũng chính là ý nghĩa của tên gọi paradigm — một ngôn ngữ hướng đối tượng muốn bạn <em>định hướng</em> code của mình theo các hàng (row) là các type. Ngôn ngữ lập trình hàm thì khuyến khích bạn gom toàn bộ code của mỗi cột thành một <em>hàm</em>.</p>
+<p>Một nhóm “mọt” ngôn ngữ thông minh đã nhận ra rằng không phong cách nào giúp việc thêm <em>cả</em> hàng và cột vào <span name="multi">bảng</span> trở nên dễ dàng. Họ gọi khó khăn này là “expression problem” vì — giống như chúng ta bây giờ — họ lần đầu gặp nó khi tìm cách mô hình hóa các node syntax tree của biểu thức trong một compiler.</p>
+<aside name="multi">
+<p>Những ngôn ngữ có <em>multimethod</em> như CLOS của Common Lisp, Dylan và Julia hỗ trợ việc thêm cả type mới và thao tác mới một cách dễ dàng. Thứ mà chúng thường phải đánh đổi là hoặc kiểm tra kiểu tĩnh, hoặc biên dịch tách biệt.</p>
+</aside>
+<p>Người ta đã thử đủ loại tính năng ngôn ngữ, design pattern và mẹo lập trình để giải quyết vấn đề này, nhưng chưa có ngôn ngữ “hoàn hảo” nào xử lý triệt để. Trong lúc chờ đợi, điều tốt nhất ta có thể làm là chọn một ngôn ngữ có “thớ” phù hợp với các đường ranh kiến trúc tự nhiên trong chương trình ta đang viết.</p>
+<p>Hướng đối tượng hoạt động tốt với nhiều phần của interpreter, nhưng các class cây này lại “ngược thớ” với Java. May mắn thay, có một design pattern mà ta có thể áp dụng.</p>
+<h3><a href="#visitor-pattern" id="visitor-pattern"><small>5&#8202;.&#8202;3&#8202;.&#8202;2</small>Visitor pattern</a></h3>
+<p><strong>Visitor pattern</strong> là pattern bị hiểu nhầm nhiều nhất trong toàn bộ <em>Design Patterns</em>, và điều đó thực sự nói lên nhiều điều nếu bạn nhìn vào những “thái quá” trong kiến trúc phần mềm vài thập kỷ qua.</p>
+<p>Rắc rối bắt đầu từ thuật ngữ. Pattern này không liên quan gì đến “thăm viếng”, và method <code>accept</code> trong đó cũng chẳng gợi ra hình ảnh gì hữu ích. Nhiều người nghĩ pattern này liên quan đến việc duyệt cây, nhưng thực ra không phải. Chúng ta <em>sẽ</em> dùng nó trên một tập các class có dạng cây, nhưng đó chỉ là sự trùng hợp. Như bạn sẽ thấy, pattern này hoạt động tốt ngay cả trên một object đơn lẻ.</p>
+<p>Thực chất, Visitor pattern là cách “mô phỏng” phong cách lập trình hàm trong một ngôn ngữ OOP. Nó cho phép ta dễ dàng thêm các cột mới vào bảng. Ta có thể định nghĩa toàn bộ hành vi cho một thao tác mới trên một tập type ở cùng một chỗ, mà không cần chạm vào chính các type đó. Nó làm điều này theo cách mà ta giải quyết hầu hết mọi vấn đề trong khoa học máy tính: thêm một lớp gián tiếp.</p>
+<p>Trước khi áp dụng nó vào các class <code>Expr</code> sinh tự động, hãy cùng đi qua một ví dụ đơn giản hơn. Giả sử ta có hai loại bánh ngọt: <span name="beignet">beignet</span> và cruller.</p>
+<aside name="beignet">
+<p>Beignet (đọc là “ben-yay”, nhấn đều cả hai âm tiết) là một loại bánh ngọt chiên ngập dầu, cùng họ với donut. Khi người Pháp thuộc địa hóa Bắc Mỹ vào những năm 1700, họ mang theo beignet. Ngày nay, ở Mỹ, chúng gắn liền với ẩm thực New Orleans.</p>
+<p>Cách tôi thích ăn nhất là vừa ra khỏi chảo chiên ở Café du Monde, phủ đầy đường bột, và uống kèm một tách café au lait trong khi ngắm khách du lịch loạng choạng tìm cách tỉnh táo sau cuộc vui đêm hôm trước.</p>
+</aside>
+<div class="codehilite"><pre>  <span class="k">abstract</span> <span class="k">class</span> <span class="t">Pastry</span> {
+  }
+
+  <span class="k">class</span> <span class="t">Beignet</span> <span class="k">extends</span> <span class="t">Pastry</span> {
+  }
+
+  <span class="k">class</span> <span class="t">Cruller</span> <span class="k">extends</span> <span class="t">Pastry</span> {
+  }
+</pre></div>
+
+<p>Ta muốn có thể định nghĩa các thao tác mới với bánh ngọt — nấu, ăn, trang trí, v.v. — mà không phải thêm method mới vào từng class mỗi lần. Đây là cách làm. Đầu tiên, ta định nghĩa một interface riêng.</p>
+<div class="codehilite"><pre>  <span class="k">interface</span> <span class="t">PastryVisitor</span> {
+    <span class="t">void</span> <span class="i">visitBeignet</span>(<span class="t">Beignet</span> <span class="i">beignet</span>);<span name="overload"> </span>
+    <span class="t">void</span> <span class="i">visitCruller</span>(<span class="t">Cruller</span> <span class="i">cruller</span>);
+  }
+</pre></div>
+
+<aside name="overload">
+<p>Trong <em>Design Patterns</em>, cả hai method này đều được đặt tên <code>visit()</code>, và dựa vào overloading để phân biệt. Điều này khiến một số người đọc nghĩ rằng method <code>visit</code> phù hợp sẽ được chọn <em>lúc chạy</em> dựa trên kiểu tham số. Thực tế không phải vậy. Khác với over<em>riding</em>, over<em>loading</em> được phân giải tĩnh khi biên dịch.</p>
+<p>Dùng tên riêng cho từng method giúp việc phân giải trở nên rõ ràng hơn, và cũng cho bạn thấy cách áp dụng pattern này trong các ngôn ngữ không hỗ trợ overloading.</p>
+</aside>
+<p>Mỗi thao tác có thể thực hiện trên bánh ngọt là một class mới implement interface đó. Nó có một method cụ thể cho từng loại bánh. Điều này giữ cho code của thao tác trên cả hai loại được gói gọn trong một class.</p>
+<p>Khi có một chiếc bánh, làm sao ta điều hướng nó tới đúng method trên visitor dựa trên type của nó? Câu trả lời là: nhờ polymorphism! Ta thêm method này vào <code>Pastry</code>:</p>
+<div class="codehilite"><pre class="insert-before">  abstract class Pastry {
+</pre><pre class="insert">    <span class="k">abstract</span> <span class="t">void</span> <span class="i">accept</span>(<span class="t">PastryVisitor</span> <span class="i">visitor</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+
+<p>Mỗi subclass sẽ hiện thực nó.</p>
+<div class="codehilite"><pre class="insert-before">  class Beignet extends Pastry {
+</pre><pre class="insert">    <span class="a">@Override</span>
+    <span class="t">void</span> <span class="i">accept</span>(<span class="t">PastryVisitor</span> <span class="i">visitor</span>) {
+      <span class="i">visitor</span>.<span class="i">visitBeignet</span>(<span class="k">this</span>);
+    }
+</pre><pre class="insert-after">  }
+</pre></div>
+
+<p>Và:</p>
+<div class="codehilite"><pre class="insert-before">  class Cruller extends Pastry {
+</pre><pre class="insert">    <span class="a">@Override</span>
+    <span class="t">void</span> <span class="i">accept</span>(<span class="t">PastryVisitor</span> <span class="i">visitor</span>) {
+      <span class="i">visitor</span>.<span class="i">visitCruller</span>(<span class="k">this</span>);
+    }
+</pre><pre class="insert-after">  }
+</pre></div>
+
+<p>Để thực hiện một thao tác trên bánh, ta gọi method <code>accept()</code> của nó và truyền vào visitor cho thao tác muốn thực hiện. Chiếc bánh — cụ thể là hiện thực override <code>accept()</code> của subclass — sẽ gọi ngược lại method <code>visit</code> phù hợp trên visitor và truyền <em>chính nó</em> vào.</p>
+<p>Đó chính là mấu chốt của “mẹo” này. Nó cho phép ta dùng polymorphic dispatch trên các class <em>bánh</em> để chọn method phù hợp trên class <em>visitor</em>. Trong bảng, mỗi class bánh là một hàng, nhưng nếu bạn nhìn vào tất cả các method của một visitor, chúng tạo thành một <em>cột</em>.</p><img src="image/representing-code/visitor.png" alt="Now all of the cells for one operation are part of the same class, the visitor." />
+<p>Chúng ta đã thêm một phương thức <code>accept()</code> vào mỗi class, và có thể dùng nó cho bao nhiêu visitor tùy thích mà không bao giờ phải đụng lại vào các class bánh ngọt nữa. Đây là một pattern khá thông minh.</p>
+<h3><a href="#visitor-cho-biểu-thức" id="visitor-cho-biểu-thức"><small>5&#8202;.&#8202;3&#8202;.&#8202;3</small>Visitor cho biểu thức</a></h3>
+<p>Được rồi, hãy đưa nó vào các class biểu thức của chúng ta. Ta cũng sẽ <span name="context">tinh chỉnh</span> pattern này một chút. Trong ví dụ bánh ngọt, các phương thức <code>visit</code> và <code>accept()</code> không trả về gì cả. Trên thực tế, visitor thường muốn định nghĩa các thao tác tạo ra giá trị. Nhưng <code>accept()</code> nên có kiểu trả về gì? Ta không thể giả định mọi class visitor đều muốn trả về cùng một kiểu, nên ta sẽ dùng generics để cho phép mỗi hiện thực tự chỉ định kiểu trả về.</p>
+<aside name="context">
+<p>Một tinh chỉnh phổ biến khác là thêm một tham số “context” được truyền vào các phương thức <code>visit</code> và sau đó được chuyển ngược lại như một tham số cho <code>accept()</code>. Điều này cho phép các thao tác nhận thêm một tham số bổ sung. Các visitor mà ta định nghĩa trong sách này không cần điều đó, nên tôi đã bỏ qua.</p>
+</aside>
+<p>Trước tiên, ta định nghĩa interface visitor. Một lần nữa, ta lồng nó bên trong class cơ sở để giữ mọi thứ trong một file.</p>
+<div class="codehilite"><pre class="insert-before">    writer.println(&quot;abstract class &quot; + baseName + &quot; {&quot;);
+
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>defineAst</em>()</div>
+<pre class="insert">    <span class="i">defineVisitor</span>(<span class="i">writer</span>, <span class="i">baseName</span>, <span class="i">types</span>);
+
+</pre><pre class="insert-after">    // The AST classes.
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>defineAst</em>()</div>
+
+<p>Hàm này sinh ra interface visitor.</p>
+<div class="codehilite"><div class="source-file"><em>tool/GenerateAst.java</em><br>
+add after <em>defineAst</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">defineVisitor</span>(
+      <span class="t">PrintWriter</span> <span class="i">writer</span>, <span class="t">String</span> <span class="i">baseName</span>, <span class="t">List</span>&lt;<span class="t">String</span>&gt; <span class="i">types</span>) {
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;  interface Visitor&lt;R&gt; {&quot;</span>);
+
+    <span class="k">for</span> (<span class="t">String</span> <span class="i">type</span> : <span class="i">types</span>) {
+      <span class="t">String</span> <span class="i">typeName</span> = <span class="i">type</span>.<span class="i">split</span>(<span class="s">&quot;:&quot;</span>)[<span class="n">0</span>].<span class="i">trim</span>();
+      <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    R visit&quot;</span> + <span class="i">typeName</span> + <span class="i">baseName</span> + <span class="s">&quot;(&quot;</span> +
+          <span class="i">typeName</span> + <span class="s">&quot; &quot;</span> + <span class="i">baseName</span>.<span class="i">toLowerCase</span>() + <span class="s">&quot;);&quot;</span>);
+    }
+
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;  }&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, add after <em>defineAst</em>()</div>
+
+<p>Ở đây, ta duyệt qua tất cả các subclass và khai báo một phương thức <code>visit</code> cho từng cái. Khi ta định nghĩa các loại biểu thức mới sau này, chúng sẽ tự động được thêm vào.</p>
+<p>Bên trong class cơ sở, ta định nghĩa phương thức trừu tượng <code>accept()</code>.</p>
+<div class="codehilite"><pre class="insert-before">      defineType(writer, baseName, className, fields);
+    }
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>defineAst</em>()</div>
+<pre class="insert">
+
+    <span class="c">// The base accept() method.</span>
+    <span class="i">writer</span>.<span class="i">println</span>();
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;  abstract &lt;R&gt; R accept(Visitor&lt;R&gt; visitor);&quot;</span>);
+
+</pre><pre class="insert-after">    writer.println(&quot;}&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>defineAst</em>()</div>
+
+<p>Cuối cùng, mỗi subclass sẽ hiện thực phương thức đó và gọi đúng phương thức <code>visit</code> cho loại của chính nó.</p>
+<div class="codehilite"><pre class="insert-before">    writer.println(&quot;    }&quot;);
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>defineType</em>()</div>
+<pre class="insert">
+
+    <span class="c">// Visitor pattern.</span>
+    <span class="i">writer</span>.<span class="i">println</span>();
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    @Override&quot;</span>);
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    &lt;R&gt; R accept(Visitor&lt;R&gt; visitor) {&quot;</span>);
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;      return visitor.visit&quot;</span> +
+        <span class="i">className</span> + <span class="i">baseName</span> + <span class="s">&quot;(this);&quot;</span>);
+    <span class="i">writer</span>.<span class="i">println</span>(<span class="s">&quot;    }&quot;</span>);
+</pre><pre class="insert-after">
+
+    // Fields.
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>defineType</em>()</div>
+
+<p>Vậy là xong. Giờ ta có thể định nghĩa các thao tác trên biểu thức mà không cần phải chỉnh sửa các class hay script sinh code. Hãy biên dịch và chạy script sinh code này để xuất ra file <code>Expr.java</code> đã được cập nhật. Nó chứa một interface Visitor được generated và một tập các class node biểu thức hỗ trợ Visitor pattern.</p>
+<p>Trước khi kết thúc chương dài dòng này, hãy hiện thực interface Visitor đó và xem pattern này hoạt động ra sao.</p>
+<h2><a href="#một-bộ-in-không-mấy-đẹp" id="một-bộ-in-không-mấy-đẹp"><small>5&#8202;.&#8202;4</small>Một bộ in (không mấy) đẹp</a></h2>
+<p>Khi debug parser và interpreter, việc nhìn vào một syntax tree đã parse và đảm bảo nó có cấu trúc như mong đợi thường rất hữu ích. Ta có thể kiểm tra nó trong debugger, nhưng việc đó khá mất công.</p>
+<p>Thay vào đó, ta muốn có một đoạn code mà, khi nhận vào một syntax tree, sẽ tạo ra một chuỗi biểu diễn rõ ràng, không mơ hồ của nó. Việc chuyển một cây thành chuỗi có thể coi là ngược lại với parser, và thường được gọi là “pretty printing” khi mục tiêu là tạo ra một chuỗi văn bản có cú pháp hợp lệ trong ngôn ngữ nguồn.</p>
+<p>Nhưng đó không phải mục tiêu của ta ở đây. Ta muốn chuỗi này thể hiện thật rõ ràng cấu trúc lồng nhau của cây. Một bộ in trả về <code>1 + 2 * 3</code> sẽ không hữu ích lắm nếu điều ta đang cố debug là việc xử lý precedence của toán tử có đúng không. Ta muốn biết <code>+</code> hay <code>*</code> nằm ở đỉnh của cây.</p>
+<p>Vì vậy, chuỗi mà ta tạo ra sẽ không phải cú pháp Lox. Thay vào đó, nó sẽ trông khá giống Lisp. Mỗi biểu thức được đặt trong ngoặc đơn một cách tường minh, và tất cả các biểu thức con cùng token của nó đều nằm bên trong.</p>
+<p>Với một syntax tree như:</p><img src="image/representing-code/expression.png" alt="An example syntax tree." />
+<p>Nó sẽ tạo ra:</p>
+<div class="codehilite"><pre>(* (- 123) (group 45.67))
+</pre></div>
+<p>Không hẳn là “đẹp”, nhưng nó thể hiện rõ ràng sự lồng ghép và nhóm biểu thức. Để hiện thực điều này, ta định nghĩa một class mới.</p>
+<div class="codehilite"><div class="source-file"><em>lox/AstPrinter.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">class</span> <span class="t">AstPrinter</span> <span class="k">implements</span> <span class="t">Expr</span>.<span class="t">Visitor</span>&lt;<span class="t">String</span>&gt; {
+  <span class="t">String</span> <span class="i">print</span>(<span class="t">Expr</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">expr</span>.<span class="i">accept</span>(<span class="k">this</span>);
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/AstPrinter.java</em>, create new file</div>
+
+<p>Như bạn thấy, nó hiện thực interface visitor. Điều đó có nghĩa là ta cần các phương thức <code>visit</code> cho từng loại biểu thức hiện có.</p>
+<div class="codehilite"><pre class="insert-before">    return expr.accept(this);
+  }
+</pre><div class="source-file"><em>lox/AstPrinter.java</em><br>
+add after <em>print</em>()</div>
+<pre class="insert">
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">visitBinaryExpr</span>(<span class="t">Expr</span>.<span class="t">Binary</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">parenthesize</span>(<span class="i">expr</span>.<span class="i">operator</span>.<span class="i">lexeme</span>,
+                        <span class="i">expr</span>.<span class="i">left</span>, <span class="i">expr</span>.<span class="i">right</span>);
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">visitGroupingExpr</span>(<span class="t">Expr</span>.<span class="t">Grouping</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">parenthesize</span>(<span class="s">&quot;group&quot;</span>, <span class="i">expr</span>.<span class="i">expression</span>);
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">visitLiteralExpr</span>(<span class="t">Expr</span>.<span class="t">Literal</span> <span class="i">expr</span>) {
+    <span class="k">if</span> (<span class="i">expr</span>.<span class="i">value</span> == <span class="k">null</span>) <span class="k">return</span> <span class="s">&quot;nil&quot;</span>;
+    <span class="k">return</span> <span class="i">expr</span>.<span class="i">value</span>.<span class="i">toString</span>();
+  }
+
+  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">visitUnaryExpr</span>(<span class="t">Expr</span>.<span class="t">Unary</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">parenthesize</span>(<span class="i">expr</span>.<span class="i">operator</span>.<span class="i">lexeme</span>, <span class="i">expr</span>.<span class="i">right</span>);
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>lox/AstPrinter.java</em>, add after <em>print</em>()</div>
+
+<p>Biểu thức literal thì dễ — chỉ cần chuyển giá trị thành chuỗi, kèm một chút kiểm tra để xử lý <code>null</code> của Java thay cho <code>nil</code> của Lox. Các biểu thức khác có biểu thức con, nên chúng dùng phương thức tiện ích <code>parenthesize()</code> này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/AstPrinter.java</em><br>
+add after <em>visitUnaryExpr</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">String</span> <span class="i">parenthesize</span>(<span class="t">String</span> <span class="i">name</span>, <span class="t">Expr</span>... <span class="i">exprs</span>) {
+    <span class="t">StringBuilder</span> <span class="i">builder</span> = <span class="k">new</span> <span class="t">StringBuilder</span>();
+
+    <span class="i">builder</span>.<span class="i">append</span>(<span class="s">&quot;(&quot;</span>).<span class="i">append</span>(<span class="i">name</span>);
+    <span class="k">for</span> (<span class="t">Expr</span> <span class="i">expr</span> : <span class="i">exprs</span>) {
+      <span class="i">builder</span>.<span class="i">append</span>(<span class="s">&quot; &quot;</span>);
+      <span class="i">builder</span>.<span class="i">append</span>(<span class="i">expr</span>.<span class="i">accept</span>(<span class="k">this</span>));
+    }
+    <span class="i">builder</span>.<span class="i">append</span>(<span class="s">&quot;)&quot;</span>);
+
+    <span class="k">return</span> <span class="i">builder</span>.<span class="i">toString</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/AstPrinter.java</em>, add after <em>visitUnaryExpr</em>()</div>
+
+<p>Nó nhận một tên và một danh sách các biểu thức con, rồi bao tất cả trong ngoặc đơn, tạo ra một chuỗi như:</p>
+<div class="codehilite"><pre>(+ 1 2)
+</pre></div>
+<p>Lưu ý rằng nó gọi <code>accept()</code> trên từng biểu thức con và truyền vào chính nó. Đây là bước <span name="tree">đệ quy</span> cho phép ta in ra toàn bộ cây.</p>
+<aside name="tree">
+<p>Chính sự đệ quy này cũng là lý do khiến nhiều người nghĩ rằng bản thân Visitor pattern có liên quan đến cây.</p>
+</aside>
+<p>Chúng ta chưa có parser, nên hơi khó để thấy pattern này hoạt động thế nào. Tạm thời, ta sẽ “chế” một phương thức <code>main()</code> nhỏ để tự tạo thủ công một cây và in nó ra.</p>
+<div class="codehilite"><div class="source-file"><em>lox/AstPrinter.java</em><br>
+add after <em>parenthesize</em>()</div>
+<pre>  <span class="k">public</span> <span class="k">static</span> <span class="t">void</span> <span class="i">main</span>(<span class="t">String</span>[] <span class="i">args</span>) {
+    <span class="t">Expr</span> <span class="i">expression</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Binary</span>(
+        <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Unary</span>(
+            <span class="k">new</span> <span class="t">Token</span>(<span class="t">TokenType</span>.<span class="i">MINUS</span>, <span class="s">&quot;-&quot;</span>, <span class="k">null</span>, <span class="n">1</span>),
+            <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="n">123</span>)),
+        <span class="k">new</span> <span class="t">Token</span>(<span class="t">TokenType</span>.<span class="i">STAR</span>, <span class="s">&quot;*&quot;</span>, <span class="k">null</span>, <span class="n">1</span>),
+        <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Grouping</span>(
+            <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Literal</span>(<span class="n">45.67</span>)));
+
+    <span class="t">System</span>.<span class="i">out</span>.<span class="i">println</span>(<span class="k">new</span> <span class="t">AstPrinter</span>().<span class="i">print</span>(<span class="i">expression</span>));
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/AstPrinter.java</em>, add after <em>parenthesize</em>()</div>
+
+<p>Nếu mọi thứ đúng, nó sẽ in ra:</p>
+<div class="codehilite"><pre>(* (- 123) (group 45.67))
+</pre></div>
+<p>Bạn có thể xóa phương thức này đi. Ta sẽ không cần nó nữa. Ngoài ra, khi ta thêm các loại syntax tree mới, tôi sẽ không mất công hiển thị các phương thức <code>visit</code> cần thiết cho chúng trong AstPrinter. Nếu bạn muốn (và muốn Java compiler không “la” bạn), hãy tự thêm chúng vào. Điều này sẽ hữu ích trong chương sau khi ta bắt đầu parse code Lox thành syntax tree. Hoặc, nếu bạn không muốn duy trì AstPrinter, cứ thoải mái xóa nó. Ta sẽ không dùng lại nó nữa.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>5&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Trước đó, tôi đã nói rằng các dạng <code>|</code>, <code>*</code> và <code>+</code> mà ta thêm vào metasyntax của ngữ pháp chỉ là “đường cú pháp” (syntactic sugar). Hãy xem ngữ pháp này:</p>
+<div class="codehilite"><pre><span class="i">expr</span> → <span class="i">expr</span> ( <span class="s">&quot;(&quot;</span> ( <span class="i">expr</span> ( <span class="s">&quot;,&quot;</span> <span class="i">expr</span> )* )? <span class="s">&quot;)&quot;</span> | <span class="s">&quot;.&quot;</span> <span class="t">IDENTIFIER</span> )+
+     | <span class="t">IDENTIFIER</span>
+     | <span class="t">NUMBER</span>
+</pre></div>
+<p>Hãy viết lại một ngữ pháp khớp cùng ngôn ngữ này nhưng <strong>không</strong> dùng bất kỳ “đường cú pháp” nào ở trên.</p>
+<p><em>Bonus:</em> Đoạn ngữ pháp này mô tả loại biểu thức gì?</p>
+</li>
+<li>
+<p>Visitor pattern cho phép bạn mô phỏng phong cách lập trình hàm trong một ngôn ngữ hướng đối tượng. Hãy nghĩ ra một pattern bổ sung cho một ngôn ngữ lập trình hàm. Nó nên cho phép bạn gom tất cả các thao tác trên một type vào cùng một chỗ và cho phép định nghĩa type mới một cách dễ dàng.</p>
+<p>(SML hoặc Haskell sẽ là lý tưởng cho bài tập này, nhưng Scheme hoặc một Lisp khác cũng được.)</p>
+</li>
+<li>
+<p>Trong <a href="https://en.wikipedia.org/wiki/Reverse_Polish_notation">reverse Polish notation</a> (RPN), các toán hạng của một toán tử số học đều được đặt <strong>trước</strong> toán tử, nên <code>1 + 2</code> trở thành <code>1 2 +</code>. Việc tính toán diễn ra từ trái sang phải. Các số được đẩy vào một stack ngầm định. Một toán tử số học sẽ pop hai số trên cùng, thực hiện phép toán, rồi push kết quả trở lại. Do đó, biểu thức:</p>
+<div class="codehilite"><pre>(<span class="n">1</span> + <span class="n">2</span>) * (<span class="n">4</span> - <span class="n">3</span>)
+</pre></div>
+<p>trong RPN sẽ thành:</p>
+<div class="codehilite"><pre><span class="n">1</span> <span class="n">2</span> + <span class="n">4</span> <span class="n">3</span> - *
+</pre></div>
+<p>Hãy định nghĩa một visitor class cho các syntax tree class của chúng ta, nhận vào một biểu thức, chuyển nó sang RPN và trả về chuỗi kết quả.</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="parsing-expressions.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Parsing Expressions&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

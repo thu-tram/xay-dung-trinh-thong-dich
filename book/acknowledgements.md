@@ -1,0 +1,9 @@
+Khi bản đầu tiên của *[Game Programming Patterns](https://gameprogrammingpatterns.com/)* được bán ra, tôi đoán là mình đã có quyền tự gọi mình là một tác giả. Nhưng phải mất một thời gian tôi mới cảm thấy thoải mái với danh xưng đó. Xin cảm ơn tất cả những ai đã mua cuốn sách đầu tiên của tôi, và cảm ơn các nhà xuất bản cùng những dịch giả đã đưa nó đến với các ngôn ngữ khác. Các bạn đã cho tôi sự tự tin để tin rằng mình có thể đảm đương một dự án với quy mô như thế này. Ừ thì… còn cả việc tôi đã đánh giá thấp khối lượng công việc mình sắp lao vào nữa, nhưng cái đó là lỗi của tôi.
+
+Một nỗi sợ đặc thù của việc viết sách kỹ thuật là *viết sai*. Test và static analysis chỉ giúp được đến một mức nào đó. Một khi code và lời văn đã được in ra giấy, sẽ không thể sửa lại. Tôi vô cùng biết ơn những người đã gửi issue và pull request trên [repo mã nguồn mở](https://github.com/munificent/craftinginterpreters) của cuốn sách. Đặc biệt cảm ơn cm1776, người đã gửi 145 issue với lời lẽ khéo léo, chỉ ra hàng trăm lỗi code, lỗi chính tả và câu văn chưa rõ ràng. Cuốn sách này chính xác và dễ đọc hơn là nhờ tất cả các bạn.
+
+Tôi cũng biết ơn biên tập viên Kari Somerton, người đã dũng cảm “lặn” vào một đống thuật ngữ khoa học máy tính và một quy trình làm việc xa lạ để sửa vô số lỗi ngữ pháp và sự thiếu nhất quán về phong cách của tôi.
+
+Khi đại dịch đảo lộn cuộc sống của mọi người, đã có nhiều người liên hệ và nói rằng cuốn sách của tôi mang lại cho họ một sự xao nhãng tích cực. Cuốn sách mà tôi dành sáu năm để viết này đã trở thành một chương trong câu chuyện cuộc đời tôi, và tôi biết ơn những độc giả đã liên lạc, khiến chương đó trở nên ý nghĩa hơn.
+
+Cuối cùng, lời cảm ơn sâu sắc nhất xin dành cho vợ tôi — Megan — và hai con gái Lily và Gretchen. Các em đã kiên nhẫn chịu đựng khoảng thời gian tôi phải “chìm” vào cuốn sách, và cả những căng thẳng của tôi khi viết nó. Không ai khác mà tôi muốn bị “mắc kẹt” ở nhà cùng hơn là ba mẹ con.

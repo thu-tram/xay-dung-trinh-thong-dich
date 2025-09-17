@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Global Variables &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Global Variables<small>21</small></a></h3>
+
+<ul>
+    <li><a href="#statements"><small>21.1</small> Statements</a></li>
+    <li><a href="#variable-declarations"><small>21.2</small> Variable Declarations</a></li>
+    <li><a href="#đọc-giá-trị-biến-reading-variables"><small>21.3</small> Đọc giá trị biến (Reading Variables)</a></li>
+    <li><a href="#gán-giá-trị-assignment"><small>21.4</small> Gán giá trị (Assignment)</a></li>
+    <li><a href="#thử-thách"><small>21.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="hash-tables.html" title="Hash Tables" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="local-variables.html" title="Local Variables" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="hash-tables.html" title="Hash Tables" class="prev">←</a>
+<a href="local-variables.html" title="Local Variables" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Global Variables<small>21</small></a></h3>
+
+<ul>
+    <li><a href="#statements"><small>21.1</small> Statements</a></li>
+    <li><a href="#variable-declarations"><small>21.2</small> Variable Declarations</a></li>
+    <li><a href="#đọc-giá-trị-biến-reading-variables"><small>21.3</small> Đọc giá trị biến (Reading Variables)</a></li>
+    <li><a href="#gán-giá-trị-assignment"><small>21.4</small> Gán giá trị (Assignment)</a></li>
+    <li><a href="#thử-thách"><small>21.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="hash-tables.html" title="Hash Tables" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="local-variables.html" title="Local Variables" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">21</div>
+  <h1>Global Variables</h1>
+
+<blockquote>
+<p>Giá như có một phát minh nào đó có thể đóng chai ký ức, như hương thơm. Và nó sẽ không bao giờ phai, không bao giờ cũ. Rồi khi ta muốn, chỉ cần mở nút chai, và sẽ như được sống lại khoảnh khắc ấy một lần nữa.</p>
+<p><cite>Daphne du Maurier, <em>Rebecca</em></cite></p>
+</blockquote>
+<p><a href="hash-tables.html">Chương trước</a> là một cuộc khám phá dài về một cấu trúc dữ liệu nền tảng, sâu và lớn trong khoa học máy tính. Nặng về lý thuyết và khái niệm. Có thể đã có đôi chút bàn luận về ký hiệu big-O và thuật toán. Chương này thì ít “trí tuệ” hơn. Không có ý tưởng lớn nào để học. Thay vào đó, chỉ là một vài tác vụ kỹ thuật thẳng thắn. Khi hoàn thành, máy ảo của chúng ta sẽ hỗ trợ biến.</p>
+<p>Thực ra, nó sẽ chỉ hỗ trợ <em>biến toàn cục</em>. Biến cục bộ sẽ xuất hiện ở <a href="local-variables.html">chương sau</a>. Trong jlox, chúng ta gộp cả hai vào một chương vì dùng cùng một kỹ thuật implement cho mọi biến. Ta xây dựng một chuỗi environment, mỗi scope một environment, nối lên tận đỉnh. Đó là một cách đơn giản, gọn gàng để học cách quản lý state.</p>
+<p>Nhưng nó cũng <em>chậm</em>. Cấp phát một hash table mới mỗi khi vào một block hoặc gọi một hàm không phải là con đường dẫn đến một VM nhanh. Xét đến việc rất nhiều code liên quan đến việc dùng biến, nếu biến chậm thì mọi thứ đều chậm. Với clox, ta sẽ cải thiện bằng cách dùng chiến lược hiệu quả hơn nhiều cho biến <span name="different">cục bộ</span>, nhưng biến toàn cục thì không dễ tối ưu như vậy.</p>
+<aside name="different">
+<p>Đây là một meta-strategy phổ biến trong các implement ngôn ngữ phức tạp. Thường thì cùng một tính năng ngôn ngữ sẽ có nhiều kỹ thuật implement khác nhau, mỗi kỹ thuật được tinh chỉnh cho các kiểu sử dụng khác nhau. Ví dụ, các VM JavaScript thường có cách biểu diễn nhanh hơn cho các object được dùng giống như instance của class so với các object có tập thuộc tính thay đổi tự do hơn. Compiler C và C++ thường có nhiều cách biên dịch câu lệnh <code>switch</code> tùy vào số lượng case và mức độ “sát nhau” của các giá trị case.</p>
+</aside>
+<p>Một chút nhắc lại về semantics của Lox: Biến toàn cục trong Lox là “late bound”, hay được resolve động. Điều này nghĩa là bạn có thể compile một đoạn code tham chiếu đến biến toàn cục trước khi nó được định nghĩa. Miễn là code đó không <em>execute</em> trước khi định nghĩa xảy ra, thì mọi thứ đều ổn. Trên thực tế, điều này nghĩa là bạn có thể tham chiếu đến các biến được định nghĩa sau trong phần thân của hàm.</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">showVariable</span>() {
+  <span class="k">print</span> <span class="i">global</span>;
+}
+
+<span class="k">var</span> <span class="i">global</span> = <span class="s">&quot;after&quot;</span>;
+<span class="i">showVariable</span>();
+</pre></div>
+<p>Code như thế này có thể trông lạ, nhưng nó hữu ích khi định nghĩa các hàm đệ quy lẫn nhau. Nó cũng thân thiện hơn với REPL. Bạn có thể viết một hàm nhỏ trong một dòng, rồi định nghĩa biến mà nó dùng ở dòng tiếp theo.</p>
+<p>Biến cục bộ hoạt động khác. Vì khai báo biến cục bộ <em>luôn</em> xảy ra trước khi nó được dùng, VM có thể resolve chúng ngay tại compile time, ngay cả trong một compiler một-pass đơn giản. Điều đó sẽ cho phép ta dùng cách biểu diễn thông minh hơn cho biến cục bộ. Nhưng đó là chuyện của chương sau. Giờ hãy chỉ tập trung vào biến toàn cục.</p>
+<h2><a href="#statements" id="statements"><small>21&#8202;.&#8202;1</small>Statements</a></h2>
+<p>Biến được tạo ra thông qua khai báo biến, nghĩa là giờ cũng là lúc thêm hỗ trợ cho statement vào compiler của chúng ta. Nếu bạn nhớ, Lox chia statement thành hai loại. “Declaration” là những statement gán một tên mới cho một giá trị. Các loại statement khác — control flow, print, v.v. — chỉ được gọi là “statement”. Chúng ta không cho phép khai báo trực tiếp bên trong control flow statement, như thế này:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">monday</span>) <span class="k">var</span> <span class="i">croissant</span> = <span class="s">&quot;yes&quot;</span>; <span class="c">// Error.</span>
+</pre></div>
+<p>Cho phép điều đó sẽ dẫn đến những câu hỏi khó hiểu về phạm vi của biến. Vì vậy, giống như các ngôn ngữ khác, ta cấm điều đó về mặt cú pháp bằng cách có một grammar rule riêng cho tập con các statement <em>được</em> phép bên trong thân control flow.</p>
+<div class="codehilite"><pre><span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">forStmt</span>
+               | <span class="i">ifStmt</span>
+               | <span class="i">printStmt</span>
+               | <span class="i">returnStmt</span>
+               | <span class="i">whileStmt</span>
+               | <span class="i">block</span> ;
+</pre></div>
+<p>Sau đó, ta dùng một rule riêng cho cấp cao nhất của script và bên trong block.</p>
+<div class="codehilite"><pre><span class="i">declaration</span>    → <span class="i">classDecl</span>
+               | <span class="i">funDecl</span>
+               | <span class="i">varDecl</span>
+               | <span class="i">statement</span> ;
+</pre></div>
+<p>Rule <code>declaration</code> chứa các statement khai báo tên, và cũng bao gồm <code>statement</code> để cho phép tất cả các loại statement. Vì <code>block</code> bản thân nó nằm trong <code>statement</code>, bạn có thể đặt khai báo <span name="parens">bên trong</span> một control flow construct bằng cách lồng chúng trong một block.</p>
+<aside name="parens">
+<p>Block hoạt động giống như dấu ngoặc đơn đối với expression. Một block cho phép bạn đặt các statement khai báo “độ ưu tiên thấp” vào những nơi chỉ cho phép statement không khai báo “độ ưu tiên cao” hơn.</p>
+</aside>
+<p>Trong chương này, chúng ta sẽ chỉ đề cập đến một vài statement và một declaration.</p>
+<div class="codehilite"><pre><span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">printStmt</span> ;
+
+<span class="i">declaration</span>    → <span class="i">varDecl</span>
+               | <span class="i">statement</span> ;
+</pre></div>
+<p>Cho đến giờ, VM của chúng ta coi một “program” là một expression duy nhất vì đó là tất cả những gì ta có thể parse và compile. Trong một implement Lox đầy đủ, một program là một chuỗi các declaration. Giờ ta đã sẵn sàng hỗ trợ điều đó.</p>
+<div class="codehilite"><pre class="insert-before">  advance();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>compile</em>()<br>
+replace 2 lines</div>
+<pre class="insert">
+
+  <span class="k">while</span> (!<span class="i">match</span>(<span class="a">TOKEN_EOF</span>)) {
+    <span class="i">declaration</span>();
+  }
+
+</pre><pre class="insert-after">  endCompiler();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>compile</em>(), replace 2 lines</div>
+
+<p>Ta tiếp tục compile các declaration cho đến khi gặp cuối file nguồn. Ta compile một declaration đơn bằng cách này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expression</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">declaration</span>() {
+  <span class="i">statement</span>();
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expression</em>()</div>
+
+<p>Chúng ta sẽ nói về variable declaration sau trong chương, nên hiện tại, ta chỉ đơn giản chuyển tiếp sang <code>statement()</code>.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>declaration</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">statement</span>() {
+  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_PRINT</span>)) {
+    <span class="i">printStatement</span>();
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>declaration</em>()</div>
+
+<p>Block có thể chứa declaration, và control flow statement có thể chứa các statement khác. Điều đó nghĩa là hai hàm này cuối cùng sẽ đệ quy. Ta có thể viết luôn phần forward declaration ngay bây giờ.</p>
+<div class="codehilite"><pre class="insert-before">static void expression();
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after <em>expression</em>()</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">statement</span>();
+<span class="k">static</span> <span class="t">void</span> <span class="i">declaration</span>();
+</pre><pre class="insert-after">static ParseRule* getRule(TokenType type);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expression</em>()</div>
+
+<h3><a href="#câu-lệnh-print" id="câu-lệnh-print"><small>21&#8202;.&#8202;1&#8202;.&#8202;1</small>Câu lệnh Print</a></h3>
+<p>Trong chương này, chúng ta sẽ hỗ trợ hai loại statement. Hãy bắt đầu với câu lệnh <code>print</code>, vốn tất nhiên bắt đầu bằng token <code>print</code>. Ta phát hiện nó bằng hàm helper sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>consume</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">match</span>(<span class="t">TokenType</span> <span class="i">type</span>) {
+  <span class="k">if</span> (!<span class="i">check</span>(<span class="i">type</span>)) <span class="k">return</span> <span class="k">false</span>;
+  <span class="i">advance</span>();
+  <span class="k">return</span> <span class="k">true</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>consume</em>()</div>
+
+<p>Bạn có thể nhận ra nó từ jlox. Nếu token hiện tại có type được chỉ định, ta consume token đó và trả về <code>true</code>. Ngược lại, ta giữ nguyên token và trả về <code>false</code>. Hàm <span name="turtles">helper</span> này được implement dựa trên một helper khác:</p>
+<aside name="turtles">
+<p>Helper chồng lên helper, tầng tầng lớp lớp!</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>consume</em>()</div>
+<pre><span class="k">static</span> <span class="t">bool</span> <span class="i">check</span>(<span class="t">TokenType</span> <span class="i">type</span>) {
+  <span class="k">return</span> <span class="i">parser</span>.<span class="i">current</span>.<span class="i">type</span> == <span class="i">type</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>consume</em>()</div>
+
+<p>Hàm <code>check()</code> trả về <code>true</code> nếu token hiện tại có type được chỉ định. Có vẻ hơi <span name="read">thừa</span> khi bọc nó trong một hàm, nhưng sau này ta sẽ dùng nó nhiều, và tôi nghĩ những hàm ngắn gọn, đặt tên theo động từ như thế này giúp parser dễ đọc hơn.</p>
+<aside name="read">
+<p>Nghe thì tầm thường, nhưng parser viết tay cho các ngôn ngữ “không phải đồ chơi” có thể rất lớn. Khi bạn có hàng nghìn dòng code, một hàm tiện ích giúp rút gọn từ hai dòng xuống một và làm kết quả dễ đọc hơn hoàn toàn xứng đáng tồn tại.</p>
+</aside>
+<p>Nếu ta match được token <code>print</code>, thì ta compile phần còn lại của statement ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expression</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">printStatement</span>() {
+  <span class="i">expression</span>();
+  <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after value.&quot;</span>);
+  <span class="i">emitByte</span>(<span class="a">OP_PRINT</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expression</em>()</div>
+
+<p>Một câu lệnh <code>print</code> sẽ evaluate một expression và in kết quả, nên trước tiên ta parse và compile expression đó. Grammar yêu cầu có dấu chấm phẩy sau đó, nên ta consume nó. Cuối cùng, ta emit một instruction mới để in kết quả.</p>
+<div class="codehilite"><pre class="insert-before">  OP_NEGATE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_PRINT</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Khi runtime, ta execute instruction này như sau:</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_PRINT</span>: {
+        <span class="i">printValue</span>(<span class="i">pop</span>());
+        <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Khi interpreter gặp instruction này, nó đã execute xong code cho expression, để lại giá trị kết quả trên đỉnh stack. Giờ ta chỉ cần pop và in nó ra.</p>
+<p>Lưu ý rằng ta không push thêm gì sau đó. Đây là một điểm khác biệt quan trọng giữa expression và statement trong VM. Mỗi instruction bytecode đều có một <span name="effect"><strong>stack effect</strong></span> mô tả cách instruction đó thay đổi stack. Ví dụ, <code>OP_ADD</code> pop hai giá trị và push một, khiến stack giảm đi một phần tử so với trước.</p>
+<aside name="effect">
+<p>Stack ngắn hơn một phần tử sau <code>OP_ADD</code>, nên effect của nó là -1:</p><img src="image/global-variables/stack-effect.png" alt="Stack effect của một instruction OP_ADD." />
+</aside>
+<p>Bạn có thể cộng các stack effect của một chuỗi instruction để ra tổng effect của chúng. Khi cộng stack effect của chuỗi instruction được compile từ bất kỳ expression hoàn chỉnh nào, tổng sẽ là một. Mỗi expression để lại một giá trị kết quả trên stack.</p>
+<p>Bytecode cho toàn bộ một statement có tổng stack effect bằng 0. Vì statement không tạo ra giá trị nào, nó cuối cùng sẽ để stack không đổi, dù tất nhiên nó vẫn dùng stack trong quá trình execute. Điều này quan trọng vì khi ta đến phần control flow và vòng lặp, một chương trình có thể execute một chuỗi dài statement. Nếu mỗi statement làm stack tăng hoặc giảm, cuối cùng stack có thể bị tràn hoặc hụt.</p>
+<p>Nhân tiện khi đang ở trong vòng lặp interpreter, ta nên xóa một chút code.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_RETURN: {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 2 lines</div>
+<pre class="insert">        <span class="c">// Exit interpreter.</span>
+</pre><pre class="insert-after">        return INTERPRET_OK;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 2 lines</div>
+
+<p>Khi VM chỉ compile và evaluate một expression duy nhất, ta có một đoạn code tạm trong <code>OP_RETURN</code> để in giá trị. Giờ khi đã có statement và <code>print</code>, ta không cần nó nữa. Chúng ta đã tiến thêm một <span name="return">bước</span> đến bản implement hoàn chỉnh của clox.</p>
+<aside name="return">
+<p>Nhưng mới chỉ là một bước thôi. Chúng ta sẽ quay lại <code>OP_RETURN</code> khi thêm function. Hiện tại, nó thoát toàn bộ vòng lặp interpreter.</p>
+</aside>
+<p>Như thường lệ, một instruction mới cần được hỗ trợ trong disassembler.</p>
+<div class="codehilite"><pre class="insert-before">      return simpleInstruction(&quot;OP_NEGATE&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_PRINT</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_PRINT&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Đó là câu lệnh <code>print</code> của chúng ta. Nếu muốn, bạn có thể thử ngay:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="n">1</span> + <span class="n">2</span>;
+<span class="k">print</span> <span class="n">3</span> * <span class="n">4</span>;
+</pre></div>
+<p>Thú vị đấy chứ! OK, có thể chưa đến mức hồi hộp, nhưng giờ ta có thể viết script chứa bao nhiêu statement tùy thích, và đó là một bước tiến.</p>
+<h3><a href="#expression-statements" id="expression-statements"><small>21&#8202;.&#8202;1&#8202;.&#8202;2</small>Expression statements</a></h3>
+<p>Chờ đến khi bạn thấy statement tiếp theo. Nếu ta <em>không</em> thấy từ khóa <code>print</code>, thì chắc chắn ta đang nhìn vào một expression statement.</p>
+<div class="codehilite"><pre class="insert-before">    printStatement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">  } <span class="k">else</span> {
+    <span class="i">expressionStatement</span>();
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>statement</em>()</div>
+
+<p>Nó được parse như sau:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expression</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">expressionStatement</span>() {
+  <span class="i">expression</span>();
+  <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after expression.&quot;</span>);
+  <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expression</em>()</div>
+
+<p>Một “expression statement” đơn giản là một expression theo sau bởi dấu chấm phẩy. Đây là cách bạn viết một expression trong ngữ cảnh cần một statement. Thường thì điều này để bạn có thể gọi một hàm hoặc evaluate một phép gán nhằm lấy side effect của nó, như thế này:</p>
+<div class="codehilite"><pre><span class="i">brunch</span> = <span class="s">&quot;quiche&quot;</span>;
+<span class="i">eat</span>(<span class="i">brunch</span>);
+</pre></div>
+<p>Về mặt ngữ nghĩa, một expression statement sẽ evaluate expression và bỏ qua kết quả. Compiler encode trực tiếp hành vi đó: nó compile expression, rồi emit một instruction <code>OP_POP</code>.</p>
+<div class="codehilite"><pre class="insert-before">  OP_FALSE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_POP</span>,
+</pre><pre class="insert-after">  OP_EQUAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Đúng như tên gọi, instruction này pop giá trị trên đỉnh stack và bỏ nó đi.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_FALSE: push(BOOL_VAL(false)); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_POP</span>: <span class="i">pop</span>(); <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Ta cũng có thể disassemble nó.</p>
+<div class="codehilite"><pre class="insert-before">      return simpleInstruction(&quot;OP_FALSE&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_POP</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_POP&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_EQUAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Expression statement hiện tại chưa hữu ích lắm vì ta chưa thể tạo ra expression nào có side effect, nhưng chúng sẽ trở nên thiết yếu khi <a href="calls-and-functions.html">thêm function sau này</a>. <span name="majority">Phần lớn</span> statement trong code thực tế của các ngôn ngữ như C là expression statement.</p>
+<aside name="majority">
+<p>Theo thống kê của tôi, 80 trong số 149 statement ở phiên bản “compiler.c” mà chúng ta có vào cuối chương này là expression statement.</p>
+</aside>
+<h3><a href="#error-synchronization" id="error-synchronization"><small>21&#8202;.&#8202;1&#8202;.&#8202;3</small>Error synchronization</a></h3>
+<p>Khi đang hoàn thiện phần việc ban đầu trong compiler, ta có thể xử lý nốt một đầu mối còn bỏ dở <a href="compiling-expressions.html#handling-syntax-errors">từ vài chương trước</a>. Giống như jlox, clox dùng panic mode error recovery để giảm thiểu số lượng lỗi compile dây chuyền mà nó báo. Compiler sẽ thoát khỏi panic mode khi đến một điểm đồng bộ (synchronization point). Với Lox, ta chọn ranh giới statement làm điểm đó. Giờ khi đã có statement, ta có thể implement việc đồng bộ.</p>
+<div class="codehilite"><pre class="insert-before">  statement();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>declaration</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">parser</span>.<span class="i">panicMode</span>) <span class="i">synchronize</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>declaration</em>()</div>
+
+<p>Nếu gặp lỗi compile khi parse statement trước đó, ta sẽ vào panic mode. Khi điều đó xảy ra, sau statement đó ta bắt đầu đồng bộ.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>printStatement</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">synchronize</span>() {
+  <span class="i">parser</span>.<span class="i">panicMode</span> = <span class="k">false</span>;
+
+  <span class="k">while</span> (<span class="i">parser</span>.<span class="i">current</span>.<span class="i">type</span> != <span class="a">TOKEN_EOF</span>) {
+    <span class="k">if</span> (<span class="i">parser</span>.<span class="i">previous</span>.<span class="i">type</span> == <span class="a">TOKEN_SEMICOLON</span>) <span class="k">return</span>;
+    <span class="k">switch</span> (<span class="i">parser</span>.<span class="i">current</span>.<span class="i">type</span>) {
+      <span class="k">case</span> <span class="a">TOKEN_CLASS</span>:
+      <span class="k">case</span> <span class="a">TOKEN_FUN</span>:
+      <span class="k">case</span> <span class="a">TOKEN_VAR</span>:
+      <span class="k">case</span> <span class="a">TOKEN_FOR</span>:
+      <span class="k">case</span> <span class="a">TOKEN_IF</span>:
+      <span class="k">case</span> <span class="a">TOKEN_WHILE</span>:
+      <span class="k">case</span> <span class="a">TOKEN_PRINT</span>:
+      <span class="k">case</span> <span class="a">TOKEN_RETURN</span>:
+        <span class="k">return</span>;
+
+      <span class="k">default</span>:
+        ; <span class="c">// Do nothing.</span>
+    }
+
+    <span class="i">advance</span>();
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>printStatement</em>()</div>
+
+<p>Ta bỏ qua token một cách “vô tội vạ” cho đến khi gặp thứ trông giống ranh giới statement. Ta nhận diện ranh giới này bằng cách tìm token đứng trước có thể kết thúc một statement, như dấu chấm phẩy. Hoặc ta tìm token tiếp theo bắt đầu một statement, thường là một trong các từ khóa control flow hoặc declaration.</p>
+<h2><a href="#variable-declarations" id="variable-declarations"><small>21&#8202;.&#8202;2</small>Variable Declarations</a></h2>
+<p>Chỉ <em>in</em> thôi thì chẳng giúp ngôn ngữ của bạn giành giải gì ở <span name="fair">hội chợ</span> ngôn ngữ lập trình, nên hãy chuyển sang thứ tham vọng hơn một chút: biến. Có ba thao tác ta cần hỗ trợ:</p>
+<aside name="fair">
+<p>Tôi không thể không tưởng tượng một “hội chợ ngôn ngữ” giống như hội chợ nông thôn 4H nào đó. Những dãy gian hàng lót rơm đầy các “ngôn ngữ con non” đang <em>moo</em> và <em>baa</em> gọi nhau.</p>
+</aside>
+<ul>
+<li>Khai báo một biến mới bằng câu lệnh <code>var</code>.</li>
+<li>Truy cập giá trị của một biến bằng identifier expression.</li>
+<li>Lưu một giá trị mới vào biến hiện có bằng assignment expression.</li>
+</ul>
+<p>Ta chưa thể làm hai thao tác cuối cho đến khi có biến, nên ta bắt đầu với khai báo.</p>
+<div class="codehilite"><pre class="insert-before">static void declaration() {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>declaration</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_VAR</span>)) {
+    <span class="i">varDeclaration</span>();
+  } <span class="k">else</span> {
+    <span class="i">statement</span>();
+  }
+</pre><pre class="insert-after">
+
+  if (parser.panicMode) synchronize();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>declaration</em>(), replace 1 line</div>
+
+<p>Hàm parse placeholder mà ta phác thảo cho rule grammar declaration giờ đã có phần xử lý thực sự. Nếu match được token <code>var</code>, ta nhảy đến đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>expression</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">varDeclaration</span>() {
+  <span class="t">uint8_t</span> <span class="i">global</span> = <span class="i">parseVariable</span>(<span class="s">&quot;Expect variable name.&quot;</span>);
+
+  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_EQUAL</span>)) {
+    <span class="i">expression</span>();
+  } <span class="k">else</span> {
+    <span class="i">emitByte</span>(<span class="a">OP_NIL</span>);
+  }
+  <span class="i">consume</span>(<span class="a">TOKEN_SEMICOLON</span>,
+          <span class="s">&quot;Expect &#39;;&#39; after variable declaration.&quot;</span>);
+
+  <span class="i">defineVariable</span>(<span class="i">global</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>expression</em>()</div>
+
+<p>Từ khóa này theo sau bởi tên biến. Việc này được compile bởi <code>parseVariable()</code>, mà ta sẽ nói tới ngay sau đây. Sau đó, ta tìm dấu <code>=</code> theo sau bởi một initializer expression. Nếu người dùng không khởi tạo biến, compiler sẽ ngầm định khởi tạo nó thành <span name="nil"><code>nil</code></span> bằng cách emit instruction <code>OP_NIL</code>. Dù theo cách nào, ta cũng mong statement kết thúc bằng dấu chấm phẩy.</p>
+<aside name="nil" class="bottom">
+<p>Về cơ bản, compiler sẽ “desugar” một khai báo biến như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span>;
+</pre></div>
+<p>thành:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="k">nil</span>;
+</pre></div>
+<p>Code nó tạo ra cho trường hợp đầu tiên giống hệt với trường hợp thứ hai.</p>
+</aside>
+<p>Ở đây có hai hàm mới để làm việc với biến và identifier. Đây là hàm đầu tiên:</p>
+<div class="codehilite"><pre class="insert-before">static void parsePrecedence(Precedence precedence);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after <em>parsePrecedence</em>()</div>
+<pre class="insert"><span class="k">static</span> <span class="t">uint8_t</span> <span class="i">parseVariable</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">errorMessage</span>) {
+  <span class="i">consume</span>(<span class="a">TOKEN_IDENTIFIER</span>, <span class="i">errorMessage</span>);
+  <span class="k">return</span> <span class="i">identifierConstant</span>(&amp;<span class="i">parser</span>.<span class="i">previous</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>parsePrecedence</em>()</div>
+
+<p>Hàm này yêu cầu token tiếp theo phải là một identifier, nó sẽ consume token đó và chuyển sang đây:</p>
+<div class="codehilite"><pre class="insert-before">static void parsePrecedence(Precedence precedence);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after <em>parsePrecedence</em>()</div>
+<pre class="insert"><span class="k">static</span> <span class="t">uint8_t</span> <span class="i">identifierConstant</span>(<span class="t">Token</span>* <span class="i">name</span>) {
+  <span class="k">return</span> <span class="i">makeConstant</span>(<span class="a">OBJ_VAL</span>(<span class="i">copyString</span>(<span class="i">name</span>-&gt;<span class="i">start</span>,
+                                         <span class="i">name</span>-&gt;<span class="i">length</span>)));
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>parsePrecedence</em>()</div>
+
+<p>Hàm này nhận token được truyền vào và thêm lexeme của nó vào constant table của chunk dưới dạng string. Sau đó, nó trả về chỉ số của constant đó trong constant table.</p>
+<p>Biến toàn cục được tra cứu <em>theo tên</em> ở runtime. Điều đó nghĩa là VM — vòng lặp bytecode interpreter — cần truy cập được tên này. Một string đầy đủ thì quá lớn để nhét trực tiếp vào luồng bytecode như một toán hạng. Thay vào đó, ta lưu string vào constant table và instruction sẽ tham chiếu tới tên bằng chỉ số của nó trong bảng.</p>
+<p>Hàm này trả về chỉ số đó cho <code>varDeclaration()</code>, hàm này sau đó chuyển nó tới đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>parseVariable</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">defineVariable</span>(<span class="t">uint8_t</span> <span class="i">global</span>) {
+  <span class="i">emitBytes</span>(<span class="a">OP_DEFINE_GLOBAL</span>, <span class="i">global</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>parseVariable</em>()</div>
+
+<p><span name="helper">Hàm này</span> xuất ra instruction bytecode định nghĩa biến mới và lưu giá trị khởi tạo của nó. Chỉ số của tên biến trong constant table chính là toán hạng của instruction. Như thường lệ trong một stack-based VM, ta emit instruction này sau cùng. Ở runtime, ta execute code cho phần khởi tạo biến trước, để lại giá trị trên stack. Sau đó, instruction này lấy giá trị đó và lưu lại để dùng sau.</p>
+<aside name="helper">
+<p>Tôi biết một số hàm này trông có vẻ khá vô nghĩa vào lúc này. Nhưng chúng sẽ hữu ích hơn khi ta thêm nhiều tính năng ngôn ngữ để làm việc với tên. Cả function và class declaration đều khai báo biến mới, và variable/assignment expression sẽ truy cập chúng.</p>
+</aside>
+<p>Bên phía runtime, ta bắt đầu với instruction mới này:</p>
+<div class="codehilite"><pre class="insert-before">  OP_POP,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_DEFINE_GLOBAL</span>,
+</pre><pre class="insert-after">  OP_EQUAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Nhờ có hash table tiện dụng, phần implement không quá khó.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_POP: pop(); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_DEFINE_GLOBAL</span>: {
+        <span class="t">ObjString</span>* <span class="i">name</span> = <span class="a">READ_STRING</span>();
+        <span class="i">tableSet</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>, <span class="i">name</span>, <span class="i">peek</span>(<span class="n">0</span>));
+        <span class="i">pop</span>();
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Ta lấy tên biến từ constant table. Sau đó, ta <span name="pop">lấy</span> giá trị từ đỉnh stack và lưu nó vào hash table với tên đó làm key.</p>
+<aside name="pop">
+<p>Lưu ý rằng ta không <em>pop</em> giá trị cho đến <em>sau khi</em> thêm nó vào hash table. Điều này đảm bảo VM vẫn có thể tìm thấy giá trị nếu garbage collection được kích hoạt ngay giữa lúc thêm vào hash table. Đây là khả năng hoàn toàn có thể xảy ra vì hash table cần cấp phát động khi resize.</p>
+</aside>
+<p>Đoạn code này không kiểm tra xem key đã tồn tại trong bảng chưa. Lox khá “thoáng” với biến toàn cục và cho phép bạn định nghĩa lại chúng mà không báo lỗi. Điều này hữu ích trong phiên REPL, nên VM hỗ trợ bằng cách đơn giản ghi đè giá trị nếu key đã tồn tại trong hash table.</p>
+<p>Có thêm một macro helper nhỏ:</p>
+<div class="codehilite"><pre class="insert-before">#define READ_CONSTANT() (vm.chunk-&gt;constants.values[READ_BYTE()])
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#define READ_STRING() AS_STRING(READ_CONSTANT())</span>
+</pre><pre class="insert-after">#define BINARY_OP(valueType, op) \
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Nó đọc một toán hạng một byte từ bytecode chunk. Nó coi đó là chỉ số trong constant table của chunk và trả về string ở chỉ số đó. Nó không kiểm tra giá trị <em>có</em> phải là string hay không — chỉ đơn giản cast nó. Điều này an toàn vì compiler không bao giờ emit instruction tham chiếu tới một constant không phải string.</p>
+<p>Vì muốn giữ “vệ sinh” về mặt từ vựng, ta cũng undefine macro này ở cuối hàm interpret.</p>
+<div class="codehilite"><pre class="insert-before">#undef READ_CONSTANT
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert"><span class="a">#undef READ_STRING</span>
+</pre><pre class="insert-after">#undef BINARY_OP
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Tôi cứ nói “hash table” nhưng thực ra ta chưa có cái nào. Ta cần một nơi để lưu các biến toàn cục này. Vì muốn chúng tồn tại suốt thời gian clox chạy, ta lưu chúng ngay trong VM.</p>
+<div class="codehilite"><pre class="insert-before">  Value* stackTop;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">Table</span> <span class="i">globals</span>;
+</pre><pre class="insert-after">  Table strings;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Giống như với string table, ta cần khởi tạo hash table về trạng thái hợp lệ khi VM khởi động.</p>
+<div class="codehilite"><pre class="insert-before">  vm.objects = NULL;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">
+
+  <span class="i">initTable</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>);
+</pre><pre class="insert-after">  initTable(&amp;vm.strings);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Và ta <span name="tear">giải phóng</span> nó khi thoát.</p>
+<aside name="tear">
+<p>Quá trình thoát sẽ giải phóng mọi thứ, nhưng thật thiếu chỉn chu nếu phải nhờ hệ điều hành dọn dẹp mớ hỗn độn của chúng ta.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">void freeVM() {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>freeVM</em>()</div>
+<pre class="insert">  <span class="i">freeTable</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>);
+</pre><pre class="insert-after">  freeTable(&amp;vm.strings);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>freeVM</em>()</div>
+
+<p>Như thường lệ, ta cũng muốn có thể disassemble instruction mới này.</p>
+<div class="codehilite"><pre class="insert-before">      return simpleInstruction(&quot;OP_POP&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_DEFINE_GLOBAL</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_DEFINE_GLOBAL&quot;</span>, <span class="i">chunk</span>,
+                                 <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_EQUAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Và với điều đó, ta đã có thể định nghĩa biến toàn cục. Tất nhiên, người dùng chưa <em>nhận ra</em> là họ đã làm vậy, vì họ chưa thể <em>dùng</em> chúng. Vậy nên, hãy sửa điều đó ở bước tiếp theo.</p>
+<h2><a href="#đọc-giá-trị-biến-reading-variables" id="đọc-giá-trị-biến-reading-variables"><small>21&#8202;.&#8202;3</small>Đọc giá trị biến (Reading Variables)</a></h2>
+<p>Giống như trong mọi ngôn ngữ lập trình, ta truy cập giá trị của một biến thông qua tên của nó. Ta kết nối các identifier token với expression parser tại đây:</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_IDENTIFIER</span>]    = {<span class="i">variable</span>, <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Điều này gọi tới hàm parser mới:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>string</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">variable</span>() {
+  <span class="i">namedVariable</span>(<span class="i">parser</span>.<span class="i">previous</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>string</em>()</div>
+
+<p>Giống như với khai báo biến, ở đây cũng có một vài hàm helper nhỏ trông có vẻ vô nghĩa lúc này nhưng sẽ hữu ích hơn ở các chương sau. Tôi hứa đấy.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>string</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">namedVariable</span>(<span class="t">Token</span> <span class="i">name</span>) {
+  <span class="t">uint8_t</span> <span class="i">arg</span> = <span class="i">identifierConstant</span>(&amp;<span class="i">name</span>);
+  <span class="i">emitBytes</span>(<span class="a">OP_GET_GLOBAL</span>, <span class="i">arg</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>string</em>()</div>
+
+<p>Hàm này gọi lại <code>identifierConstant()</code> như trước để lấy identifier token được truyền vào và thêm lexeme của nó vào constant table của chunk dưới dạng string. Việc còn lại là emit một instruction để load biến toàn cục có tên đó. Đây là instruction đó:</p>
+<div class="codehilite"><pre class="insert-before">  OP_POP,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_GET_GLOBAL</span>,
+</pre><pre class="insert-after">  OP_DEFINE_GLOBAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Bên phía interpreter, phần implement phản chiếu <code>OP_DEFINE_GLOBAL</code>.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_POP: pop(); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_GET_GLOBAL</span>: {
+        <span class="t">ObjString</span>* <span class="i">name</span> = <span class="a">READ_STRING</span>();
+        <span class="t">Value</span> <span class="i">value</span>;
+        <span class="k">if</span> (!<span class="i">tableGet</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>, <span class="i">name</span>, &amp;<span class="i">value</span>)) {
+          <span class="i">runtimeError</span>(<span class="s">&quot;Undefined variable &#39;%s&#39;.&quot;</span>, <span class="i">name</span>-&gt;<span class="i">chars</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="i">push</span>(<span class="i">value</span>);
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_DEFINE_GLOBAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Ta lấy chỉ số trong constant table từ toán hạng của instruction và lấy tên biến. Sau đó, ta dùng tên này làm key để tra giá trị của biến trong globals hash table.</p>
+<p>Nếu key không tồn tại trong hash table, nghĩa là biến toàn cục đó chưa bao giờ được định nghĩa. Đây là lỗi runtime trong Lox, nên ta báo lỗi và thoát khỏi vòng lặp interpreter nếu điều đó xảy ra. Ngược lại, ta lấy giá trị và push nó lên stack.</p>
+<div class="codehilite"><pre class="insert-before">      return simpleInstruction(&quot;OP_POP&quot;, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_GET_GLOBAL</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_GET_GLOBAL&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_DEFINE_GLOBAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Thêm một chút disassemble nữa là xong. Interpreter của chúng ta giờ có thể chạy code như thế này:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">beverage</span> = <span class="s">&quot;cafe au lait&quot;</span>;
+<span class="k">var</span> <span class="i">breakfast</span> = <span class="s">&quot;beignets with &quot;</span> + <span class="i">beverage</span>;
+<span class="k">print</span> <span class="i">breakfast</span>;
+</pre></div>
+<p>Giờ chỉ còn một thao tác nữa.</p>
+<h2><a href="#gán-giá-trị-assignment" id="gán-giá-trị-assignment"><small>21&#8202;.&#8202;4</small>Gán giá trị (Assignment)</a></h2>
+<p>Xuyên suốt cuốn sách này, tôi đã cố gắng giữ cho bạn đi trên một con đường khá an toàn và dễ dàng. Tôi không né tránh các <em>vấn đề</em> khó, nhưng tôi cố không làm cho <em>giải pháp</em> phức tạp hơn mức cần thiết. Tiếc là, một số lựa chọn thiết kế khác trong <span name="jlox">bytecode</span> compiler của chúng ta khiến việc implement assignment trở nên phiền phức.</p>
+<aside name="jlox">
+<p>Nếu bạn còn nhớ, assignment trong jlox khá dễ.</p>
+</aside>
+<p>Bytecode VM của chúng ta dùng compiler một-pass. Nó parse và sinh bytecode ngay lập tức mà không qua bất kỳ AST trung gian nào. Ngay khi nhận ra một phần cú pháp, nó sẽ emit code cho phần đó. Assignment thì không tự nhiên phù hợp với cách này. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="i">menu</span>.<span class="i">brunch</span>(<span class="i">sunday</span>).<span class="i">beverage</span> = <span class="s">&quot;mimosa&quot;</span>;
+</pre></div>
+<p>Trong đoạn code này, parser không nhận ra <code>menu.brunch(sunday).beverage</code> là mục tiêu của một phép gán (assignment target) chứ không phải một expression thông thường cho đến khi gặp dấu <code>=</code>, tức là nhiều token sau <code>menu</code>. Lúc đó, compiler đã emit bytecode cho toàn bộ phần đó rồi.</p>
+<p>Tuy nhiên, vấn đề không nghiêm trọng như có vẻ. Hãy xem parser nhìn ví dụ này thế nào:</p><img src="image/global-variables/setter.png" alt="Câu lệnh 'menu.brunch(sunday).beverage = &quot;mimosa&quot;', cho thấy 'menu.brunch(sunday)' là một expression." />
+<p>Mặc dù phần <code>.beverage</code> không được compile như một get expression, mọi thứ bên trái dấu <code>.</code> vẫn là một expression, với semantics thông thường. Phần <code>menu.brunch(sunday)</code> có thể compile và execute như bình thường.</p>
+<p>May mắn cho chúng ta, sự khác biệt về semantics ở phía bên trái của một assignment chỉ xuất hiện ở phần cuối cùng của chuỗi token, ngay trước dấu <code>=</code>. Dù receiver của một setter có thể là một expression dài tùy ý, phần có hành vi khác với get expression chỉ là identifier ở cuối, ngay trước dấu <code>=</code>. Ta không cần lookahead nhiều để nhận ra <code>beverage</code> nên được compile như một set expression thay vì getter.</p>
+<p>Với biến thì còn dễ hơn, vì chúng chỉ là một identifier đơn lẻ trước dấu <code>=</code>. Ý tưởng là ngay <em>trước khi</em> compile một expression có thể được dùng làm assignment target, ta sẽ kiểm tra xem token tiếp theo có phải là <code>=</code> không. Nếu có, ta compile nó như một assignment hoặc setter thay vì variable access hoặc getter.</p>
+<p>Hiện tại ta chưa có setter để lo, nên tất cả những gì cần xử lý chỉ là biến.</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t arg = identifierConstant(&amp;name);
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>namedVariable</em>()<br>
+replace 1 line</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">match</span>(<span class="a">TOKEN_EQUAL</span>)) {
+    <span class="i">expression</span>();
+    <span class="i">emitBytes</span>(<span class="a">OP_SET_GLOBAL</span>, <span class="i">arg</span>);
+  } <span class="k">else</span> {
+    <span class="i">emitBytes</span>(<span class="a">OP_GET_GLOBAL</span>, <span class="i">arg</span>);
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>namedVariable</em>(), replace 1 line</div>
+
+<p>Trong hàm parse cho identifier expression, ta tìm dấu bằng sau identifier. Nếu tìm thấy, thay vì emit code cho variable access, ta compile giá trị được gán và sau đó emit một assignment instruction.</p>
+<p>Đây là instruction cuối cùng cần thêm trong chương này.</p>
+<div class="codehilite"><pre class="insert-before">  OP_DEFINE_GLOBAL,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_SET_GLOBAL</span>,
+</pre><pre class="insert-after">  OP_EQUAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Như bạn mong đợi, hành vi runtime của nó tương tự như khi định nghĩa biến mới.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_SET_GLOBAL</span>: {
+        <span class="t">ObjString</span>* <span class="i">name</span> = <span class="a">READ_STRING</span>();
+        <span class="k">if</span> (<span class="i">tableSet</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>, <span class="i">name</span>, <span class="i">peek</span>(<span class="n">0</span>))) {
+          <span class="i">tableDelete</span>(&amp;<span class="i">vm</span>.<span class="i">globals</span>, <span class="i">name</span>);<span name="delete"> </span>
+          <span class="i">runtimeError</span>(<span class="s">&quot;Undefined variable &#39;%s&#39;.&quot;</span>, <span class="i">name</span>-&gt;<span class="i">chars</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Điểm khác biệt chính là điều gì xảy ra khi key chưa tồn tại trong globals hash table. Nếu biến chưa được định nghĩa, việc gán giá trị cho nó là lỗi runtime. Lox <a href="implicit">không cho phép khai báo biến ngầm định</a>.</p>
+<aside name="delete">
+<p>Lệnh gọi <code>tableSet()</code> sẽ lưu giá trị vào bảng biến toàn cục ngay cả khi biến chưa được định nghĩa trước đó. Điều này có thể thấy trong phiên REPL, vì nó vẫn tiếp tục chạy ngay cả sau khi báo lỗi runtime. Vì vậy, ta cũng xóa giá trị “xác sống” đó khỏi bảng.</p>
+</aside>
+<p>Điểm khác biệt còn lại là việc gán giá trị cho một biến <strong>không</strong> pop giá trị đó khỏi stack. Hãy nhớ rằng, assignment là một expression, nên nó cần để lại giá trị đó trên stack trong trường hợp phép gán này được lồng bên trong một expression lớn hơn.</p>
+<p>Thêm một chút phần disassembly:</p>
+<div class="codehilite"><pre class="insert-before">      return constantInstruction(&quot;OP_DEFINE_GLOBAL&quot;, chunk,
+                                 offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_SET_GLOBAL</span>:
+      <span class="k">return</span> <span class="i">constantInstruction</span>(<span class="s">&quot;OP_SET_GLOBAL&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_EQUAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Vậy là xong rồi, đúng không? Ừm… chưa hẳn. Chúng ta đã mắc một lỗi! Hãy xem thử:</p>
+<div class="codehilite"><pre><span class="i">a</span> * <span class="i">b</span> = <span class="i">c</span> + <span class="i">d</span>;
+</pre></div>
+<p>Theo grammar của Lox, <code>=</code> có độ ưu tiên thấp nhất, nên đoạn này sẽ được parse đại khái như:</p><img src="image/global-variables/ast-good.png" alt="Cách parse mong đợi, giống '(a * b) = (c + d)'." />
+<p>Rõ ràng, <code>a * b</code> không phải là một assignment target <span name="do">hợp lệ</span>, nên đây phải là lỗi cú pháp. Nhưng parser của chúng ta lại làm như sau:</p>
+<aside name="do">
+<p>Sẽ thật “điên rồ” nếu <code>a * b</code> <em>lại</em> là một assignment target hợp lệ, đúng không? Bạn có thể tưởng tượng một ngôn ngữ kiểu đại số, cố gắng chia giá trị được gán ra theo cách hợp lý nào đó và phân phối nó cho <code>a</code> và <code>b</code>… có lẽ đó sẽ là một ý tưởng tồi tệ.</p>
+</aside>
+<ol>
+<li>Đầu tiên, <code>parsePrecedence()</code> parse <code>a</code> bằng prefix parser <code>variable()</code>.</li>
+<li>Sau đó, nó bước vào vòng lặp parse infix.</li>
+<li>Nó gặp <code>*</code> và gọi <code>binary()</code>.</li>
+<li>Hàm này đệ quy gọi <code>parsePrecedence()</code> để parse toán hạng bên phải.</li>
+<li>Lần này, <code>variable()</code> lại được gọi để parse <code>b</code>.</li>
+<li>Bên trong lời gọi <code>variable()</code> này, nó tìm dấu <code>=</code> ở phía sau. Nó thấy một dấu và parse phần còn lại của dòng như một assignment.</li>
+</ol>
+<p>Nói cách khác, parser nhìn đoạn code trên như:</p><img src="image/global-variables/ast-bad.png" alt="Cách parse thực tế, giống 'a * (b = c + d)'." />
+<p>Chúng ta đã làm hỏng phần xử lý precedence vì <code>variable()</code> không xét đến độ ưu tiên của expression bao quanh biến đó. Nếu biến này tình cờ nằm ở phía bên phải của một toán tử infix, hoặc là toán hạng của một toán tử unary, thì expression bao quanh đó có precedence quá cao để cho phép dấu <code>=</code>.</p>
+<p>Để sửa, <code>variable()</code> chỉ nên tìm và consume dấu <code>=</code> nếu nó đang ở trong ngữ cảnh của một expression có precedence thấp. Phần code biết precedence hiện tại, hợp lý thay, là <code>parsePrecedence()</code>. Hàm <code>variable()</code> không cần biết chính xác cấp độ precedence, nó chỉ cần biết precedence đủ thấp để cho phép assignment, nên ta truyền thông tin đó vào dưới dạng một giá trị Boolean.</p>
+<div class="codehilite"><pre class="insert-before">    error(&quot;Expect expression.&quot;);
+    return;
+  }
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>parsePrecedence</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">bool</span> <span class="i">canAssign</span> = <span class="i">precedence</span> &lt;= <span class="a">PREC_ASSIGNMENT</span>;
+  <span class="i">prefixRule</span>(<span class="i">canAssign</span>);
+</pre><pre class="insert-after">
+
+  while (precedence &lt;= getRule(parser.current.type)-&gt;precedence) {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>parsePrecedence</em>(), replace 1 line</div>
+
+<p>Vì assignment là expression có precedence thấp nhất, thời điểm duy nhất ta cho phép assignment là khi đang parse một assignment expression hoặc một top-level expression như trong expression statement. Cờ này được truyền tới hàm parser ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>variable</em>()<br>
+replace 3 lines</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">variable</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+  <span class="i">namedVariable</span>(<span class="i">parser</span>.<span class="i">previous</span>, <span class="i">canAssign</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>variable</em>(), replace 3 lines</div>
+
+<p>Hàm này truyền nó qua một tham số mới:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>namedVariable</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">namedVariable</span>(<span class="t">Token</span> <span class="i">name</span>, <span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  uint8_t arg = identifierConstant(&amp;name);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>namedVariable</em>(), replace 1 line</div>
+
+<p>Và cuối cùng sử dụng nó ở đây:</p>
+<div class="codehilite"><pre class="insert-before">  uint8_t arg = identifierConstant(&amp;name);
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>namedVariable</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">canAssign</span> &amp;&amp; <span class="i">match</span>(<span class="a">TOKEN_EQUAL</span>)) {
+</pre><pre class="insert-after">    expression();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>namedVariable</em>(), replace 1 line</div>
+
+<p>Khá nhiều “đường ống” chỉ để đưa đúng <strong>một bit</strong> dữ liệu tới đúng chỗ trong compiler, nhưng cuối cùng nó cũng tới. Nếu biến nằm bên trong một expression có precedence cao hơn, <code>canAssign</code> sẽ là <code>false</code> và đoạn code này sẽ bỏ qua dấu <code>=</code> ngay cả khi nó có ở đó. Sau đó <code>namedVariable()</code> trả về, và luồng execute cuối cùng quay lại <code>parsePrecedence()</code>.</p>
+<p>Rồi sao nữa? Compiler sẽ làm gì với ví dụ hỏng trước đó? Lúc này, <code>variable()</code> sẽ không consume dấu <code>=</code>, nên nó sẽ là token hiện tại. Compiler quay lại <code>parsePrecedence()</code> từ prefix parser <code>variable()</code> và sau đó cố gắng bước vào vòng lặp parse infix. Không có hàm parse nào gắn với <code>=</code>, nên nó bỏ qua vòng lặp đó.</p>
+<p>Rồi <code>parsePrecedence()</code> lặng lẽ trả về cho caller. Điều này cũng không đúng. Nếu dấu <code>=</code> không được consume như một phần của expression, sẽ không có gì khác consume nó. Đây là một lỗi và ta nên báo lỗi.</p>
+<div class="codehilite"><pre class="insert-before">    infixRule();
+  }
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>parsePrecedence</em>()</div>
+<pre class="insert">
+
+  <span class="k">if</span> (<span class="i">canAssign</span> &amp;&amp; <span class="i">match</span>(<span class="a">TOKEN_EQUAL</span>)) {
+    <span class="i">error</span>(<span class="s">&quot;Invalid assignment target.&quot;</span>);
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>parsePrecedence</em>()</div>
+
+<p>Với thay đổi này, chương trình sai trước đó sẽ nhận lỗi compile đúng như mong đợi. OK, <em>giờ</em> thì xong chưa? Vẫn chưa hẳn. Bạn thấy đấy, ta đang truyền một tham số vào một trong các hàm parse. Nhưng các hàm này được lưu trong một bảng con trỏ hàm, nên tất cả các hàm parse đều phải có cùng kiểu. Dù hầu hết các hàm parse không hỗ trợ việc được dùng làm assignment target — setter là trường hợp <span name="index">duy nhất</span> khác — nhưng C compiler “thân thiện” của chúng ta yêu cầu tất cả chúng đều phải nhận tham số này.</p>
+<aside name="index">
+<p>Nếu Lox có mảng và toán tử subscript như <code>array[index]</code> thì một infix <code>[</code> cũng sẽ cho phép assignment để hỗ trợ <code>array[index] = value</code>.</p>
+</aside>
+<p>Vậy là chúng ta sẽ kết thúc chương này với một chút “việc tay chân”. Đầu tiên, hãy truyền flag này vào các hàm parse infix.</p>
+<div class="codehilite"><pre class="insert-before">    ParseFn infixRule = getRule(parser.previous.type)-&gt;infix;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>parsePrecedence</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="i">infixRule</span>(<span class="i">canAssign</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>parsePrecedence</em>(), replace 1 line</div>
+
+<p>Rồi sau này ta sẽ cần nó cho setter. Tiếp theo, ta sửa typedef cho kiểu hàm.</p>
+<div class="codehilite"><pre class="insert-before">} Precedence;
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+add after enum <em>Precedence</em><br>
+replace 1 line</div>
+<pre class="insert"><span class="k">typedef</span> <span class="t">void</span> (*<span class="t">ParseFn</span>)(<span class="t">bool</span> <span class="i">canAssign</span>);
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after enum <em>Precedence</em>, replace 1 line</div>
+
+<p>Và thêm một loạt code khá nhàm chán để chấp nhận tham số này trong tất cả các hàm parse hiện có. Ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>binary</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">binary</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  TokenType operatorType = parser.previous.type;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>binary</em>(), replace 1 line</div>
+
+<p>Và ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>literal</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">literal</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  switch (parser.previous.type) {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>literal</em>(), replace 1 line</div>
+
+<p>Và ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>grouping</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">grouping</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  expression();
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>grouping</em>(), replace 1 line</div>
+
+<p>Và ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>number</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">number</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  double value = strtod(parser.previous.start, NULL);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>number</em>(), replace 1 line</div>
+
+<p>Và cả ở đây nữa:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>string</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">string</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  emitConstant(OBJ_VAL(copyString(parser.previous.start + 1,
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>string</em>(), replace 1 line</div>
+
+<p>Và cuối cùng:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+function <em>unary</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">void</span> <span class="i">unary</span>(<span class="t">bool</span> <span class="i">canAssign</span>) {
+</pre><pre class="insert-after">  TokenType operatorType = parser.previous.type;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, function <em>unary</em>(), replace 1 line</div>
+
+<p>Phù! Giờ ta lại có một chương trình C có thể compile. Chạy nó lên và bạn có thể execute đoạn này:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">breakfast</span> = <span class="s">&quot;beignets&quot;</span>;
+<span class="k">var</span> <span class="i">beverage</span> = <span class="s">&quot;cafe au lait&quot;</span>;
+<span class="i">breakfast</span> = <span class="s">&quot;beignets with &quot;</span> + <span class="i">beverage</span>;
+
+<span class="k">print</span> <span class="i">breakfast</span>;
+</pre></div>
+<p>Nó bắt đầu trông giống code thật của một ngôn ngữ lập trình thực thụ rồi đấy!</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>21&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Compiler thêm tên biến toàn cục vào constant table dưới dạng string mỗi khi gặp một identifier. Nó tạo một constant mới mỗi lần, ngay cả khi tên biến đó đã tồn tại ở một slot trước đó trong constant table. Điều này lãng phí trong trường hợp cùng một biến được tham chiếu nhiều lần bởi cùng một hàm. Điều đó cũng làm tăng khả năng lấp đầy constant table và hết slot, vì ta chỉ cho phép tối đa 256 constant trong một chunk.</p>
+<p>Hãy tối ưu điều này. Việc tối ưu của bạn ảnh hưởng thế nào đến hiệu năng của compiler so với runtime? Đây có phải là sự đánh đổi hợp lý không?</p>
+</li>
+<li>
+<p>Việc tra cứu biến toàn cục theo tên trong hash table mỗi lần sử dụng khá chậm, ngay cả với một hash table tốt. Bạn có thể nghĩ ra cách nào hiệu quả hơn để lưu trữ và truy cập biến toàn cục mà không thay đổi semantics không?</p>
+</li>
+<li>
+<p>Khi chạy trong REPL, người dùng có thể viết một hàm tham chiếu tới một biến toàn cục chưa biết. Sau đó, ở dòng tiếp theo, họ khai báo biến đó. Lox nên xử lý trường hợp này một cách “êm” bằng cách không báo lỗi compile “unknown variable” khi hàm vừa được định nghĩa.</p>
+<p>Nhưng khi người dùng chạy một <em>script</em> Lox, compiler có quyền truy cập toàn bộ nội dung chương trình trước khi bất kỳ code nào được chạy. Xem chương trình này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">useVar</span>() {
+  <span class="k">print</span> <span class="i">oops</span>;
+}
+
+<span class="k">var</span> <span class="i">ooops</span> = <span class="s">&quot;too many o&#39;s!&quot;</span>;
+</pre></div>
+<p>Ở đây, ta có thể biết một cách tĩnh rằng <code>oops</code> sẽ không được định nghĩa vì <em>không</em> có khai báo nào của biến toàn cục đó trong chương trình. Lưu ý rằng <code>useVar()</code> cũng không bao giờ được gọi, nên dù biến không được định nghĩa, cũng sẽ không có lỗi runtime vì nó cũng không bao giờ được dùng.</p>
+<p>Ta có thể báo những lỗi như thế này ngay tại compile time, ít nhất là khi chạy từ script. Bạn có nghĩ ta nên làm vậy không? Hãy giải thích lý do. Các ngôn ngữ scripting khác mà bạn biết xử lý thế nào?</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="local-variables.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Local Variables&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

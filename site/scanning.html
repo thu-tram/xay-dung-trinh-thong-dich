@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Scanning &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Scanning<small>4</small></a></h3>
+
+<ul>
+    <li><a href="#khung-interpreter"><small>4.1</small> Khung Interpreter</a></li>
+    <li><a href="#lexeme-&amp;-token"><small>4.2</small> Lexeme &amp; Token</a></li>
+    <li><a href="#ngôn-ngữ-&amp;-biểu-thức-chính-quy"><small>4.3</small> Ngôn ngữ &amp; biểu thức chính quy</a></li>
+    <li><a href="#lớp-scanner"><small>4.4</small> Lớp Scanner</a></li>
+    <li><a href="#nhận-diện-lexeme"><small>4.5</small> Nhận diện Lexeme</a></li>
+    <li><a href="#lexeme-d&amp;agrave;i-hơn"><small>4.6</small> Lexeme d&amp;agrave;i hơn</a></li>
+    <li><a href="#reserved-word-&amp;-identifier"><small>4.7</small> Reserved Word &amp; Identifier</a></li>
+    <li><a href="#thử-thách"><small>4.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-dấu-chấm-phẩy-ngầm-định"><small>4.9</small> Ghi chú thiết kế: Dấu chấm phẩy ngầm định</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="representing-code.html" title="Representing Code" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter" class="prev">←</a>
+<a href="representing-code.html" title="Representing Code" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Scanning<small>4</small></a></h3>
+
+<ul>
+    <li><a href="#khung-interpreter"><small>4.1</small> Khung Interpreter</a></li>
+    <li><a href="#lexeme-&amp;-token"><small>4.2</small> Lexeme &amp; Token</a></li>
+    <li><a href="#ngôn-ngữ-&amp;-biểu-thức-chính-quy"><small>4.3</small> Ngôn ngữ &amp; biểu thức chính quy</a></li>
+    <li><a href="#lớp-scanner"><small>4.4</small> Lớp Scanner</a></li>
+    <li><a href="#nhận-diện-lexeme"><small>4.5</small> Nhận diện Lexeme</a></li>
+    <li><a href="#lexeme-d&amp;agrave;i-hơn"><small>4.6</small> Lexeme d&amp;agrave;i hơn</a></li>
+    <li><a href="#reserved-word-&amp;-identifier"><small>4.7</small> Reserved Word &amp; Identifier</a></li>
+    <li><a href="#thử-thách"><small>4.8</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-dấu-chấm-phẩy-ngầm-định"><small>4.9</small> Ghi chú thiết kế: Dấu chấm phẩy ngầm định</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="representing-code.html" title="Representing Code" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">4</div>
+  <h1>Scanning</h1>
+
+<blockquote>
+<p>Cắn miếng to vào. Bất cứ việc gì đáng làm thì cũng đáng làm tới mức “quá tay”.</p>
+<p><cite>Robert A. Heinlein, <em>Time Enough for Love</em></cite></p>
+</blockquote>
+<p>Bước đầu tiên trong bất kỳ compiler hay interpreter nào là <span name="lexing">scanning</span>. Scanner nhận vào mã nguồn thô dưới dạng một chuỗi ký tự và nhóm chúng thành một chuỗi các mảnh mà ta gọi là <strong>token</strong>. Đây là những “từ” và “dấu câu” mang ý nghĩa, tạo nên ngữ pháp của ngôn ngữ.</p>
+<aside name="lexing">
+<p>Nhiệm vụ này qua nhiều năm đã được gọi bằng nhiều tên khác nhau: “scanning” và “lexing” (viết tắt của “lexical analysis”). Ngày xưa, khi máy tính to bằng cả chiếc xe Winnebago nhưng bộ nhớ còn ít hơn cả đồng hồ của bạn, một số người chỉ dùng từ “scanner” để chỉ phần code xử lý việc đọc ký tự mã nguồn thô từ đĩa và đưa vào bộ nhớ đệm. Sau đó, “lexing” là giai đoạn tiếp theo, làm những việc hữu ích với các ký tự đó.</p>
+<p>Ngày nay, việc đọc một file mã nguồn vào bộ nhớ là chuyện đơn giản, nên nó hiếm khi là một giai đoạn riêng biệt trong compiler. Vì vậy, hai thuật ngữ này giờ gần như có thể dùng thay thế cho nhau.</p>
+</aside>
+<p>Scanning cũng là một điểm khởi đầu tốt cho chúng ta vì phần code này không quá khó — về cơ bản là một câu lệnh <code>switch</code> nhưng “mơ mộng” hơn một chút. Nó sẽ giúp ta khởi động trước khi bước vào những phần thú vị hơn ở phía sau. Đến cuối chương này, ta sẽ có một scanner đầy đủ tính năng, chạy nhanh, có thể nhận bất kỳ chuỗi mã nguồn Lox nào và tạo ra các token để đưa vào parser trong chương tiếp theo.</p>
+<h2><a href="#khung-interpreter" id="khung-interpreter"><small>4&#8202;.&#8202;1</small>Khung Interpreter</a></h2>
+<p>Vì đây là chương thực sự đầu tiên, trước khi bắt tay vào quét code, ta cần phác thảo hình hài cơ bản của interpreter jlox. Mọi thứ bắt đầu với một class trong Java.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.io.BufferedReader</span>;
+<span class="k">import</span> <span class="i">java.io.IOException</span>;
+<span class="k">import</span> <span class="i">java.io.InputStreamReader</span>;
+<span class="k">import</span> <span class="i">java.nio.charset.Charset</span>;
+<span class="k">import</span> <span class="i">java.nio.file.Files</span>;
+<span class="k">import</span> <span class="i">java.nio.file.Paths</span>;
+<span class="k">import</span> <span class="i">java.util.List</span>;
+
+<span class="k">public</span> <span class="k">class</span> <span class="t">Lox</span> {
+  <span class="k">public</span> <span class="k">static</span> <span class="t">void</span> <span class="i">main</span>(<span class="t">String</span>[] <span class="i">args</span>) <span class="k">throws</span> <span class="t">IOException</span> {
+    <span class="k">if</span> (<span class="i">args</span>.<span class="i">length</span> &gt; <span class="n">1</span>) {
+      <span class="t">System</span>.<span class="i">out</span>.<span class="i">println</span>(<span class="s">&quot;Usage: jlox [script]&quot;</span>);
+      <span class="t">System</span>.<span class="i">exit</span>(<span class="n">64</span>);<span name="64"> </span>
+    } <span class="k">else</span> <span class="k">if</span> (<span class="i">args</span>.<span class="i">length</span> == <span class="n">1</span>) {
+      <span class="i">runFile</span>(<span class="i">args</span>[<span class="n">0</span>]);
+    } <span class="k">else</span> {
+      <span class="i">runPrompt</span>();
+    }
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, create new file</div>
+
+<aside name="64">
+<p>Về exit code, tôi dùng quy ước được định nghĩa trong header UNIX
+<a href="https://www.freebsd.org/cgi/man.cgi?query=sysexits&amp;apropos=0&amp;sektion=0&amp;manpath=FreeBSD+4.3-RELEASE&amp;format=html">&ldquo;sysexits.h&rdquo;</a>. Đây là thứ gần giống tiêu chuẩn nhất mà tôi tìm được.</p>
+</aside>
+<p>Hãy lưu nó vào một file văn bản, rồi mở IDE hoặc Makefile hay bất cứ công cụ nào bạn dùng để thiết lập. Tôi sẽ ở đây chờ bạn sẵn sàng. Xong chứ? OK!</p>
+<p>Lox là một ngôn ngữ scripting, nghĩa là nó execute trực tiếp từ mã nguồn. Interpreter của ta hỗ trợ hai cách chạy code. Nếu bạn khởi động jlox từ dòng lệnh và truyền vào đường dẫn tới một file, nó sẽ đọc file đó và execute.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+add after <em>main</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">runFile</span>(<span class="t">String</span> <span class="i">path</span>) <span class="k">throws</span> <span class="t">IOException</span> {
+    <span class="t">byte</span>[] <span class="i">bytes</span> = <span class="t">Files</span>.<span class="i">readAllBytes</span>(<span class="t">Paths</span>.<span class="i">get</span>(<span class="i">path</span>));
+    <span class="i">run</span>(<span class="k">new</span> <span class="t">String</span>(<span class="i">bytes</span>, <span class="t">Charset</span>.<span class="i">defaultCharset</span>()));
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, add after <em>main</em>()</div>
+
+<p>Nếu bạn muốn “trò chuyện” gần gũi hơn với interpreter, bạn cũng có thể chạy nó ở chế độ tương tác. Khởi động jlox mà không truyền đối số nào, nó sẽ đưa bạn vào một prompt nơi bạn có thể nhập và execute code từng dòng một.</p>
+<aside name="repl">
+<p>Prompt tương tác còn được gọi là “REPL” (phát âm giống “rebel” nhưng với âm “p”). Tên gọi này xuất phát từ Lisp, nơi việc hiện thực một REPL đơn giản như việc bọc một vòng lặp quanh vài hàm dựng sẵn:</p>
+<div class="codehilite"><pre>(<span class="i">print</span> (<span class="i">eval</span> (<span class="i">read</span>)))
+</pre></div>
+<p>Đi từ trong ra ngoài, bạn <strong>R</strong>ead (đọc) một dòng nhập, <strong>E</strong>valuate (đánh giá) nó, <strong>P</strong>rint (in) kết quả, rồi <strong>L</strong>oop (lặp) và làm lại từ đầu.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+add after <em>runFile</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">runPrompt</span>() <span class="k">throws</span> <span class="t">IOException</span> {
+    <span class="t">InputStreamReader</span> <span class="i">input</span> = <span class="k">new</span> <span class="t">InputStreamReader</span>(<span class="t">System</span>.<span class="i">in</span>);
+    <span class="t">BufferedReader</span> <span class="i">reader</span> = <span class="k">new</span> <span class="t">BufferedReader</span>(<span class="i">input</span>);
+
+    <span class="k">for</span> (;;) {<span name="repl"> </span>
+      <span class="t">System</span>.<span class="i">out</span>.<span class="i">print</span>(<span class="s">&quot;&gt; &quot;</span>);
+      <span class="t">String</span> <span class="i">line</span> = <span class="i">reader</span>.<span class="i">readLine</span>();
+      <span class="k">if</span> (<span class="i">line</span> == <span class="k">null</span>) <span class="k">break</span>;
+      <span class="i">run</span>(<span class="i">line</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, add after <em>runFile</em>()</div>
+
+<p>Hàm <code>readLine()</code>, đúng như tên gọi, đọc một dòng nhập từ người dùng trên dòng lệnh và trả về kết quả. Để thoát một ứng dụng dòng lệnh tương tác, bạn thường nhấn Control-D. Thao tác này gửi tín hiệu “end-of-file” tới chương trình. Khi điều đó xảy ra, <code>readLine()</code> trả về <code>null</code>, nên ta kiểm tra điều này để thoát vòng lặp.</p>
+<p>Cả prompt và trình chạy file đều là các lớp bọc mỏng quanh hàm lõi này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+add after <em>runPrompt</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">run</span>(<span class="t">String</span> <span class="i">source</span>) {
+    <span class="t">Scanner</span> <span class="i">scanner</span> = <span class="k">new</span> <span class="t">Scanner</span>(<span class="i">source</span>);
+    <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">tokens</span> = <span class="i">scanner</span>.<span class="i">scanTokens</span>();
+
+    <span class="c">// For now, just print the tokens.</span>
+    <span class="k">for</span> (<span class="t">Token</span> <span class="i">token</span> : <span class="i">tokens</span>) {
+      <span class="t">System</span>.<span class="i">out</span>.<span class="i">println</span>(<span class="i">token</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, add after <em>runPrompt</em>()</div>
+
+<p>Hiện tại nó chưa hữu ích lắm vì ta chưa viết interpreter, nhưng cứ từ từ từng bước một. Lúc này, nó sẽ in ra các token mà scanner sắp viết sẽ tạo ra, để ta có thể thấy mình đang tiến triển thế nào.</p>
+<h3><a href="#xử-lý-lỗi" id="xử-lý-lỗi"><small>4&#8202;.&#8202;1&#8202;.&#8202;1</small>Xử lý lỗi</a></h3>
+<p>Khi đang thiết lập mọi thứ, một phần hạ tầng quan trọng khác là <em>xử lý lỗi</em>. Sách giáo khoa đôi khi lướt qua phần này vì nó mang tính thực tiễn nhiều hơn là một vấn đề khoa học máy tính “hàn lâm”. Nhưng nếu bạn muốn tạo ra một ngôn ngữ thực sự <em>dùng được</em>, thì xử lý lỗi một cách mượt mà là điều sống còn.</p>
+<p>Các công cụ mà ngôn ngữ của ta cung cấp để xử lý lỗi chiếm một phần lớn trong giao diện người dùng của nó. Khi code của người dùng chạy tốt, họ chẳng nghĩ gì về ngôn ngữ của ta cả — tâm trí họ hoàn toàn tập trung vào <em>chương trình của họ</em>. Thường thì chỉ khi mọi thứ trục trặc, họ mới để ý đến phần hiện thực của ta.</p>
+<p><span name="errors">Khi</span> điều đó xảy ra, nhiệm vụ của ta là cung cấp cho người dùng tất cả thông tin họ cần để hiểu chuyện gì đã sai và nhẹ nhàng dẫn họ quay lại đúng hướng. Làm tốt điều này nghĩa là phải nghĩ về xử lý lỗi xuyên suốt quá trình hiện thực interpreter, bắt đầu từ bây giờ.</p>
+<aside name="errors">
+<p>Nói vậy thôi, với interpreter <em>này</em>, những gì ta xây dựng sẽ khá đơn giản. Tôi rất muốn bàn về debugger tương tác, static analyzer, và những thứ thú vị khác, nhưng “mực” trong bút thì có hạn.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/Lox.java</em><br>
+add after <em>run</em>()</div>
+<pre>  <span class="k">static</span> <span class="t">void</span> <span class="i">error</span>(<span class="t">int</span> <span class="i">line</span>, <span class="t">String</span> <span class="i">message</span>) {
+    <span class="i">report</span>(<span class="i">line</span>, <span class="s">&quot;&quot;</span>, <span class="i">message</span>);
+  }
+
+  <span class="k">private</span> <span class="k">static</span> <span class="t">void</span> <span class="i">report</span>(<span class="t">int</span> <span class="i">line</span>, <span class="t">String</span> <span class="i">where</span>,
+                             <span class="t">String</span> <span class="i">message</span>) {
+    <span class="t">System</span>.<span class="i">err</span>.<span class="i">println</span>(
+        <span class="s">&quot;[line &quot;</span> + <span class="i">line</span> + <span class="s">&quot;] Error&quot;</span> + <span class="i">where</span> + <span class="s">&quot;: &quot;</span> + <span class="i">message</span>);
+    <span class="i">hadError</span> = <span class="k">true</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, add after <em>run</em>()</div>
+
+<p>Hàm <code>error()</code> này và helper <code>report()</code> của nó sẽ báo cho người dùng biết có lỗi cú pháp xảy ra ở một dòng nhất định. Đây thực sự là mức tối thiểu để có thể nói rằng bạn <em>có</em> báo lỗi. Hãy tưởng tượng nếu bạn vô tình để sót một dấu phẩy trong lời gọi hàm và interpreter in ra:</p>
+<div class="codehilite"><pre>Error: Unexpected &quot;,&quot; somewhere in your code. Good luck finding it!
+</pre></div>
+<p>Thế thì chẳng giúp ích gì mấy. Ta cần ít nhất chỉ ra đúng dòng. Tốt hơn nữa là chỉ ra cả cột bắt đầu và kết thúc để họ biết <em>chỗ nào</em> trong dòng. Còn tốt hơn <em>nữa</em> là <em>hiển thị</em> cho người dùng dòng code gây lỗi, như:</p>
+<div class="codehilite"><pre>Error: Unexpected &quot;,&quot; in argument list.
+
+    15 | function(first, second,);
+                               ^-- Here.
+</pre></div>
+<p>Tôi rất muốn hiện thực thứ như vậy trong sách này, nhưng thật lòng mà nói thì nó đòi hỏi khá nhiều code xử lý chuỗi lắt nhắt. Rất hữu ích cho người dùng, nhưng không thú vị lắm để đọc trong sách và cũng không quá hấp dẫn về mặt kỹ thuật. Vậy nên ta sẽ chỉ dừng ở mức số dòng. Trong interpreter của riêng bạn, hãy làm như tôi khuyên, đừng như tôi làm ở đây.</p>
+<p>Lý do chính mà ta đặt hàm báo lỗi này trong class <code>Lox</code> chính là vì trường <code>hadError</code>. Nó được định nghĩa ở đây:</p>
+<div class="codehilite"><pre class="insert-before">public class Lox {
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in class <em>Lox</em></div>
+<pre class="insert">  <span class="k">static</span> <span class="t">boolean</span> <span class="i">hadError</span> = <span class="k">false</span>;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in class <em>Lox</em></div>
+
+<p>Ta sẽ dùng nó để đảm bảo không cố execute code đã biết là có lỗi. Ngoài ra, nó cho phép ta thoát với exit code khác 0 như một “công dân” dòng lệnh gương mẫu.</p>
+<div class="codehilite"><pre class="insert-before">    run(new String(bytes, Charset.defaultCharset()));
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>runFile</em>()</div>
+<pre class="insert">
+
+    <span class="c">// Indicate an error in the exit code.</span>
+    <span class="k">if</span> (<span class="i">hadError</span>) <span class="t">System</span>.<span class="i">exit</span>(<span class="n">65</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>runFile</em>()</div>
+
+<p>Ta cần reset cờ này trong vòng lặp tương tác. Nếu người dùng mắc lỗi, nó không nên “giết” cả phiên làm việc của họ.</p>
+<div class="codehilite"><pre class="insert-before">      run(line);
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>runPrompt</em>()</div>
+<pre class="insert">      <span class="i">hadError</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">    }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>runPrompt</em>()</div>
+
+<p>Một lý do khác tôi tách phần báo lỗi ra đây thay vì nhét vào scanner hay các giai đoạn khác nơi lỗi có thể xảy ra là để nhắc bạn rằng việc tách biệt code <em>tạo</em> lỗi và code <em>báo</em> lỗi là một thực hành kỹ thuật tốt.</p>
+<p>Nhiều giai đoạn của front-end sẽ phát hiện lỗi, nhưng không thực sự là nhiệm vụ của chúng để biết cách hiển thị lỗi cho người dùng. Trong một hiện thực ngôn ngữ đầy đủ tính năng, bạn có thể sẽ có nhiều cách hiển thị lỗi: trên stderr, trong cửa sổ lỗi của IDE, ghi vào file log, v.v. Bạn không muốn code đó bị rải khắp scanner và parser.</p>
+<p>Lý tưởng nhất, ta sẽ có một abstraction thực sự, kiểu như một interface <span name="reporter">&ldquo;ErrorReporter&rdquo;</span> được truyền vào scanner và parser để có thể thay đổi chiến lược báo lỗi. Với interpreter đơn giản này, tôi không làm vậy, nhưng ít nhất tôi cũng đã chuyển code báo lỗi sang một class khác.</p>
+<aside name="reporter">
+<p>Khi lần đầu hiện thực jlox, tôi đã làm đúng như vậy. Nhưng cuối cùng tôi bỏ nó đi vì cảm thấy quá “over-engineered” so với interpreter tối giản trong sách này.</p>
+</aside>
+<p>Với một chút xử lý lỗi cơ bản, “vỏ” ứng dụng của ta đã sẵn sàng. Khi có class <code>Scanner</code> với phương thức <code>scanTokens()</code>, ta có thể bắt đầu chạy nó. Trước khi đến đó, hãy làm rõ hơn về token.</p>
+<h2><a href="#lexeme-&-token" id="lexeme-&-token"><small>4&#8202;.&#8202;2</small>Lexeme &amp; Token</a></h2>
+<p>Đây là một dòng code Lox:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">language</span> = <span class="s">&quot;lox&quot;</span>;
+</pre></div>
+<p>Ở đây, <code>var</code> là keyword để khai báo biến. Chuỗi ba ký tự “v-a-r” có ý nghĩa. Nhưng nếu ta lấy ba ký tự từ giữa <code>language</code>, như “g-u-a”, thì chúng chẳng có nghĩa gì cả.</p>
+<p>Đó chính là điều mà phân tích từ vựng (lexical analysis) xử lý. Nhiệm vụ của ta là quét qua danh sách ký tự và nhóm chúng thành các chuỗi nhỏ nhất vẫn mang ý nghĩa. Mỗi “cục” ký tự như vậy được gọi là <strong>lexeme</strong>. Trong ví dụ trên, các lexeme là:</p><img src="image/scanning/lexemes.png" alt="'var', 'language', '=', 'lox', ';'" />
+<p>Lexeme chỉ là các chuỗi con thô của mã nguồn. Tuy nhiên, trong quá trình nhóm các ký tự thành lexeme, ta cũng thu được một số thông tin hữu ích khác. Khi ta lấy lexeme và gói nó cùng dữ liệu đó, kết quả là một token. Nó bao gồm những thứ hữu ích như:</p>
+<h3><a href="#loại-token-token-type" id="loại-token-token-type"><small>4&#8202;.&#8202;2&#8202;.&#8202;1</small>Loại token (Token type)</a></h3>
+<p>Keyword là một phần của cấu trúc ngữ pháp ngôn ngữ, nên parser thường có code kiểu như: “Nếu token tiếp theo là <code>while</code> thì làm…”. Điều đó nghĩa là parser muốn biết không chỉ rằng nó có một lexeme cho một identifier nào đó, mà còn rằng nó là một từ khóa <em>reserved</em>, và <em>là từ khóa nào</em>.</p>
+<p><span name="ugly">Parser</span> có thể phân loại token từ lexeme thô bằng cách so sánh chuỗi, nhưng cách đó vừa chậm vừa xấu. Thay vào đó, ngay tại thời điểm ta nhận diện được một lexeme, ta cũng ghi nhớ <em>loại</em> lexeme mà nó biểu diễn. Ta có một loại riêng cho mỗi keyword, toán tử, dấu câu, và loại literal.</p>
+<aside name="ugly">
+<p>Xét cho cùng, so sánh chuỗi cũng phải duyệt từng ký tự, mà đó chẳng phải là việc của scanner sao?</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/TokenType.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">enum</span> <span class="t">TokenType</span> {
+  <span class="c">// Single-character tokens.</span>
+  <span class="i">LEFT_PAREN</span>, <span class="i">RIGHT_PAREN</span>, <span class="i">LEFT_BRACE</span>, <span class="i">RIGHT_BRACE</span>,
+  <span class="i">COMMA</span>, <span class="i">DOT</span>, <span class="i">MINUS</span>, <span class="i">PLUS</span>, <span class="i">SEMICOLON</span>, <span class="i">SLASH</span>, <span class="i">STAR</span>,
+
+  <span class="c">// One or two character tokens.</span>
+  <span class="i">BANG</span>, <span class="i">BANG_EQUAL</span>,
+  <span class="i">EQUAL</span>, <span class="i">EQUAL_EQUAL</span>,
+  <span class="i">GREATER</span>, <span class="i">GREATER_EQUAL</span>,
+  <span class="i">LESS</span>, <span class="i">LESS_EQUAL</span>,
+
+  <span class="c">// Literals.</span>
+  <span class="i">IDENTIFIER</span>, <span class="i">STRING</span>, <span class="i">NUMBER</span>,
+
+  <span class="c">// Keywords.</span>
+  <span class="i">AND</span>, <span class="i">CLASS</span>, <span class="i">ELSE</span>, <span class="i">FALSE</span>, <span class="i">FUN</span>, <span class="i">FOR</span>, <span class="i">IF</span>, <span class="i">NIL</span>, <span class="i">OR</span>,
+  <span class="i">PRINT</span>, <span class="i">RETURN</span>, <span class="i">SUPER</span>, <span class="i">THIS</span>, <span class="i">TRUE</span>, <span class="i">VAR</span>, <span class="i">WHILE</span>,
+
+  <span class="i">EOF</span>
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/TokenType.java</em>, create new file</div>
+
+<h3><a href="#giá-trị-literal" id="giá-trị-literal"><small>4&#8202;.&#8202;2&#8202;.&#8202;2</small>Giá trị literal</a></h3>
+<p>Có những lexeme dành cho các giá trị literal — số, chuỗi và những thứ tương tự. Vì scanner phải duyệt qua từng ký tự trong literal để nhận diện chính xác, nó cũng có thể chuyển đổi biểu diễn dạng văn bản của giá trị đó thành đối tượng runtime “sống” sẽ được interpreter sử dụng sau này.</p>
+<h3><a href="#thông-tin-vị-trí" id="thông-tin-vị-trí"><small>4&#8202;.&#8202;2&#8202;.&#8202;3</small>Thông tin vị trí</a></h3>
+<p>Khi tôi nói về “phúc âm” của xử lý lỗi, ta đã thấy rằng ta cần cho người dùng biết <em>lỗi xảy ra ở đâu</em>. Việc theo dõi điều đó bắt đầu từ đây. Trong interpreter đơn giản của ta, ta chỉ ghi lại token xuất hiện ở dòng nào, nhưng các hiện thực phức tạp hơn sẽ bao gồm cả cột và độ dài.</p>
+<aside name="location">
+<p>Một số hiện thực token lưu thông tin vị trí dưới dạng hai số: offset từ đầu file nguồn tới đầu lexeme, và độ dài của lexeme. Scanner vốn dĩ cần biết những thông tin này, nên không tốn thêm chi phí để tính toán.</p>
+<p>Offset có thể được chuyển đổi thành vị trí dòng và cột sau này bằng cách nhìn lại file nguồn và đếm số lần xuống dòng trước đó. Nghe có vẻ chậm, và đúng là vậy. Tuy nhiên, bạn chỉ cần làm điều đó <em>khi thực sự cần hiển thị dòng và cột cho người dùng</em>. Phần lớn token sẽ không bao giờ xuất hiện trong thông báo lỗi. Với những token đó, càng ít thời gian tính toán thông tin vị trí trước thì càng tốt.</p>
+</aside>
+<p>Ta gom tất cả dữ liệu này và gói nó trong một class.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Token.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">class</span> <span class="t">Token</span> {
+  <span class="k">final</span> <span class="t">TokenType</span> <span class="i">type</span>;
+  <span class="k">final</span> <span class="t">String</span> <span class="i">lexeme</span>;
+  <span class="k">final</span> <span class="t">Object</span> <span class="i">literal</span>;
+  <span class="k">final</span> <span class="t">int</span> <span class="i">line</span>;<span name="location"> </span>
+
+  <span class="t">Token</span>(<span class="t">TokenType</span> <span class="i">type</span>, <span class="t">String</span> <span class="i">lexeme</span>, <span class="t">Object</span> <span class="i">literal</span>, <span class="t">int</span> <span class="i">line</span>) {
+    <span class="k">this</span>.<span class="i">type</span> = <span class="i">type</span>;
+    <span class="k">this</span>.<span class="i">lexeme</span> = <span class="i">lexeme</span>;
+    <span class="k">this</span>.<span class="i">literal</span> = <span class="i">literal</span>;
+    <span class="k">this</span>.<span class="i">line</span> = <span class="i">line</span>;
+  }
+
+  <span class="k">public</span> <span class="t">String</span> <span class="i">toString</span>() {
+    <span class="k">return</span> <span class="i">type</span> + <span class="s">&quot; &quot;</span> + <span class="i">lexeme</span> + <span class="s">&quot; &quot;</span> + <span class="i">literal</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Token.java</em>, create new file</div>
+
+<p>Giờ ta đã có một đối tượng với đủ cấu trúc để hữu ích cho tất cả các giai đoạn sau của interpreter.</p>
+<h2><a href="#ngôn-ngữ-&-biểu-thức-chính-quy" id="ngôn-ngữ-&-biểu-thức-chính-quy"><small>4&#8202;.&#8202;3</small>Ngôn ngữ &amp; biểu thức chính quy</a></h2>
+<p>Giờ ta đã biết mình muốn tạo ra cái gì, hãy… tạo ra nó. Lõi của scanner là một vòng lặp. Bắt đầu từ ký tự đầu tiên của mã nguồn, scanner xác định ký tự đó thuộc về lexeme nào, rồi tiêu thụ nó cùng bất kỳ ký tự tiếp theo nào thuộc về lexeme đó. Khi tới cuối lexeme, nó phát ra một token.</p>
+<p>Sau đó, nó quay lại và làm lại từ đầu, bắt đầu từ ký tự tiếp theo trong mã nguồn. Nó cứ tiếp tục như vậy, “ăn” ký tự và thỉnh thoảng, ờ, “thải” ra token, cho tới khi tới cuối input.</p>
+<p><span name="alligator"></span></p><img src="image/scanning/lexigator.png" alt="Một con cá sấu đang ăn ký tự và, ừm, bạn không muốn biết đâu." />
+<aside name="alligator">
+<p>Lexical analygator.</p>
+</aside>
+<p>Phần trong vòng lặp nơi ta nhìn vào một vài ký tự để xác định lexeme nó “khớp” có thể nghe quen thuộc. Nếu bạn biết regular expression, bạn có thể nghĩ tới việc định nghĩa một regex cho mỗi loại lexeme và dùng chúng để so khớp ký tự. Ví dụ, Lox có cùng quy tắc với C cho identifier (tên biến và tương tự). Regex này sẽ khớp một identifier:</p>
+<div class="codehilite"><pre>[a-zA-Z_][a-zA-Z_0-9]*
+</pre></div>
+<p>Nếu bạn nghĩ tới regular expression, thì trực giác của bạn rất sâu sắc. Các quy tắc xác định cách một ngôn ngữ nhóm ký tự thành lexeme được gọi là <span name="theory"><strong>lexical grammar</strong></span> của nó. Trong Lox, cũng như hầu hết các ngôn ngữ lập trình, các quy tắc của ngữ pháp này đủ đơn giản để ngôn ngữ được xếp loại là <strong><a href="https://en.wikipedia.org/wiki/Regular_language">regular language</a></strong>. Đây chính là “regular” trong regular expression.</p>
+<aside name="theory">
+<p>Tôi thấy tiếc khi phải lướt qua phần lý thuyết này, nhất là khi nó thú vị như <a href="https://en.wikipedia.org/wiki/Chomsky_hierarchy">Chomsky hierarchy</a> và <a href="https://en.wikipedia.org/wiki/Finite-state_machine">finite-state machine</a>. Nhưng thật lòng mà nói, có những cuốn sách khác trình bày phần này tốt hơn tôi nhiều. <a href="https://en.wikipedia.org/wiki/Compilers:_Principles,_Techniques,_and_Tools"><em>Compilers: Principles, Techniques, and Tools</em></a> (được biết đến rộng rãi là “dragon book”) là tài liệu tham khảo kinh điển.</p>
+</aside>
+<p>Bạn hoàn toàn <em>có thể</em> nhận diện tất cả các lexeme khác nhau của Lox bằng regex nếu muốn, và có cả một đống lý thuyết thú vị giải thích tại sao và ý nghĩa của điều đó. Các công cụ như <a href="http://dinosaur.compilertools.net/lex/">Lex</a> hoặc <a href="https://github.com/westes/flex">Flex</a> được thiết kế riêng để làm việc này — bạn đưa cho chúng một loạt regex, và chúng sẽ trả lại cho bạn một scanner hoàn chỉnh.</p>
+<aside name="lex">
+<p>Lex được tạo ra bởi Mike Lesk và Eric Schmidt. Vâng, chính là Eric Schmidt từng là chủ tịch điều hành của Google. Tôi không nói rằng lập trình ngôn ngữ là con đường chắc chắn dẫn tới giàu sang và nổi tiếng, nhưng ta <em>có thể</em> kể ra ít nhất một tỷ phú trong giới này.</p>
+</aside>
+<p>Vì mục tiêu của ta là hiểu cách một scanner làm việc, ta sẽ không giao phó nhiệm vụ này. Chúng ta hướng tới những sản phẩm thủ công tinh xảo.</p>
+<h2><a href="#lớp-scanner" id="lớp-scanner"><small>4&#8202;.&#8202;4</small>Lớp Scanner</a></h2>
+<p>Không dài dòng nữa, hãy bắt tay vào tạo một scanner.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.ArrayList</span>;
+<span class="k">import</span> <span class="i">java.util.HashMap</span>;
+<span class="k">import</span> <span class="i">java.util.List</span>;
+<span class="k">import</span> <span class="i">java.util.Map</span>;
+
+<span class="k">import static</span> <span class="i">com.craftinginterpreters.lox.TokenType.*</span>;<span name="static-import"> </span>
+
+<span class="k">class</span> <span class="t">Scanner</span> {
+  <span class="k">private</span> <span class="k">final</span> <span class="t">String</span> <span class="i">source</span>;
+  <span class="k">private</span> <span class="k">final</span> <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">tokens</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+
+  <span class="t">Scanner</span>(<span class="t">String</span> <span class="i">source</span>) {
+    <span class="k">this</span>.<span class="i">source</span> = <span class="i">source</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, create new file</div>
+
+<aside name="static-import">
+<p>Tôi biết một số người cho rằng static import là phong cách xấu, nhưng nó giúp tôi khỏi phải rải <code>TokenType.</code> khắp scanner và parser. Hãy bỏ qua cho tôi, vì trong sách này từng ký tự đều đáng giá.</p>
+</aside>
+<p>Ta lưu mã nguồn thô dưới dạng một chuỗi đơn giản, và có sẵn một danh sách để chứa các token sẽ được tạo ra. Vòng lặp đã nhắc tới trước đó trông như thế này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>Scanner</em>()</div>
+<pre>  <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">scanTokens</span>() {
+    <span class="k">while</span> (!<span class="i">isAtEnd</span>()) {
+      <span class="c">// We are at the beginning of the next lexeme.</span>
+      <span class="i">start</span> = <span class="i">current</span>;
+      <span class="i">scanToken</span>();
+    }
+
+    <span class="i">tokens</span>.<span class="i">add</span>(<span class="k">new</span> <span class="t">Token</span>(<span class="i">EOF</span>, <span class="s">&quot;&quot;</span>, <span class="k">null</span>, <span class="i">line</span>));
+    <span class="k">return</span> <span class="i">tokens</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>Scanner</em>()</div>
+
+<p>Scanner sẽ duyệt qua mã nguồn, thêm token cho đến khi hết ký tự. Sau đó, nó thêm một token “end of file” cuối cùng. Thực ra thì không bắt buộc, nhưng nó giúp parser của ta gọn gàng hơn một chút.</p>
+<p>Vòng lặp này dựa vào một vài trường để theo dõi vị trí hiện tại của scanner trong mã nguồn.</p>
+<div class="codehilite"><pre class="insert-before">  private final List&lt;Token&gt; tokens = new ArrayList&lt;&gt;();
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in class <em>Scanner</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="t">int</span> <span class="i">start</span> = <span class="n">0</span>;
+  <span class="k">private</span> <span class="t">int</span> <span class="i">current</span> = <span class="n">0</span>;
+  <span class="k">private</span> <span class="t">int</span> <span class="i">line</span> = <span class="n">1</span>;
+</pre><pre class="insert-after">
+
+  Scanner(String source) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in class <em>Scanner</em></div>
+
+<p>Các trường <code>start</code> và <code>current</code> là các offset đánh chỉ số vào chuỗi. Trường <code>start</code> trỏ tới ký tự đầu tiên trong lexeme đang được quét, còn <code>current</code> trỏ tới ký tự hiện tại đang được xét. Trường <code>line</code> theo dõi <code>current</code> đang ở dòng nào trong mã nguồn để ta có thể tạo ra các token biết vị trí của mình.</p>
+<p>Tiếp theo, ta có một hàm helper nhỏ để cho biết liệu ta đã tiêu thụ hết ký tự hay chưa.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanTokens</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">isAtEnd</span>() {
+    <span class="k">return</span> <span class="i">current</span> &gt;= <span class="i">source</span>.<span class="i">length</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanTokens</em>()</div>
+
+<h2><a href="#nhận-diện-lexeme" id="nhận-diện-lexeme"><small>4&#8202;.&#8202;5</small>Nhận diện Lexeme</a></h2>
+<p>Mỗi vòng lặp, ta quét một token. Đây là phần cốt lõi thực sự của scanner. Ta sẽ bắt đầu đơn giản. Hãy tưởng tượng nếu mỗi lexeme chỉ dài một ký tự. Tất cả những gì cần làm là tiêu thụ ký tự tiếp theo và chọn loại token cho nó. Trong Lox, có một số lexeme <em>đúng là</em> chỉ một ký tự, nên hãy bắt đầu với chúng.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanTokens</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">scanToken</span>() {
+    <span class="t">char</span> <span class="i">c</span> = <span class="i">advance</span>();
+    <span class="k">switch</span> (<span class="i">c</span>) {
+      <span class="k">case</span> <span class="s">&#39;(&#39;</span>: <span class="i">addToken</span>(<span class="i">LEFT_PAREN</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;)&#39;</span>: <span class="i">addToken</span>(<span class="i">RIGHT_PAREN</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;{&#39;</span>: <span class="i">addToken</span>(<span class="i">LEFT_BRACE</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;}&#39;</span>: <span class="i">addToken</span>(<span class="i">RIGHT_BRACE</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;,&#39;</span>: <span class="i">addToken</span>(<span class="i">COMMA</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;.&#39;</span>: <span class="i">addToken</span>(<span class="i">DOT</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;-&#39;</span>: <span class="i">addToken</span>(<span class="i">MINUS</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;+&#39;</span>: <span class="i">addToken</span>(<span class="i">PLUS</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;;&#39;</span>: <span class="i">addToken</span>(<span class="i">SEMICOLON</span>); <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;*&#39;</span>: <span class="i">addToken</span>(<span class="i">STAR</span>); <span class="k">break</span>;<span name="slash"> </span>
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanTokens</em>()</div>
+
+<aside name="slash">
+<p>Bạn thắc mắc tại sao <code>/</code> chưa có ở đây? Đừng lo, ta sẽ xử lý nó sau.</p>
+</aside>
+<p>Một lần nữa, ta cần một vài phương thức helper.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>isAtEnd</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">char</span> <span class="i">advance</span>() {
+    <span class="k">return</span> <span class="i">source</span>.<span class="i">charAt</span>(<span class="i">current</span>++);
+  }
+
+  <span class="k">private</span> <span class="t">void</span> <span class="i">addToken</span>(<span class="t">TokenType</span> <span class="i">type</span>) {
+    <span class="i">addToken</span>(<span class="i">type</span>, <span class="k">null</span>);
+  }
+
+  <span class="k">private</span> <span class="t">void</span> <span class="i">addToken</span>(<span class="t">TokenType</span> <span class="i">type</span>, <span class="t">Object</span> <span class="i">literal</span>) {
+    <span class="t">String</span> <span class="i">text</span> = <span class="i">source</span>.<span class="i">substring</span>(<span class="i">start</span>, <span class="i">current</span>);
+    <span class="i">tokens</span>.<span class="i">add</span>(<span class="k">new</span> <span class="t">Token</span>(<span class="i">type</span>, <span class="i">text</span>, <span class="i">literal</span>, <span class="i">line</span>));
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>isAtEnd</em>()</div>
+
+<p>Phương thức <code>advance()</code> tiêu thụ ký tự tiếp theo trong file nguồn và trả về nó. Nếu <code>advance()</code> là để lấy input, thì <code>addToken()</code> là để xuất output. Nó lấy phần văn bản của lexeme hiện tại và tạo một token mới cho nó. Ta sẽ dùng overload khác để xử lý các token có giá trị literal sau.</p>
+<h3><a href="#lỗi-từ-vựng-lexical-errors" id="lỗi-từ-vựng-lexical-errors"><small>4&#8202;.&#8202;5&#8202;.&#8202;1</small>Lỗi từ vựng (Lexical errors)</a></h3>
+<p>Trước khi đi quá xa, hãy dành chút thời gian nghĩ về lỗi ở mức từ vựng. Điều gì xảy ra nếu người dùng đưa vào một file nguồn chứa các ký tự mà Lox không dùng, như <code>@#^</code>? Hiện tại, các ký tự đó sẽ bị bỏ qua trong im lặng. Chúng không được Lox sử dụng, nhưng điều đó không có nghĩa interpreter có thể giả vờ như chúng không tồn tại. Thay vào đó, ta sẽ báo lỗi.</p>
+<div class="codehilite"><pre class="insert-before">      case '*': addToken(STAR); break;<span name="slash"> </span>
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">
+
+      <span class="k">default</span>:
+        <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">line</span>, <span class="s">&quot;Unexpected character.&quot;</span>);
+        <span class="k">break</span>;
+</pre><pre class="insert-after">    }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Lưu ý rằng ký tự gây lỗi vẫn được <em>tiêu thụ</em> bởi lời gọi <code>advance()</code> trước đó. Điều này quan trọng để tránh bị kẹt trong vòng lặp vô hạn.</p>
+<p>Cũng lưu ý rằng ta <span name="shotgun"><em>tiếp tục quét</em></span>. Có thể còn những lỗi khác ở phần sau của chương trình. Việc phát hiện càng nhiều lỗi trong một lần chạy sẽ mang lại trải nghiệm tốt hơn cho người dùng. Nếu không, họ sẽ thấy một lỗi nhỏ, sửa nó, rồi lại thấy lỗi tiếp theo, cứ thế… Chơi trò “đập chuột” với lỗi cú pháp thì chẳng vui chút nào.</p>
+<p>(Đừng lo. Vì <code>hadError</code> đã được đặt, ta sẽ không bao giờ cố <em>execute</em> bất kỳ code nào, dù vẫn tiếp tục quét phần còn lại.)</p>
+<aside name="shotgun">
+<p>Code sẽ báo từng ký tự không hợp lệ riêng lẻ, nên nếu người dùng lỡ dán một đống văn bản kỳ quặc, họ sẽ bị “xả” một loạt lỗi. Gom một chuỗi ký tự không hợp lệ thành một lỗi duy nhất sẽ mang lại trải nghiệm dễ chịu hơn.</p>
+</aside>
+<h3><a href="#toán-tử-operators" id="toán-tử-operators"><small>4&#8202;.&#8202;5&#8202;.&#8202;2</small>Toán tử (Operators)</a></h3>
+<p>Ta đã xử lý xong các lexeme một ký tự, nhưng điều đó chưa bao quát hết các toán tử của Lox. Còn <code>!</code> thì sao? Nó là một ký tự đơn, đúng không? Đôi khi đúng, nhưng nếu ký tự ngay sau nó là dấu bằng, thì ta cần tạo lexeme <code>!=</code>. Lưu ý rằng <code>!</code> và <code>=</code> <em>không</em> phải là hai toán tử độc lập. Bạn không thể viết <code>!   =</code> trong Lox và mong nó hoạt động như toán tử so sánh khác nhau. Đó là lý do ta cần quét <code>!=</code> như một lexeme duy nhất. Tương tự, <code>&lt;</code>, <code>&gt;</code>, và <code>=</code> đều có thể theo sau bởi <code>=</code> để tạo ra các toán tử so sánh và bằng khác.</p>
+<p>Với tất cả các trường hợp này, ta cần nhìn vào ký tự thứ hai.</p>
+<div class="codehilite"><pre class="insert-before">      case '*': addToken(STAR); break;<span name="slash"> </span>
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="s">&#39;!&#39;</span>:
+        <span class="i">addToken</span>(<span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="i">BANG_EQUAL</span> : <span class="i">BANG</span>);
+        <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;=&#39;</span>:
+        <span class="i">addToken</span>(<span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="i">EQUAL_EQUAL</span> : <span class="i">EQUAL</span>);
+        <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;&lt;&#39;</span>:
+        <span class="i">addToken</span>(<span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="i">LESS_EQUAL</span> : <span class="i">LESS</span>);
+        <span class="k">break</span>;
+      <span class="k">case</span> <span class="s">&#39;&gt;&#39;</span>:
+        <span class="i">addToken</span>(<span class="i">match</span>(<span class="s">&#39;=&#39;</span>) ? <span class="i">GREATER_EQUAL</span> : <span class="i">GREATER</span>);
+        <span class="k">break</span>;
+</pre><pre class="insert-after">
+
+      default:
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Các trường hợp đó dùng phương thức mới này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanToken</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">match</span>(<span class="t">char</span> <span class="i">expected</span>) {
+    <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="k">false</span>;
+    <span class="k">if</span> (<span class="i">source</span>.<span class="i">charAt</span>(<span class="i">current</span>) != <span class="i">expected</span>) <span class="k">return</span> <span class="k">false</span>;
+
+    <span class="i">current</span>++;
+    <span class="k">return</span> <span class="k">true</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanToken</em>()</div>
+
+<p>Nó giống như một <code>advance()</code> có điều kiện. Ta chỉ tiêu thụ ký tự hiện tại nếu nó đúng là ký tự ta đang tìm.</p>
+<p>Dùng <code>match()</code>, ta nhận diện các lexeme này theo hai bước. Khi gặp, ví dụ, <code>!</code>, ta nhảy vào case tương ứng trong switch. Điều đó nghĩa là ta biết lexeme <em>bắt đầu</em> bằng <code>!</code>. Sau đó, ta nhìn ký tự tiếp theo để xác định xem đó là <code>!=</code> hay chỉ là <code>!</code>.</p>
+<h2><a href="#lexeme-d&agrave;i-hơn" id="lexeme-d&agrave;i-hơn"><small>4&#8202;.&#8202;6</small>Lexeme d&agrave;i hơn</a></h2>
+<p>Ta vẫn còn thiếu một toán tử: <code>/</code> cho phép chia. Ký tự này cần xử lý đặc biệt một chút vì comment cũng bắt đầu bằng dấu gạch chéo.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="s">&#39;/&#39;</span>:
+        <span class="k">if</span> (<span class="i">match</span>(<span class="s">&#39;/&#39;</span>)) {
+          <span class="c">// A comment goes until the end of the line.</span>
+          <span class="k">while</span> (<span class="i">peek</span>() != <span class="s">&#39;\n&#39;</span> &amp;&amp; !<span class="i">isAtEnd</span>()) <span class="i">advance</span>();
+        } <span class="k">else</span> {
+          <span class="i">addToken</span>(<span class="i">SLASH</span>);
+        }
+        <span class="k">break</span>;
+</pre><pre class="insert-after">
+
+      default:
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Điều này tương tự như các toán tử hai ký tự khác, ngoại trừ khi ta tìm thấy dấu <code>/</code> thứ hai, ta chưa kết thúc token ngay. Thay vào đó, ta tiếp tục tiêu thụ ký tự cho đến khi gặp cuối dòng.</p>
+<p>Đây là chiến lược chung của ta để xử lý các lexeme dài hơn. Sau khi phát hiện phần bắt đầu của một lexeme, ta chuyển sang đoạn code chuyên biệt cho lexeme đó để tiếp tục “ăn” ký tự cho đến khi gặp điểm kết thúc.</p>
+<p>Ta có thêm một helper khác:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>match</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">char</span> <span class="i">peek</span>() {
+    <span class="k">if</span> (<span class="i">isAtEnd</span>()) <span class="k">return</span> <span class="s">&#39;\0&#39;</span>;
+    <span class="k">return</span> <span class="i">source</span>.<span class="i">charAt</span>(<span class="i">current</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>match</em>()</div>
+
+<p>Nó giống như <code>advance()</code>, nhưng không tiêu thụ ký tự. Điều này được gọi là <span name="match"><strong>lookahead</strong></span>. Vì nó chỉ nhìn vào ký tự hiện tại chưa tiêu thụ, nên ta có <em>lookahead một ký tự</em>. Số này càng nhỏ thì scanner thường chạy càng nhanh. Các quy tắc của lexical grammar quyết định ta cần lookahead bao nhiêu. May mắn thay, hầu hết các ngôn ngữ phổ biến chỉ cần nhìn trước một hoặc hai ký tự.</p>
+<aside name="match">
+<p>Về mặt kỹ thuật, <code>match()</code> cũng đang thực hiện lookahead. <code>advance()</code> và <code>peek()</code> là các toán tử cơ bản, còn <code>match()</code> kết hợp chúng lại.</p>
+</aside>
+<p>Comment là lexeme, nhưng chúng không mang ý nghĩa, và parser không muốn xử lý chúng. Vì vậy, khi đến cuối comment, ta <em>không</em> gọi <code>addToken()</code>. Khi vòng lặp quay lại để bắt đầu lexeme tiếp theo, <code>start</code> được đặt lại và lexeme của comment biến mất như một làn khói.</p>
+<p>Nhân tiện, đây cũng là lúc tốt để bỏ qua những ký tự vô nghĩa khác: xuống dòng và khoảng trắng.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">
+
+      <span class="k">case</span> <span class="s">&#39; &#39;</span>:
+      <span class="k">case</span> <span class="s">&#39;\r&#39;</span>:
+      <span class="k">case</span> <span class="s">&#39;\t&#39;</span>:
+        <span class="c">// Ignore whitespace.</span>
+        <span class="k">break</span>;
+
+      <span class="k">case</span> <span class="s">&#39;\n&#39;</span>:
+        <span class="i">line</span>++;
+        <span class="k">break</span>;
+</pre><pre class="insert-after">
+
+      default:
+        Lox.error(line, &quot;Unexpected character.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Khi gặp khoảng trắng, ta đơn giản quay lại đầu vòng lặp quét. Điều đó bắt đầu một lexeme mới <em>sau</em> ký tự khoảng trắng. Với xuống dòng, ta làm tương tự, nhưng cũng tăng bộ đếm dòng. (Đây là lý do ta dùng <code>peek()</code> để tìm ký tự xuống dòng kết thúc comment thay vì <code>match()</code>. Ta muốn ký tự xuống dòng đó đưa ta đến đây để cập nhật <code>line</code>.)</p>
+<p>Scanner của ta đang trở nên thông minh hơn. Nó có thể xử lý code khá tự do như:</p>
+<div class="codehilite"><pre><span class="c">// this is a comment</span>
+(( )){} <span class="c">// grouping stuff</span>
+!*+-/=&lt;&gt; &lt;= == <span class="c">// operators</span>
+</pre></div>
+<h3><a href="#string-literal" id="string-literal"><small>4&#8202;.&#8202;6&#8202;.&#8202;1</small>String literal</a></h3>
+<p>Giờ ta đã quen với lexeme dài hơn, ta sẵn sàng xử lý literal. Ta sẽ làm chuỗi trước, vì chúng luôn bắt đầu bằng một ký tự cụ thể, <code>"</code>.</p>
+<div class="codehilite"><pre class="insert-before">        break;
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">
+
+      <span class="k">case</span> <span class="s">&#39;&quot;&#39;</span>: <span class="i">string</span>(); <span class="k">break</span>;
+</pre><pre class="insert-after">
+
+      default:
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Hàm này gọi tới:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanToken</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">string</span>() {
+    <span class="k">while</span> (<span class="i">peek</span>() != <span class="s">&#39;&quot;&#39;</span> &amp;&amp; !<span class="i">isAtEnd</span>()) {
+      <span class="k">if</span> (<span class="i">peek</span>() == <span class="s">&#39;\n&#39;</span>) <span class="i">line</span>++;
+      <span class="i">advance</span>();
+    }
+
+    <span class="k">if</span> (<span class="i">isAtEnd</span>()) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">line</span>, <span class="s">&quot;Unterminated string.&quot;</span>);
+      <span class="k">return</span>;
+    }
+
+    <span class="c">// The closing &quot;.</span>
+    <span class="i">advance</span>();
+
+    <span class="c">// Trim the surrounding quotes.</span>
+    <span class="t">String</span> <span class="i">value</span> = <span class="i">source</span>.<span class="i">substring</span>(<span class="i">start</span> + <span class="n">1</span>, <span class="i">current</span> - <span class="n">1</span>);
+    <span class="i">addToken</span>(<span class="i">STRING</span>, <span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanToken</em>()</div>
+
+<p>Giống như với comment, ta tiêu thụ ký tự cho đến khi gặp dấu <code>"</code> kết thúc chuỗi. Ta cũng xử lý gọn gàng trường hợp hết input trước khi chuỗi được đóng và báo lỗi cho tình huống đó.</p>
+<p>Không vì lý do đặc biệt nào, Lox hỗ trợ chuỗi nhiều dòng. Điều này có ưu và nhược điểm, nhưng việc cấm chúng phức tạp hơn một chút so với cho phép, nên tôi để nguyên. Điều đó có nghĩa là ta cũng cần cập nhật <code>line</code> khi gặp xuống dòng bên trong chuỗi.</p>
+<p>Cuối cùng, điểm thú vị là khi tạo token, ta cũng tạo ra <em>giá trị</em> chuỗi thực tế sẽ được interpreter sử dụng sau này. Ở đây, việc chuyển đổi chỉ cần một <code>substring()</code> để bỏ dấu ngoặc kép bao quanh. Nếu Lox hỗ trợ escape sequence như <code>\n</code>, ta sẽ giải mã chúng ở đây.</p>
+<h3><a href="#number-literal" id="number-literal"><small>4&#8202;.&#8202;6&#8202;.&#8202;2</small>Number literal</a></h3>
+<p>Tất cả số trong Lox đều là số thực dấu chấm động ở runtime, nhưng cả literal nguyên và thập phân đều được hỗ trợ. Một number literal là một chuỗi <span name="minus">chữ số</span> tùy chọn theo sau bởi một dấu <code>.</code> và một hoặc nhiều chữ số tiếp theo.</p>
+<aside name="minus">
+<p>Vì ta chỉ tìm chữ số để bắt đầu một số, điều đó có nghĩa là <code>-123</code> không phải là number <em>literal</em>. Thay vào đó, <code>-123</code> là một <em>biểu thức</em> áp dụng toán tử <code>-</code> lên number literal <code>123</code>. Trên thực tế, kết quả là như nhau, dù có một trường hợp đặc biệt thú vị nếu ta thêm lời gọi method trên số. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">print</span> -<span class="n">123</span>.<span class="i">abs</span>();
+</pre></div>
+<p>Lệnh này in ra <code>-123</code> vì phép phủ định có độ ưu tiên thấp hơn lời gọi method. Ta có thể sửa bằng cách làm cho <code>-</code> trở thành một phần của number literal. Nhưng hãy xem xét:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">n</span> = <span class="n">123</span>;
+<span class="k">print</span> -<span class="i">n</span>.<span class="i">abs</span>();
+</pre></div>
+<p>Lệnh này vẫn in ra <code>-123</code>, nên giờ ngôn ngữ trông không nhất quán. Dù làm gì, cũng sẽ có trường hợp trở nên kỳ lạ.</p>
+</aside>
+<div class="codehilite"><pre><span class="n">1234</span>
+<span class="n">12.34</span>
+</pre></div>
+<p>Ta không cho phép dấu chấm ở đầu hoặc cuối, nên cả hai trường hợp này đều không hợp lệ:</p>
+<div class="codehilite"><pre>.<span class="n">1234</span>
+<span class="n">1234</span>.
+</pre></div>
+<p>Ta có thể dễ dàng hỗ trợ trường hợp đầu, nhưng tôi bỏ qua để giữ mọi thứ đơn giản. Trường hợp thứ hai trở nên rắc rối nếu ta muốn cho phép method trên số như <code>123.sqrt()</code>.</p>
+<p>Để nhận diện phần bắt đầu của một number lexeme, ta tìm bất kỳ chữ số nào. Việc thêm case cho từng chữ số thập phân khá tẻ nhạt, nên ta sẽ nhét nó vào case mặc định.</p>
+<div class="codehilite"><pre class="insert-before">      default:
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()<br>
+replace 1 line</div>
+<pre class="insert">        <span class="k">if</span> (<span class="i">isDigit</span>(<span class="i">c</span>)) {
+          <span class="i">number</span>();
+        } <span class="k">else</span> {
+          <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">line</span>, <span class="s">&quot;Unexpected character.&quot;</span>);
+        }
+</pre><pre class="insert-after">        break;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>(), replace 1 line</div>
+
+<p>Điều này dựa vào tiện ích nhỏ này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>peek</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">isDigit</span>(<span class="t">char</span> <span class="i">c</span>) {
+    <span class="k">return</span> <span class="i">c</span> &gt;= <span class="s">&#39;0&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;9&#39;</span>;
+  }<span name="is-digit"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>peek</em>()</div>
+
+<aside name="is-digit">
+<p>Thư viện chuẩn Java cung cấp <a href="http://docs.oracle.com/javase/7/docs/api/java/lang/Character.html#isDigit(char)"><code>Character.isDigit()</code></a>, có vẻ phù hợp. Tiếc là phương thức này cho phép những thứ như chữ số Devanagari, số full-width, và các ký tự lạ khác mà ta không muốn.</p>
+</aside>
+<p>Khi đã biết mình đang ở trong một số, ta sẽ rẽ sang một phương thức riêng để tiêu thụ phần còn lại của literal, giống như cách ta làm với chuỗi.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanToken</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">number</span>() {
+    <span class="k">while</span> (<span class="i">isDigit</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+
+    <span class="c">// Look for a fractional part.</span>
+    <span class="k">if</span> (<span class="i">peek</span>() == <span class="s">&#39;.&#39;</span> &amp;&amp; <span class="i">isDigit</span>(<span class="i">peekNext</span>())) {
+      <span class="c">// Consume the &quot;.&quot;</span>
+      <span class="i">advance</span>();
+
+      <span class="k">while</span> (<span class="i">isDigit</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+    }
+
+    <span class="i">addToken</span>(<span class="i">NUMBER</span>,
+        <span class="t">Double</span>.<span class="i">parseDouble</span>(<span class="i">source</span>.<span class="i">substring</span>(<span class="i">start</span>, <span class="i">current</span>)));
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanToken</em>()</div>
+
+<p>Ta tiêu thụ càng nhiều chữ số càng tốt cho phần nguyên của literal. Sau đó, ta tìm phần thập phân, tức là một dấu chấm (<code>.</code>) theo sau bởi ít nhất một chữ số. Nếu có phần thập phân, ta lại tiếp tục tiêu thụ càng nhiều chữ số càng tốt.</p>
+<p>Nhìn vượt qua dấu chấm đòi hỏi lookahead hai ký tự, vì ta không muốn tiêu thụ dấu <code>.</code> cho đến khi chắc chắn có một chữ số <em>sau</em> nó. Vậy nên ta thêm:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>peek</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">char</span> <span class="i">peekNext</span>() {
+    <span class="k">if</span> (<span class="i">current</span> + <span class="n">1</span> &gt;= <span class="i">source</span>.<span class="i">length</span>()) <span class="k">return</span> <span class="s">&#39;\0&#39;</span>;
+    <span class="k">return</span> <span class="i">source</span>.<span class="i">charAt</span>(<span class="i">current</span> + <span class="n">1</span>);
+  }<span name="peek-next"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>peek</em>()</div>
+
+<aside name="peek-next">
+<p>Tôi có thể đã làm cho <code>peek()</code> nhận một tham số chỉ số ký tự cần nhìn trước thay vì định nghĩa hai hàm riêng, nhưng như vậy sẽ cho phép lookahead <em>tùy ý xa</em>. Việc cung cấp hai hàm riêng giúp người đọc code hiểu rõ rằng scanner của ta chỉ nhìn trước tối đa hai ký tự.</p>
+</aside>
+<p>Cuối cùng, ta chuyển đổi lexeme thành giá trị số. Interpreter của ta dùng kiểu <code>Double</code> của Java để biểu diễn số, nên ta tạo ra một giá trị thuộc kiểu đó. Ta dùng chính phương thức parse của Java để chuyển lexeme thành một số thực Java. Ta có thể tự hiện thực việc này, nhưng thật lòng mà nói, trừ khi bạn đang ôn gấp cho một buổi phỏng vấn lập trình sắp tới, thì không đáng tốn thời gian.</p>
+<p>Các literal còn lại là Boolean và <code>nil</code>, nhưng ta xử lý chúng như keyword, và điều đó dẫn ta tới<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<h2><a href="#reserved-word-&-identifier" id="reserved-word-&-identifier"><small>4&#8202;.&#8202;7</small>Reserved Word &amp; Identifier</a></h2>
+<p>Scanner của ta gần như xong. Phần còn lại của lexical grammar cần hiện thực là identifier và “họ hàng” gần của chúng — các reserved word. Bạn có thể nghĩ rằng ta có thể khớp keyword như <code>or</code> theo cùng cách ta xử lý các toán tử nhiều ký tự như <code>&lt;=</code>.</p>
+<div class="codehilite"><pre><span class="k">case</span> <span class="s">&#39;o&#39;</span>:
+  <span class="k">if</span> (<span class="i">match</span>(<span class="s">&#39;r&#39;</span>)) {
+    <span class="i">addToken</span>(<span class="i">OR</span>);
+  }
+  <span class="k">break</span>;
+</pre></div>
+<p>Hãy nghĩ xem điều gì sẽ xảy ra nếu người dùng đặt tên biến là <code>orchid</code>. Scanner sẽ thấy hai chữ cái đầu <code>or</code> và lập tức phát ra token keyword <code>or</code>. Điều này dẫn ta tới một nguyên tắc quan trọng gọi là <span name="maximal"><strong>maximal munch</strong></span>. Khi hai quy tắc của lexical grammar đều có thể khớp một đoạn code mà scanner đang xét, <em>quy tắc nào khớp được nhiều ký tự hơn sẽ thắng</em>.</p>
+<p>Nguyên tắc này nói rằng nếu ta có thể khớp <code>orchid</code> như một identifier và <code>or</code> như một keyword, thì trường hợp đầu sẽ thắng. Đây cũng là lý do ta ngầm giả định trước đó rằng <code>&lt;=</code> nên được quét thành một token <code>&lt;=</code> duy nhất chứ không phải <code>&lt;</code> rồi <code>=</code>.</p>
+<aside name="maximal">
+<p>Hãy xem đoạn code C “khó chịu” này:</p>
+<div class="codehilite"><pre>---<span class="i">a</span>;
+</pre></div>
+<p>Nó có hợp lệ không? Điều đó phụ thuộc vào cách scanner tách lexeme. Nếu scanner thấy nó như thế này:</p>
+<div class="codehilite"><pre>- --<span class="i">a</span>;
+</pre></div>
+<p>Thì nó có thể được parse. Nhưng điều đó sẽ yêu cầu scanner phải biết về cấu trúc ngữ pháp của code xung quanh, khiến mọi thứ rối rắm hơn ta muốn. Thay vào đó, nguyên tắc maximal munch nói rằng nó sẽ <em>luôn</em> được quét như:</p>
+<div class="codehilite"><pre>-- -<span class="i">a</span>;
+</pre></div>
+<p>Nó quét như vậy ngay cả khi điều đó dẫn tới lỗi cú pháp sau này trong parser.</p>
+</aside>
+<p>Maximal munch có nghĩa là ta không thể dễ dàng phát hiện một reserved word cho đến khi đã tới cuối của thứ có thể là một identifier. Suy cho cùng, một reserved word <em>là</em> một identifier, chỉ là một identifier đã bị ngôn ngữ “giữ chỗ” để dùng cho mục đích riêng. Đó là lý do có thuật ngữ <strong>reserved word</strong>.</p>
+<p>Vậy nên ta bắt đầu bằng cách giả định bất kỳ lexeme nào bắt đầu bằng chữ cái hoặc dấu gạch dưới là một identifier.</p>
+<div class="codehilite"><pre class="insert-before">      default:
+        if (isDigit(c)) {
+          number();
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>scanToken</em>()</div>
+<pre class="insert">        } <span class="k">else</span> <span class="k">if</span> (<span class="i">isAlpha</span>(<span class="i">c</span>)) {
+          <span class="i">identifier</span>();
+</pre><pre class="insert-after">        } else {
+          Lox.error(line, &quot;Unexpected character.&quot;);
+        }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>scanToken</em>()</div>
+
+<p>Phần còn lại của code nằm ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>scanToken</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">identifier</span>() {
+    <span class="k">while</span> (<span class="i">isAlphaNumeric</span>(<span class="i">peek</span>())) <span class="i">advance</span>();
+
+    <span class="i">addToken</span>(<span class="i">IDENTIFIER</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>scanToken</em>()</div>
+
+<p>Ta định nghĩa nó dựa trên các helper sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+add after <em>peekNext</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">boolean</span> <span class="i">isAlpha</span>(<span class="t">char</span> <span class="i">c</span>) {
+    <span class="k">return</span> (<span class="i">c</span> &gt;= <span class="s">&#39;a&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;z&#39;</span>) ||
+           (<span class="i">c</span> &gt;= <span class="s">&#39;A&#39;</span> &amp;&amp; <span class="i">c</span> &lt;= <span class="s">&#39;Z&#39;</span>) ||
+            <span class="i">c</span> == <span class="s">&#39;_&#39;</span>;
+  }
+
+  <span class="k">private</span> <span class="t">boolean</span> <span class="i">isAlphaNumeric</span>(<span class="t">char</span> <span class="i">c</span>) {
+    <span class="k">return</span> <span class="i">isAlpha</span>(<span class="i">c</span>) || <span class="i">isDigit</span>(<span class="i">c</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, add after <em>peekNext</em>()</div>
+
+<p>Như vậy là identifier đã hoạt động. Để xử lý keyword, ta kiểm tra xem lexeme của identifier có nằm trong danh sách reserved word hay không. Nếu có, ta dùng loại token đặc biệt cho keyword đó. Ta định nghĩa tập hợp reserved word trong một map.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Scanner.java</em><br>
+in class <em>Scanner</em></div>
+<pre>  <span class="k">private</span> <span class="k">static</span> <span class="k">final</span> <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">TokenType</span>&gt; <span class="i">keywords</span>;
+
+  <span class="k">static</span> {
+    <span class="i">keywords</span> = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;and&quot;</span>,    <span class="i">AND</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;class&quot;</span>,  <span class="i">CLASS</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;else&quot;</span>,   <span class="i">ELSE</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;false&quot;</span>,  <span class="i">FALSE</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;for&quot;</span>,    <span class="i">FOR</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;fun&quot;</span>,    <span class="i">FUN</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;if&quot;</span>,     <span class="i">IF</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;nil&quot;</span>,    <span class="i">NIL</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;or&quot;</span>,     <span class="i">OR</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;print&quot;</span>,  <span class="i">PRINT</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;return&quot;</span>, <span class="i">RETURN</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;super&quot;</span>,  <span class="i">SUPER</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;this&quot;</span>,   <span class="i">THIS</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;true&quot;</span>,   <span class="i">TRUE</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;var&quot;</span>,    <span class="i">VAR</span>);
+    <span class="i">keywords</span>.<span class="i">put</span>(<span class="s">&quot;while&quot;</span>,  <span class="i">WHILE</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in class <em>Scanner</em></div>
+
+<p>Sau đó, sau khi quét một identifier, ta kiểm tra xem nó có khớp với mục nào trong map không.</p>
+<div class="codehilite"><pre class="insert-before">    while (isAlphaNumeric(peek())) advance();
+
+</pre><div class="source-file"><em>lox/Scanner.java</em><br>
+in <em>identifier</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">String</span> <span class="i">text</span> = <span class="i">source</span>.<span class="i">substring</span>(<span class="i">start</span>, <span class="i">current</span>);
+    <span class="t">TokenType</span> <span class="i">type</span> = <span class="i">keywords</span>.<span class="i">get</span>(<span class="i">text</span>);
+    <span class="k">if</span> (<span class="i">type</span> == <span class="k">null</span>) <span class="i">type</span> = <span class="i">IDENTIFIER</span>;
+    <span class="i">addToken</span>(<span class="i">type</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Scanner.java</em>, in <em>identifier</em>(), replace 1 line</div>
+
+<p>Nếu có, ta dùng loại token của keyword đó. Nếu không, nó là một identifier do người dùng định nghĩa.</p>
+<p>Và với điều đó, ta đã có một scanner hoàn chỉnh cho toàn bộ lexical grammar của Lox. Hãy mở REPL và gõ vào một số code hợp lệ và không hợp lệ. Nó có tạo ra các token như bạn mong đợi không? Hãy thử nghĩ ra vài trường hợp đặc biệt thú vị và xem nó xử lý chúng có đúng như mong muốn không.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>4&#8202;.&#8202;8</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Lexical grammar của Python và Haskell không phải là <em>regular</em>. Điều đó có nghĩa là gì, và tại sao lại như vậy?</p>
+</li>
+<li>
+<p>Ngoài việc tách token — phân biệt <code>print foo</code> với <code>printfoo</code> — khoảng trắng không được dùng nhiều trong hầu hết các ngôn ngữ. Tuy nhiên, ở một vài “góc tối”, khoảng trắng <em>có</em> ảnh hưởng đến cách code được parse trong CoffeeScript, Ruby, và C preprocessor. Ở mỗi ngôn ngữ đó, nó xuất hiện ở đâu và có tác động gì?</p>
+</li>
+<li>
+<p>Scanner của ta ở đây, giống như hầu hết các scanner khác, loại bỏ comment và khoảng trắng vì parser không cần chúng. Tại sao bạn có thể muốn viết một scanner <em>không</em> loại bỏ những thứ đó? Nó sẽ hữu ích cho mục đích gì?</p>
+</li>
+<li>
+<p>Thêm hỗ trợ cho scanner của Lox để xử lý comment khối kiểu C <code>/* ... */</code>. Đảm bảo xử lý cả xuống dòng bên trong chúng. Cân nhắc cho phép chúng lồng nhau. Việc thêm hỗ trợ lồng nhau có tốn nhiều công sức hơn bạn nghĩ không? Tại sao?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-dấu-chấm-phẩy-ngầm-định" id="ghi-chú-thiết-kế-dấu-chấm-phẩy-ngầm-định"><small>4&#8202;.&#8202;9</small>Ghi chú thiết kế: Dấu chấm phẩy ngầm định</a></h2>
+<p>Lập trình viên ngày nay có rất nhiều lựa chọn ngôn ngữ và trở nên khắt khe hơn về cú pháp. Họ muốn ngôn ngữ của mình trông gọn gàng và hiện đại. Một “mảng rêu” cú pháp mà hầu như mọi ngôn ngữ mới đều cạo bỏ (và một số ngôn ngữ cổ như BASIC chưa bao giờ có) là <code>;</code> như một ký hiệu kết thúc câu lệnh tường minh.</p>
+<p>Thay vào đó, họ coi xuống dòng như một ký hiệu kết thúc câu lệnh ở những nơi hợp lý. Phần “ở những nơi hợp lý” mới là phần khó. Dù <em>hầu hết</em> câu lệnh nằm trên một dòng riêng, đôi khi bạn cần trải một câu lệnh ra vài dòng. Những dấu xuống dòng xen giữa đó không nên bị coi là kết thúc câu lệnh.</p>
+<p>Hầu hết các trường hợp rõ ràng mà xuống dòng nên bị bỏ qua thì dễ phát hiện, nhưng vẫn có một vài tình huống “khó chịu”:</p>
+<ul>
+<li>
+<p>Giá trị trả về nằm ở dòng tiếp theo:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">condition</span>) <span class="k">return</span>
+<span class="s">&quot;value&quot;</span>
+</pre></div>
+<p><code>"value"</code> là giá trị được trả về, hay ta có một câu lệnh <code>return</code> không giá trị theo sau bởi một câu lệnh biểu thức chứa string literal?</p>
+</li>
+<li>
+<p>Biểu thức trong ngoặc ở dòng tiếp theo:</p>
+<div class="codehilite"><pre><span class="i">func</span>
+(<span class="i">parenthesized</span>)
+</pre></div>
+<p>Đây là lời gọi <code>func(parenthesized)</code>, hay là hai câu lệnh biểu thức, một cho <code>func</code> và một cho biểu thức trong ngoặc?</p>
+</li>
+<li>
+<p>Dấu <code>-</code> ở dòng tiếp theo:</p>
+<div class="codehilite"><pre><span class="i">first</span>
+-<span class="i">second</span>
+</pre></div>
+<p>Đây là <code>first - second</code> — phép trừ infix — hay là hai câu lệnh biểu thức, một cho <code>first</code> và một để phủ định <code>second</code>?</p>
+</li>
+</ul>
+<p>Trong tất cả các trường hợp này, dù coi xuống dòng là dấu phân cách hay không đều tạo ra code hợp lệ, nhưng có thể không phải là code người dùng mong muốn. Giữa các ngôn ngữ, có một sự đa dạng đáng lo ngại về các quy tắc dùng để quyết định xuống dòng nào là dấu phân cách. Dưới đây là một vài ví dụ:</p>
+<ul>
+<li>
+<p><a href="https://www.lua.org/pil/1.1.html">Lua</a> hoàn toàn bỏ qua xuống dòng, nhưng kiểm soát cú pháp cẩn thận để hầu như không cần dấu phân cách giữa các câu lệnh. Điều này hoàn toàn hợp lệ:</p>
+<div class="codehilite"><pre><span class="i">a</span> = <span class="n">1</span> <span class="i">b</span> = <span class="n">2</span>
+</pre></div>
+<p>Lua tránh vấn đề <code>return</code> bằng cách yêu cầu câu lệnh <code>return</code> phải là câu lệnh cuối cùng trong một block. Nếu có giá trị sau <code>return</code> trước từ khóa <code>end</code>, nó <em>phải</em> là giá trị trả về. Với hai trường hợp còn lại, họ cho phép dùng <code>;</code> tường minh và mong người dùng sẽ dùng nó. Trên thực tế, điều đó hầu như không xảy ra vì chẳng mấy khi có câu lệnh biểu thức dạng ngoặc hoặc phủ định đơn ngôi.</p>
+</li>
+<li>
+<p><a href="https://golang.org/ref/spec#Semicolons">Go</a> xử lý xuống dòng ngay trong scanner. Nếu một xuống dòng xuất hiện sau một số loại token được biết là có thể kết thúc câu lệnh, xuống dòng đó được coi như dấu chấm phẩy. Ngược lại, nó bị bỏ qua. Nhóm phát triển Go cung cấp một trình định dạng code chuẩn, <a href="https://golang.org/cmd/gofmt/">gofmt</a>, và cộng đồng rất nhiệt tình sử dụng nó, đảm bảo rằng code theo phong cách idiomatic hoạt động tốt với quy tắc đơn giản này.</p>
+</li>
+<li>
+<p><a href="https://docs.python.org/3.5/reference/lexical_analysis.html#implicit-line-joining">Python</a> coi mọi xuống dòng là có ý nghĩa trừ khi có dấu gạch chéo ngược ở cuối dòng để nối sang dòng tiếp theo. Tuy nhiên, xuống dòng bên trong cặp ngoặc (<code>()</code>, <code>[]</code>, hoặc <code>{}</code>) sẽ bị bỏ qua. Phong cách idiomatic rất ưa chuộng cách thứ hai.</p>
+<p>Quy tắc này hoạt động tốt với Python vì đây là ngôn ngữ định hướng câu lệnh mạnh. Đặc biệt, cú pháp của Python đảm bảo một câu lệnh không bao giờ xuất hiện bên trong một biểu thức. C cũng làm vậy, nhưng nhiều ngôn ngữ khác có cú pháp “lambda” hoặc function literal thì không.</p>
+<p>Ví dụ trong JavaScript:</p>
+<div class="codehilite"><pre><span class="i">console</span>.<span class="i">log</span>(<span class="k">function</span>() {
+  <span class="i">statement</span>();
+});
+</pre></div>
+<p>Ở đây, biểu thức <code>console.log()</code> chứa một function literal, và bên trong nó lại chứa <em>câu lệnh</em> <code>statement();</code>.</p>
+<p>Python sẽ cần một bộ quy tắc khác để nối dòng ngầm định nếu bạn có thể quay lại <em>bên trong</em> một <span name="lambda">câu lệnh</span> nơi xuống dòng trở nên có ý nghĩa trong khi vẫn đang lồng bên trong ngoặc.</p>
+</li>
+</ul>
+<aside name="lambda">
+<p>Và giờ bạn đã biết tại sao <code>lambda</code> của Python chỉ cho phép một biểu thức duy nhất trong thân.</p>
+</aside>
+<ul>
+<li>
+<p>Quy tắc “<a href="https://www.ecma-international.org/ecma-262/5.1/#sec-7.9">automatic semicolon insertion</a>” của JavaScript mới thực sự kỳ lạ. Trong khi các ngôn ngữ khác giả định hầu hết xuống dòng <em>có</em> ý nghĩa và chỉ một số ít bị bỏ qua trong câu lệnh nhiều dòng, JS lại giả định ngược lại. Nó coi tất cả xuống dòng của bạn là khoảng trắng vô nghĩa <em>trừ khi</em> gặp lỗi parse. Nếu gặp lỗi, nó quay lại và thử biến xuống dòng trước đó thành dấu chấm phẩy để có code hợp lệ về mặt cú pháp.</p>
+<p>Ghi chú thiết kế này sẽ biến thành một “bài luận” nếu tôi đi sâu vào chi tiết cách nó <em>hoạt động</em>, chứ chưa nói đến tất cả những lý do khiến “giải pháp” của JavaScript là một ý tưởng tồi. Nó là một mớ hỗn độn. JavaScript là ngôn ngữ duy nhất tôi biết mà nhiều hướng dẫn phong cách yêu cầu dấu chấm phẩy tường minh sau mỗi câu lệnh, dù về lý thuyết ngôn ngữ cho phép bạn bỏ chúng.</p>
+</li>
+</ul>
+<p>Nếu bạn đang thiết kế một ngôn ngữ mới, gần như chắc chắn bạn <em>nên</em> tránh ký hiệu kết thúc câu lệnh tường minh. Lập trình viên cũng là những sinh vật chạy theo xu hướng như bao người khác, và dấu chấm phẩy đã lỗi thời như CÁC TỪ KHÓA VIẾT HOA TOÀN BỘ. Chỉ cần đảm bảo bạn chọn một bộ quy tắc hợp lý cho cú pháp và phong cách của ngôn ngữ mình. Và đừng làm như JavaScript đã làm.</p>
+</div>
+
+<footer>
+<a href="representing-code.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Representing Code&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

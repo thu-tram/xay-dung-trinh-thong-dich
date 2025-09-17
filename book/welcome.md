@@ -1,0 +1,5 @@
+Đây có thể sẽ là khởi đầu cho một chuyến phiêu lưu lớn. Thế giới ngôn ngữ lập trình là một không gian rộng lớn để khám phá và vui chơi. Có thừa chỗ cho những sáng tạo của riêng bạn — để chia sẻ với người khác hoặc chỉ để tự mình tận hưởng. Những nhà khoa học máy tính và kỹ sư phần mềm xuất sắc đã dành trọn sự nghiệp để băng qua vùng đất này mà vẫn chưa bao giờ chạm đến điểm kết thúc. Nếu cuốn sách này là lần đầu bạn đặt chân vào “quốc gia” ấy, xin chào mừng.
+
+Những trang sách này sẽ đưa bạn đi một chuyến tham quan có hướng dẫn qua một phần thế giới của các ngôn ngữ lập trình. Nhưng trước khi xỏ giày leo núi và bắt đầu hành trình, chúng ta nên làm quen với “địa hình” trước đã. Các chương trong phần này sẽ giới thiệu cho bạn những khái niệm cơ bản mà ngôn ngữ lập trình sử dụng và cách chúng được tổ chức.
+
+Chúng ta cũng sẽ làm quen với Lox — ngôn ngữ mà chúng ta sẽ dành phần còn lại của cuốn sách để hiện thực (hai lần).

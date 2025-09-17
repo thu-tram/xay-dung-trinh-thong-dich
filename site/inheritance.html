@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Inheritance &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Inheritance<small>13</small></a></h3>
+
+<ul>
+    <li><a href="#superclass-&amp;-subclass"><small>13.1</small> Superclass &amp; Subclass</a></li>
+    <li><a href="#kế-thừa-method-inheriting-methods"><small>13.2</small> Kế thừa method (Inheriting Methods)</a></li>
+    <li><a href="#gọi-method-của-superclass-calling-superclass-methods"><small>13.3</small> Gọi method của superclass (Calling Superclass Methods)</a></li>
+    <li><a href="#kết-luận"><small>13.4</small> Kết luận</a></li>
+    <li><a href="#thử-thách"><small>13.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="classes.html" title="Classes" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="classes.html" title="Classes" class="prev">←</a>
+<a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Inheritance<small>13</small></a></h3>
+
+<ul>
+    <li><a href="#superclass-&amp;-subclass"><small>13.1</small> Superclass &amp; Subclass</a></li>
+    <li><a href="#kế-thừa-method-inheriting-methods"><small>13.2</small> Kế thừa method (Inheriting Methods)</a></li>
+    <li><a href="#gọi-method-của-superclass-calling-superclass-methods"><small>13.3</small> Gọi method của superclass (Calling Superclass Methods)</a></li>
+    <li><a href="#kết-luận"><small>13.4</small> Kết luận</a></li>
+    <li><a href="#thử-thách"><small>13.5</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="classes.html" title="Classes" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">13</div>
+  <h1>Inheritance</h1>
+
+<blockquote>
+<p>Ngày xưa chúng ta chỉ là những khối nhầy dưới biển, rồi thành cá, rồi thành thằn lằn, chuột, khỉ và hàng trăm thứ ở giữa. Bàn tay này từng là một cái vây, bàn tay này từng có móng vuốt! Trong miệng con người của tôi có răng nanh của sói, răng cửa của thỏ và răng hàm của bò! Máu của chúng ta mặn như biển nơi ta từng sống! Khi sợ hãi, lông trên da ta dựng đứng, y như khi ta còn có bộ lông. Chúng ta là lịch sử! Mọi thứ ta từng là trên con đường trở thành chính mình, ta vẫn còn mang trong người.</p>
+<p><cite>Terry Pratchett, <em>A Hat Full of Sky</em></cite></p>
+</blockquote>
+<p>Bạn tin được không? Chúng ta đã đến chương cuối của <a href="a-tree-walk-interpreter.html">Phần II</a>. Chỉ còn chút nữa là xong chiếc interpreter Lox đầu tiên. <a href="classes.html">Chương trước</a> là một mớ các tính năng hướng đối tượng đan xen nhau. Tôi không thể tách rời chúng, nhưng cũng gỡ được một phần. Trong chương này, ta sẽ hoàn thiện hỗ trợ class của Lox bằng cách thêm tính năng kế thừa.</p>
+<p>Kế thừa xuất hiện trong các ngôn ngữ hướng đối tượng từ tận <span name="inherited">ngôn ngữ đầu tiên</span>, <a href="https://en.wikipedia.org/wiki/Simula">Simula</a>. Ngay từ đầu, Kristen Nygaard và Ole-Johan Dahl đã nhận ra những điểm chung giữa các class trong các chương trình mô phỏng họ viết. Kế thừa cho họ một cách để tái sử dụng code cho những phần tương tự đó.</p>
+<aside name="inherited">
+<p>Có thể nói tất cả các ngôn ngữ khác đều <em>kế thừa</em> nó từ Simula. Ha ha! Thôi, tôi xin rút.</p>
+</aside>
+<h2><a href="#superclass-&-subclass" id="superclass-&-subclass"><small>13&#8202;.&#8202;1</small>Superclass &amp; Subclass</a></h2>
+<p>Với khái niệm là “kế thừa”, hẳn bạn sẽ mong họ chọn một ẩn dụ nhất quán và gọi chúng là class “cha” và “con”, nhưng đời không đơn giản vậy. Từ lâu, C. A. R. Hoare đã đặt ra thuật ngữ &ldquo;<span name="subclass">subclass</span>&rdquo; để chỉ một kiểu record tinh chỉnh từ một kiểu khác. Simula mượn thuật ngữ đó để chỉ một <em>class</em> kế thừa từ class khác. Tôi nghĩ phải đến khi Smalltalk xuất hiện thì ai đó mới đảo tiền tố Latin để có “superclass” chỉ phía còn lại của mối quan hệ. Trong C++, bạn cũng sẽ nghe “base” và “derived” class. Tôi sẽ chủ yếu dùng “superclass” và “subclass”.</p>
+<aside name="subclass">
+<p>“Super-” và “sub-” trong tiếng Latin lần lượt nghĩa là “trên” và “dưới”. Hãy hình dung cây kế thừa như cây gia phả với gốc ở trên cùng — subclass nằm dưới superclass trên sơ đồ. Nói chung, “sub-” chỉ những thứ tinh chỉnh hoặc nằm trong một khái niệm tổng quát hơn. Trong sinh học, subclass là phân loại nhỏ hơn của một class sinh vật lớn hơn.</p>
+<p>Trong lý thuyết tập hợp, một tập con (subset) nằm trong một tập cha (superset) chứa tất cả phần tử của tập con và có thể có thêm phần tử khác. Lý thuyết tập hợp và ngôn ngữ lập trình gặp nhau ở lý thuyết kiểu (type theory). Ở đó, bạn có “supertype” và “subtype”.</p>
+<p>Trong các ngôn ngữ hướng đối tượng kiểu tĩnh, một subclass cũng thường là một subtype của superclass. Giả sử ta có superclass Doughnut và subclass BostonCream. Mọi BostonCream cũng là một instance của Doughnut, nhưng có thể có những object Doughnut không phải BostonCream (như Crullers).</p>
+<p>Hãy nghĩ về một kiểu dữ liệu như tập hợp tất cả giá trị của kiểu đó. Tập hợp tất cả instance của Doughnut chứa tập hợp tất cả instance của BostonCream vì mọi BostonCream cũng là Doughnut. Vậy BostonCream là subclass, cũng là subtype, và các instance của nó là một subset. Mọi thứ khớp nhau hoàn hảo.</p><img src="image/inheritance/doughnuts.png" alt="Boston cream &lt;: doughnut." />
+</aside>
+<p>Bước đầu tiên để hỗ trợ kế thừa trong Lox là có cách chỉ định superclass khi khai báo class. Cú pháp cho việc này rất đa dạng. C++ và C# đặt dấu <code>:</code> sau tên subclass, theo sau là tên superclass. Java dùng <code>extends</code> thay cho dấu hai chấm. Python đặt superclass (hoặc các superclass) trong ngoặc đơn sau tên class. Simula đặt tên superclass <em>trước</em> từ khóa <code>class</code>.</p>
+<p>Ở giai đoạn này, tôi không muốn thêm từ khóa hay token mới vào lexer. Ta không có <code>extends</code> hay <code>:</code>, nên sẽ theo Ruby và dùng dấu nhỏ hơn (<code>&lt;</code>).</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="c">// Mấy thứ chung của doughnut...</span>
+}
+
+<span class="k">class</span> <span class="t">BostonCream</span> &lt; <span class="t">Doughnut</span> {
+  <span class="c">// Mấy thứ riêng của Boston Cream...</span>
+}
+</pre></div>
+<p>Để đưa điều này vào grammar, ta thêm một mệnh đề tùy chọn mới vào rule <code>classDecl</code> hiện có.</p>
+<div class="codehilite"><pre><span class="i">classDecl</span>      → <span class="s">&quot;class&quot;</span> <span class="t">IDENTIFIER</span> ( <span class="s">&quot;&lt;&quot;</span> <span class="t">IDENTIFIER</span> )?
+                 <span class="s">&quot;{&quot;</span> <span class="i">function</span>* <span class="s">&quot;}&quot;</span> ;
+</pre></div>
+<p>Sau tên class, bạn có thể có <code>&lt;</code> theo sau là tên superclass. Mệnh đề superclass là tùy chọn vì bạn không <em>bắt buộc</em> phải có superclass. Không giống một số ngôn ngữ hướng đối tượng khác như Java, Lox không có class gốc “Object” mà mọi thứ kế thừa từ đó, nên khi bạn bỏ qua mệnh đề superclass, class sẽ <em>không</em> có superclass nào, kể cả ngầm định.</p>
+<p>Ta muốn lưu cú pháp mới này trong AST node của khai báo class.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Block      : List&lt;Stmt&gt; statements&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()<br>
+replace 1 line</div>
+<pre class="insert">      <span class="s">&quot;Class      : Token name, Expr.Variable superclass,&quot;</span> +
+                  <span class="s">&quot; List&lt;Stmt.Function&gt; methods&quot;</span>,
+</pre><pre class="insert-after">      &quot;Expression : Expr expression&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>(), replace 1 line</div>
+
+<p>Có thể bạn sẽ ngạc nhiên khi thấy ta lưu tên superclass dưới dạng Expr.Variable, không phải Token. Grammar giới hạn mệnh đề superclass chỉ là một identifier, nhưng ở runtime, identifier đó được đánh giá như một truy cập biến. Việc bọc tên trong Expr.Variable ngay từ parser cho ta một object mà resolver có thể gắn thông tin resolution vào.</p>
+<p>Code parser mới bám sát grammar.</p>
+<div class="codehilite"><pre class="insert-before">    Token name = consume(IDENTIFIER, &quot;Expect class name.&quot;);
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>classDeclaration</em>()</div>
+<pre class="insert">
+
+    <span class="t">Expr</span>.<span class="t">Variable</span> <span class="i">superclass</span> = <span class="k">null</span>;
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">LESS</span>)) {
+      <span class="i">consume</span>(<span class="i">IDENTIFIER</span>, <span class="s">&quot;Expect superclass name.&quot;</span>);
+      <span class="i">superclass</span> = <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Variable</span>(<span class="i">previous</span>());
+    }
+
+</pre><pre class="insert-after">    consume(LEFT_BRACE, &quot;Expect '{' before class body.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>classDeclaration</em>()</div>
+
+<p>Khi đã (có thể) parse xong khai báo superclass, ta lưu nó vào AST.</p>
+<div class="codehilite"><pre class="insert-before">    consume(RIGHT_BRACE, &quot;Expect '}' after class body.&quot;);
+
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>classDeclaration</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Class</span>(<span class="i">name</span>, <span class="i">superclass</span>, <span class="i">methods</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>classDeclaration</em>(), replace 1 line</div>
+
+<p>Nếu ta không parse mệnh đề superclass, biểu thức superclass sẽ là <code>null</code>. Ta sẽ phải đảm bảo các bước xử lý sau đó kiểm tra điều này. Bước đầu tiên trong số đó là resolver.</p>
+<div class="codehilite"><pre class="insert-before">    define(stmt.name);
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">superclass</span>);
+    }
+</pre><pre class="insert-after">
+
+    beginScope();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Node AST của khai báo class giờ có thêm một biểu thức con mới, nên ta sẽ duyệt vào và resolve nó. Vì class thường được khai báo ở cấp cao nhất, tên superclass nhiều khả năng sẽ là một biến toàn cục, nên bước này thường không làm gì đáng kể. Tuy nhiên, Lox cho phép khai báo class ngay cả bên trong block, nên hoàn toàn có thể tên superclass sẽ tham chiếu tới một biến cục bộ. Trong trường hợp đó, ta cần đảm bảo nó được resolve.</p>
+<p>Vì ngay cả lập trình viên có ý tốt đôi khi cũng viết code kỳ quặc, nên có một edge case ngớ ngẩn mà ta cần để ý khi đang ở đây. Xem thử ví dụ này:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Oops</span> &lt; <span class="t">Oops</span> {}
+</pre></div>
+<p>Không có cách nào để đoạn này làm được điều gì hữu ích, và nếu để runtime chạy, nó sẽ phá vỡ giả định của interpreter rằng chuỗi kế thừa không có vòng lặp. Cách an toàn nhất là phát hiện trường hợp này ngay từ lúc compile và báo lỗi.</p>
+<div class="codehilite"><pre class="insert-before">    define(stmt.name);
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span> &amp;&amp;
+        <span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>.<span class="i">equals</span>(<span class="i">stmt</span>.<span class="i">superclass</span>.<span class="i">name</span>.<span class="i">lexeme</span>)) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">stmt</span>.<span class="i">superclass</span>.<span class="i">name</span>,
+          <span class="s">&quot;A class can&#39;t inherit from itself.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    if (stmt.superclass != null) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Giả sử code resolve xong mà không có lỗi, AST sẽ được chuyển sang interpreter.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitClassStmt(Stmt.Class stmt) {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="t">Object</span> <span class="i">superclass</span> = <span class="k">null</span>;
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="i">superclass</span> = <span class="i">evaluate</span>(<span class="i">stmt</span>.<span class="i">superclass</span>);
+      <span class="k">if</span> (!(<span class="i">superclass</span> <span class="k">instanceof</span> <span class="t">LoxClass</span>)) {
+        <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">stmt</span>.<span class="i">superclass</span>.<span class="i">name</span>,
+            <span class="s">&quot;Superclass must be a class.&quot;</span>);
+      }
+    }
+
+</pre><pre class="insert-after">    environment.define(stmt.name.lexeme, null);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Nếu class có biểu thức superclass, ta sẽ evaluate nó. Vì kết quả có thể là một loại object khác, ta phải kiểm tra ở runtime để đảm bảo thứ ta muốn làm superclass thực sự là một class. Sẽ có chuyện tồi tệ nếu ta cho phép code như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="t">NotAClass</span> = <span class="s">&quot;I am totally not a class&quot;</span>;
+
+<span class="k">class</span> <span class="t">Subclass</span> &lt; <span class="t">NotAClass</span> {} <span class="c">// ?!</span>
+</pre></div>
+<p>Giả sử kiểm tra đó vượt qua, ta tiếp tục. Việc execute một khai báo class sẽ biến biểu diễn cú pháp của class — AST node của nó — thành biểu diễn runtime, một object LoxClass. Ta cũng cần truyền superclass vào đó. Ta chuyển superclass vào constructor.</p>
+<div class="codehilite"><pre class="insert-before">      methods.put(method.name.lexeme, function);
+    }
+
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">LoxClass</span> <span class="i">klass</span> = <span class="k">new</span> <span class="t">LoxClass</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>,
+        (<span class="t">LoxClass</span>)<span class="i">superclass</span>, <span class="i">methods</span>);
+
+</pre><pre class="insert-after">    environment.assign(stmt.name, klass);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>(), replace 1 line</div>
+
+<p>Constructor sẽ lưu nó vào một field.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxClass.java</em><br>
+constructor <em>LoxClass</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">LoxClass</span>(<span class="t">String</span> <span class="i">name</span>, <span class="t">LoxClass</span> <span class="i">superclass</span>,
+           <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">LoxFunction</span>&gt; <span class="i">methods</span>) {
+    <span class="k">this</span>.<span class="i">superclass</span> = <span class="i">superclass</span>;
+</pre><pre class="insert-after">    this.name = name;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, constructor <em>LoxClass</em>(), replace 1 line</div>
+
+<p>Và ta khai báo field đó ở đây:</p>
+<div class="codehilite"><pre class="insert-before">  final String name;
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+in class <em>LoxClass</em></div>
+<pre class="insert">  <span class="k">final</span> <span class="t">LoxClass</span> <span class="i">superclass</span>;
+</pre><pre class="insert-after">  private final Map&lt;String, LoxFunction&gt; methods;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, in class <em>LoxClass</em></div>
+
+<p>Vậy là ta đã có thể định nghĩa class là subclass của class khác. Giờ, việc có một superclass thực sự <em>làm được gì?</em></p>
+<h2><a href="#kế-thừa-method-inheriting-methods" id="kế-thừa-method-inheriting-methods"><small>13&#8202;.&#8202;2</small>Kế thừa method (Inheriting Methods)</a></h2>
+<p>Kế thừa từ một class khác nghĩa là mọi thứ <span name="liskov">đúng</span> với superclass thì cũng nên đúng, ít nhiều, với subclass. Trong các ngôn ngữ kiểu tĩnh, điều này kéo theo nhiều hệ quả. Sub<em>class</em> cũng phải là sub<em>type</em>, và layout bộ nhớ được kiểm soát sao cho bạn có thể truyền một instance của subclass vào một hàm nhận superclass và nó vẫn truy cập đúng các field được kế thừa.</p>
+<aside name="liskov">
+<p>Tên “sang chảnh” hơn cho nguyên tắc mơ hồ này là <a href="https://en.wikipedia.org/wiki/Liskov_substitution_principle"><em>nguyên tắc thay thế Liskov</em></a>. Barbara Liskov giới thiệu nó trong một bài keynote vào thời kỳ hình thành lập trình hướng đối tượng.</p>
+</aside>
+<p>Lox là ngôn ngữ kiểu động, nên yêu cầu của ta đơn giản hơn nhiều. Về cơ bản, nó nghĩa là nếu bạn có thể gọi một method trên instance của superclass, thì bạn cũng nên có thể gọi method đó khi được đưa một instance của subclass. Nói cách khác, method được kế thừa từ superclass.</p>
+<p>Điều này phù hợp với một trong những mục tiêu của kế thừa — cho người dùng cách tái sử dụng code giữa các class. Việc implement điều này trong interpreter của ta lại dễ đến bất ngờ.</p>
+<div class="codehilite"><pre class="insert-before">      return methods.get(name);
+    }
+
+</pre><div class="source-file"><em>lox/LoxClass.java</em><br>
+in <em>findMethod</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="k">return</span> <span class="i">superclass</span>.<span class="i">findMethod</span>(<span class="i">name</span>);
+    }
+
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxClass.java</em>, in <em>findMethod</em>()</div>
+
+<p>Đó thực sự là tất cả. Khi ta tìm method trên một instance, nếu không thấy ở class của instance đó, ta đệ quy đi lên chuỗi superclass và tìm ở đó. Thử xem:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Fry until golden brown.&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">BostonCream</span> &lt; <span class="t">Doughnut</span> {}
+
+<span class="t">BostonCream</span>().<span class="i">cook</span>();
+</pre></div>
+<p>Vậy là xong, một nửa tính năng kế thừa đã hoàn thiện chỉ với ba dòng Java code.</p>
+<h2><a href="#gọi-method-của-superclass-calling-superclass-methods" id="gọi-method-của-superclass-calling-superclass-methods"><small>13&#8202;.&#8202;3</small>Gọi method của superclass (Calling Superclass Methods)</a></h2>
+<p>Trong <code>findMethod()</code> chúng ta tìm method trên class hiện tại <em>trước</em> khi đi lên chuỗi superclass. Nếu một method cùng tên tồn tại ở cả subclass và superclass, method ở subclass sẽ được ưu tiên hay còn gọi là <strong>override</strong> method của superclass. Tương tự như cách biến trong scope trong che khuất biến ở scope ngoài.</p>
+<p>Điều đó rất tuyệt nếu subclass muốn <em>thay thế</em> hoàn toàn một hành vi của superclass. Nhưng trên thực tế, subclass thường muốn <em>tinh chỉnh</em> hành vi của superclass. Chúng muốn làm thêm một chút việc đặc thù cho subclass, nhưng cũng muốn execute phần hành vi gốc của superclass.</p>
+<p>Tuy nhiên, vì subclass đã override method, nên không còn cách nào tham chiếu đến bản gốc. Nếu method của subclass cố gọi nó theo tên, nó sẽ đệ quy trúng chính bản override của mình. Ta cần một cách để nói “Gọi method này, nhưng tìm nó trực tiếp trên superclass của tôi và bỏ qua bản override của tôi”. Java dùng <code>super</code> cho việc này, và ta sẽ dùng cùng cú pháp trong Lox. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Fry until golden brown.&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">BostonCream</span> &lt; <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">super</span>.<span class="i">cook</span>();
+    <span class="k">print</span> <span class="s">&quot;Pipe full of custard and coat with chocolate.&quot;</span>;
+  }
+}
+
+<span class="t">BostonCream</span>().<span class="i">cook</span>();
+</pre></div>
+<p>Chạy đoạn này, bạn sẽ thấy in ra:</p>
+<div class="codehilite"><pre>Fry until golden brown.
+Pipe full of custard and coat with chocolate.
+</pre></div>
+<p>Ta có một dạng expression mới. Từ khóa <code>super</code>, theo sau bởi dấu chấm và một identifier, sẽ tìm method có tên đó. Khác với các lời gọi trên <code>this</code>, quá trình tìm kiếm bắt đầu từ superclass.</p>
+<h3><a href="#cú-pháp" id="cú-pháp"><small>13&#8202;.&#8202;3&#8202;.&#8202;1</small>Cú pháp</a></h3>
+<p>Với <code>this</code>, từ khóa này hoạt động như một biến “ma thuật”, và expression chỉ là đúng một token đó. Nhưng với <code>super</code>, dấu <code>.</code> và tên thuộc tính phía sau là các phần không thể tách rời của expression <code>super</code>. Bạn không thể có một token <code>super</code> đứng riêng một mình.</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="k">super</span>; <span class="c">// Syntax error.</span>
+</pre></div>
+<p>Vì vậy, mệnh đề mới mà ta thêm vào rule <code>primary</code> trong grammar cũng bao gồm phần truy cập thuộc tính.</p>
+<div class="codehilite"><pre><span class="i">primary</span>        → <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span> | <span class="s">&quot;this&quot;</span>
+               | <span class="t">NUMBER</span> | <span class="t">STRING</span> | <span class="t">IDENTIFIER</span> | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span>
+               | <span class="s">&quot;super&quot;</span> <span class="s">&quot;.&quot;</span> <span class="t">IDENTIFIER</span> ;
+</pre></div>
+<p>Thông thường, một expression <code>super</code> được dùng để gọi method, nhưng, giống như với method thông thường, danh sách đối số <em>không</em> thuộc về expression. Thay vào đó, một lời <em>gọi super</em> là một <em>truy cập super</em> theo sau bởi lời gọi function. Giống như các lời gọi method khác, bạn có thể lấy một “handle” tới method của superclass và gọi nó riêng.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">method</span> = <span class="k">super</span>.<span class="i">cook</span>;
+<span class="i">method</span>();
+</pre></div>
+<p>Vì thế, bản thân expression <code>super</code> chỉ chứa token cho từ khóa <code>super</code> và tên method đang được tìm. Node cây cú pháp tương ứng <span name="super-ast">syntax tree node</span> như sau:</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Set      : Expr object, Token name, Expr value&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Super    : Token keyword, Token method&quot;</span>,
+</pre><pre class="insert-after">      &quot;This     : Token keyword&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="super-ast">
+<p>Code sinh ra cho node mới nằm ở <a href="appendix-ii.html#super-expression">Appendix II</a>.</p>
+</aside>
+<p>Theo đúng grammar, code parse mới sẽ nằm trong method <code>primary()</code> hiện có của chúng ta.</p>
+<div class="codehilite"><pre class="insert-before">      return new Expr.Literal(previous().literal);
+    }
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>primary</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">SUPER</span>)) {
+      <span class="t">Token</span> <span class="i">keyword</span> = <span class="i">previous</span>();
+      <span class="i">consume</span>(<span class="i">DOT</span>, <span class="s">&quot;Expect &#39;.&#39; after &#39;super&#39;.&quot;</span>);
+      <span class="t">Token</span> <span class="i">method</span> = <span class="i">consume</span>(<span class="i">IDENTIFIER</span>,
+          <span class="s">&quot;Expect superclass method name.&quot;</span>);
+      <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Super</span>(<span class="i">keyword</span>, <span class="i">method</span>);
+    }
+</pre><pre class="insert-after">
+
+    if (match(THIS)) return new Expr.This(previous());
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>primary</em>()</div>
+
+<p>Một từ khóa <code>super</code> ở đầu cho ta biết ta đang gặp một expression <code>super</code>. Sau đó ta consume dấu <code>.</code> và tên method như kỳ vọng.</p>
+<h3><a href="#ngữ-nghĩa" id="ngữ-nghĩa"><small>13&#8202;.&#8202;3&#8202;.&#8202;2</small>Ngữ nghĩa</a></h3>
+<p>Trước đó, tôi nói một expression <code>super</code> sẽ bắt đầu việc tìm method từ “superclass”, nhưng là <em>superclass nào</em>? Câu trả lời ngây thơ là superclass của <code>this</code>, object mà method bao quanh được gọi trên đó. Tình cờ thì điều đó cho ra hành vi đúng trong nhiều trường hợp, nhưng thực ra lại không chính xác. Hãy thử nhìn:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;A method&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">B</span> &lt; <span class="t">A</span> {
+  <span class="i">method</span>() {
+    <span class="k">print</span> <span class="s">&quot;B method&quot;</span>;
+  }
+
+  <span class="i">test</span>() {
+    <span class="k">super</span>.<span class="i">method</span>();
+  }
+}
+
+<span class="k">class</span> <span class="t">C</span> &lt; <span class="t">B</span> {}
+
+<span class="t">C</span>().<span class="i">test</span>();
+</pre></div>
+<p>Hãy dịch chương trình này sang Java, C# hoặc C++ và nó sẽ in ra <code>"A method"</code>, đúng như điều ta muốn Lox cũng làm. Khi chương trình này chạy, bên trong thân hàm <code>test()</code>, <code>this</code> là một instance của C. Superclass của C là B, nhưng đó <em>không</em> phải nơi quá trình tìm kiếm nên bắt đầu. Nếu làm vậy, ta sẽ gặp <code>method()</code> của B.</p>
+<p>Thay vào đó, quá trình tìm kiếm nên bắt đầu từ superclass của <em>class chứa biểu thức <code>super</code></em>. Trong trường hợp này, vì <code>test()</code> được định nghĩa bên trong B, nên biểu thức <code>super</code> bên trong nó phải bắt đầu tìm kiếm từ superclass của <em>B</em> — tức A.</p>
+<p><span name="flow"></span></p><img src="image/inheritance/classes.png" alt="Chuỗi lời gọi chảy qua các class." />
+<aside name="flow">
+<p>Luồng execute trông như thế này:</p>
+<ol>
+<li>
+<p>Ta gọi <code>test()</code> trên một instance của C.</p>
+</li>
+<li>
+<p>Lời gọi đó đi vào method <code>test()</code> được kế thừa từ B. Method này gọi <code>super.method()</code>.</p>
+</li>
+<li>
+<p>Superclass của B là A, nên nó sẽ nối sang <code>method()</code> của A, và chương trình in ra <code>"A method"</code>.</p>
+</li>
+</ol>
+</aside>
+<p>Vì vậy, để evaluate một biểu thức <code>super</code>, ta cần truy cập tới superclass của định nghĩa class bao quanh lời gọi đó. Tiếc thay, tại thời điểm trong interpreter khi ta đang execute một biểu thức <code>super</code>, ta lại không dễ dàng có được thông tin này.</p>
+<p>Ta <em>có thể</em> thêm một field vào LoxFunction để lưu tham chiếu tới LoxClass sở hữu method đó. Interpreter sẽ giữ tham chiếu tới LoxFunction đang execute để ta có thể tra cứu sau khi gặp một biểu thức <code>super</code>. Từ đó, ta sẽ lấy được LoxClass của method, rồi tới superclass của nó.</p>
+<p>Như vậy là khá nhiều “đường ống” phải lắp. Trong <a href="classes.html">chương trước</a>, ta cũng gặp vấn đề tương tự khi cần hỗ trợ <code>this</code>. Khi đó, ta đã dùng cơ chế environment và closure sẵn có để lưu tham chiếu tới object hiện tại. Liệu ta có thể làm điều tương tự để lưu superclass<span name="rhetorical">?</span> Chắc tôi sẽ không nói đến nếu câu trả lời là “không”, nên… câu trả lời là “có”.</p>
+<aside name="rhetorical">
+<p>Có ai thực sự thích câu hỏi tu từ không nhỉ?</p>
+</aside>
+<p>Một điểm khác biệt quan trọng là ta bind <code>this</code> khi method được <em>truy cập</em>. Cùng một method có thể được gọi trên các instance khác nhau và mỗi instance cần <code>this</code> riêng. Với biểu thức <code>super</code>, superclass là một thuộc tính cố định của <em>chính khai báo class</em>. Mỗi lần bạn evaluate một biểu thức <code>super</code>, superclass luôn giống nhau.</p>
+<p>Điều đó có nghĩa là ta có thể tạo environment cho superclass một lần, khi class được định nghĩa. Ngay trước khi định nghĩa các method, ta tạo một environment mới để bind superclass của class vào tên <code>super</code>.</p><img src="image/inheritance/superclass.png" alt="Environment của superclass." />
+<p>Khi ta tạo biểu diễn runtime LoxFunction cho mỗi method, đó sẽ là environment mà chúng capture trong closure của mình. Sau này, khi một method được gọi và <code>this</code> được bind, environment của superclass sẽ trở thành cha của environment của method, như thế này:</p><img src="image/inheritance/environments.png" alt="Chuỗi environment bao gồm environment của superclass." />
+<p>Nghe có vẻ nhiều cơ chế, nhưng ta sẽ xử lý từng bước một. Trước khi tạo environment ở runtime, ta cần xử lý chuỗi scope tương ứng trong resolver.</p>
+<div class="codehilite"><pre class="insert-before">      resolve(stmt.superclass);
+    }
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="i">beginScope</span>();
+      <span class="i">scopes</span>.<span class="i">peek</span>().<span class="i">put</span>(<span class="s">&quot;super&quot;</span>, <span class="k">true</span>);
+    }
+</pre><pre class="insert-after">
+
+    beginScope();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Nếu khai báo class có superclass, ta tạo một scope mới bao quanh tất cả method của nó. Trong scope đó, ta định nghĩa tên <code>"super"</code>. Khi resolve xong các method của class, ta bỏ scope đó đi.</p>
+<div class="codehilite"><pre class="insert-before">    endScope();
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span>) <span class="i">endScope</span>();
+
+</pre><pre class="insert-after">    currentClass = enclosingClass;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Đây là một tối ưu nhỏ, nhưng ta chỉ tạo environment của superclass nếu class thực sự <em>có</em> superclass. Không có lý do gì tạo nó khi không có superclass, vì sẽ chẳng có gì để lưu vào đó.</p>
+<p>Với <code>"super"</code> đã được định nghĩa trong chuỗi scope, ta có thể resolve chính biểu thức <code>super</code>.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitSetExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitSuperExpr</span>(<span class="t">Expr</span>.<span class="t">Super</span> <span class="i">expr</span>) {
+    <span class="i">resolveLocal</span>(<span class="i">expr</span>, <span class="i">expr</span>.<span class="i">keyword</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitSetExpr</em>()</div>
+
+<p>Ta resolve token <code>super</code> giống hệt như một biến. Quá trình resolve sẽ lưu số bước nhảy trong chuỗi environment mà interpreter cần đi để tìm environment nơi lưu superclass.</p>
+<p>Phần code này được phản chiếu trong interpreter. Khi evaluate một định nghĩa subclass, ta tạo một environment mới.</p>
+<div class="codehilite"><pre class="insert-before">        throw new RuntimeError(stmt.superclass.name,
+            &quot;Superclass must be a class.&quot;);
+      }
+    }
+
+    environment.define(stmt.name.lexeme, null);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="i">environment</span> = <span class="k">new</span> <span class="t">Environment</span>(<span class="i">environment</span>);
+      <span class="i">environment</span>.<span class="i">define</span>(<span class="s">&quot;super&quot;</span>, <span class="i">superclass</span>);
+    }
+</pre><pre class="insert-after">
+
+    Map&lt;String, LoxFunction&gt; methods = new HashMap&lt;&gt;();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Bên trong environment đó, ta lưu tham chiếu tới superclass — chính object LoxClass của superclass mà ta đã có ở runtime. Sau đó, ta tạo các LoxFunction cho từng method. Chúng sẽ capture environment hiện tại — nơi ta vừa bind <code>"super"</code> — làm closure của mình, giữ lại superclass như ta cần. Khi xong, ta pop environment.</p>
+<div class="codehilite"><pre class="insert-before">    LoxClass klass = new LoxClass(stmt.name.lexeme,
+        (LoxClass)superclass, methods);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">superclass</span> != <span class="k">null</span>) {
+      <span class="i">environment</span> = <span class="i">environment</span>.<span class="i">enclosing</span>;
+    }
+</pre><pre class="insert-after">
+
+    environment.assign(stmt.name, klass);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Giờ ta đã sẵn sàng để interpret các biểu thức <code>super</code>. Có vài phần chuyển động, nên ta sẽ xây dựng method này từng bước.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitSetExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitSuperExpr</span>(<span class="t">Expr</span>.<span class="t">Super</span> <span class="i">expr</span>) {
+    <span class="t">int</span> <span class="i">distance</span> = <span class="i">locals</span>.<span class="i">get</span>(<span class="i">expr</span>);
+    <span class="t">LoxClass</span> <span class="i">superclass</span> = (<span class="t">LoxClass</span>)<span class="i">environment</span>.<span class="i">getAt</span>(
+        <span class="i">distance</span>, <span class="s">&quot;super&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitSetExpr</em>()</div>
+
+<p>Trước hết, phần việc mà ta đã chuẩn bị từ đầu đến giờ: ta tra cứu superclass của class bao quanh bằng cách tìm <code>"super"</code> trong environment thích hợp.</p>
+<p>Khi truy cập một method, ta cũng cần bind <code>this</code> tới object mà method được truy cập từ đó. Trong một biểu thức như <code>doughnut.cook</code>, object chính là kết quả của việc evaluate <code>doughnut</code>. Trong một biểu thức <code>super</code> như <code>super.cook</code>, object hiện tại ngầm định là <em>cùng</em> object hiện tại mà ta đang dùng — nói cách khác là <code>this</code>. Dù ta đang tìm <em>method</em> trên superclass, <em>instance</em> vẫn là <code>this</code>.</p>
+<p>Không may là bên trong biểu thức <code>super</code>, ta không có một node tiện lợi để resolver gắn số bước nhảy tới <code>this</code>. May mắn là ta kiểm soát được cấu trúc chuỗi environment. Environment nơi <code>"this"</code> được bind luôn nằm ngay bên trong environment nơi ta lưu <code>"super"</code>.</p>
+<div class="codehilite"><pre class="insert-before">    LoxClass superclass = (LoxClass)environment.getAt(
+        distance, &quot;super&quot;);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitSuperExpr</em>()</div>
+<pre class="insert">
+
+    <span class="t">LoxInstance</span> <span class="i">object</span> = (<span class="t">LoxInstance</span>)<span class="i">environment</span>.<span class="i">getAt</span>(
+        <span class="i">distance</span> - <span class="n">1</span>, <span class="s">&quot;this&quot;</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitSuperExpr</em>()</div>
+
+<p>Cộng thêm một bước nhảy sẽ tìm <code>"this"</code> trong environment bên trong đó. Tôi thừa nhận đây không phải là đoạn code <span name="elegant">thanh nhã</span> nhất, nhưng nó hoạt động.</p>
+<aside name="elegant">
+<p>Viết một cuốn sách bao gồm từng dòng code của một chương trình nghĩa là tôi không thể giấu các “mánh” bằng cách để chúng lại như một “bài tập cho người đọc”.</p>
+</aside>
+<p>Giờ ta đã sẵn sàng để tìm và bind method, bắt đầu từ superclass.</p>
+<div class="codehilite"><pre class="insert-before">    LoxInstance object = (LoxInstance)environment.getAt(
+        distance - 1, &quot;this&quot;);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitSuperExpr</em>()</div>
+<pre class="insert">
+
+    <span class="t">LoxFunction</span> <span class="i">method</span> = <span class="i">superclass</span>.<span class="i">findMethod</span>(<span class="i">expr</span>.<span class="i">method</span>.<span class="i">lexeme</span>);
+    <span class="k">return</span> <span class="i">method</span>.<span class="i">bind</span>(<span class="i">object</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitSuperExpr</em>()</div>
+
+<p>Phần này gần như giống hệt code tìm method của một get expression, chỉ khác là ta gọi <code>findMethod()</code> trên superclass thay vì trên class của object hiện tại.</p>
+<p>Về cơ bản là vậy. Tất nhiên, vẫn có khả năng ta <em>không</em> tìm thấy method, nên ta cũng kiểm tra trường hợp đó.</p>
+<div class="codehilite"><pre class="insert-before">
+
+    LoxFunction method = superclass.findMethod(expr.method.lexeme);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitSuperExpr</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">method</span> == <span class="k">null</span>) {
+      <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">expr</span>.<span class="i">method</span>,
+          <span class="s">&quot;Undefined property &#39;&quot;</span> + <span class="i">expr</span>.<span class="i">method</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    return method.bind(object);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitSuperExpr</em>()</div>
+
+<p>Vậy là xong! Lấy lại ví dụ BostonCream ở trên và thử chạy. Nếu bạn và tôi làm đúng hết, nó sẽ chiên trước, rồi nhồi kem vào.</p>
+<h3><a href="#các-cách-dùng-`super`-không-hợp-lệ" id="các-cách-dùng-`super`-không-hợp-lệ"><small>13&#8202;.&#8202;3&#8202;.&#8202;3</small>Các cách dùng <code>super</code> không hợp lệ</a></h3>
+<p>Giống như các tính năng ngôn ngữ trước, implement của ta hoạt động đúng khi người dùng viết code đúng, nhưng ta chưa “bọc thép” interpreter chống lại code sai. Cụ thể, hãy xem:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Eclair</span> {
+  <span class="i">cook</span>() {
+    <span class="k">super</span>.<span class="i">cook</span>();
+    <span class="k">print</span> <span class="s">&quot;Pipe full of crème pâtissière.&quot;</span>;
+  }
+}
+</pre></div>
+<p>Class này có một biểu thức <code>super</code>, nhưng không có superclass. Ở runtime, code evaluate biểu thức <code>super</code> giả định rằng <code>"super"</code> đã được resolve thành công và sẽ tìm thấy trong environment. Điều đó sẽ thất bại ở đây vì không có environment bao quanh cho superclass — do không có superclass. JVM sẽ ném ra exception và “quật ngã” interpreter của ta.</p>
+<p>Thậm chí còn có những cách dùng <code>super</code> hỏng hóc đơn giản hơn:</p>
+<div class="codehilite"><pre><span class="k">super</span>.<span class="i">notEvenInAClass</span>();
+</pre></div>
+<p>Ta có thể xử lý các lỗi này ở runtime bằng cách kiểm tra xem việc tra cứu <code>"super"</code> có thành công không. Nhưng ta có thể biết ngay từ lúc compile — chỉ cần nhìn vào source code — rằng Eclair không có superclass và do đó không biểu thức <code>super</code> nào hoạt động bên trong nó. Tương tự, ở ví dụ thứ hai, ta biết biểu thức <code>super</code> thậm chí không nằm trong thân một method.</p>
+<p>Dù Lox là ngôn ngữ kiểu động, điều đó không có nghĩa là ta muốn dời <em>mọi thứ</em> sang runtime. Nếu người dùng mắc lỗi, ta muốn giúp họ phát hiện sớm hơn. Vậy nên ta sẽ báo các lỗi này ngay từ lúc compile, trong resolver.</p>
+<p>Đầu tiên, ta thêm một case mới vào enum dùng để theo dõi loại class bao quanh đoạn code hiện tại đang được duyệt.</p>
+<div class="codehilite"><pre class="insert-before">    NONE,
+</pre><pre class="insert-before">    <span class="i">CLASS</span><span class="insert-comma">,</span>
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in enum <em>ClassType</em><br>
+add <em>&ldquo;,&rdquo;</em> to previous line</div>
+<pre class="insert">    <span class="i">SUBCLASS</span>
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in enum <em>ClassType</em>, add <em>&ldquo;,&rdquo;</em> to previous line</div>
+
+<p>Ta sẽ dùng nó để phân biệt khi nào ta đang ở trong một class có superclass và khi nào thì không. Khi resolve một khai báo class, ta sẽ set giá trị này nếu class là một subclass.</p>
+<div class="codehilite"><pre class="insert-before">    if (stmt.superclass != null) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitClassStmt</em>()</div>
+<pre class="insert">      <span class="i">currentClass</span> = <span class="t">ClassType</span>.<span class="i">SUBCLASS</span>;
+</pre><pre class="insert-after">      resolve(stmt.superclass);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitClassStmt</em>()</div>
+
+<p>Sau đó, khi resolve một biểu thức <code>super</code>, ta kiểm tra xem ta có đang ở trong scope cho phép điều đó hay không.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitSuperExpr(Expr.Super expr) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitSuperExpr</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">currentClass</span> == <span class="t">ClassType</span>.<span class="i">NONE</span>) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">expr</span>.<span class="i">keyword</span>,
+          <span class="s">&quot;Can&#39;t use &#39;super&#39; outside of a class.&quot;</span>);
+    } <span class="k">else</span> <span class="k">if</span> (<span class="i">currentClass</span> != <span class="t">ClassType</span>.<span class="i">SUBCLASS</span>) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">expr</span>.<span class="i">keyword</span>,
+          <span class="s">&quot;Can&#39;t use &#39;super&#39; in a class with no superclass.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    resolveLocal(expr, expr.keyword);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitSuperExpr</em>()</div>
+
+<p>Nếu không — ôi thôi! — người dùng đã mắc lỗi.</p>
+<h2><a href="#kết-luận" id="kết-luận"><small>13&#8202;.&#8202;4</small>Kết luận</a></h2>
+<p>Chúng ta đã làm được! Phần xử lý lỗi cuối cùng này là mảnh ghép cuối để hoàn thiện implement Lox bằng Java. Đây thực sự là một <span name="superhero">thành tựu</span> mà bạn nên tự hào. Trong khoảng chục chương vừa qua và hơn một nghìn dòng code, chúng ta đã học và implement…</p>
+<ul>
+<li><a href="scanning.html">token và lexer</a>,</li>
+<li><a href="representing-code.html">abstract syntax tree</a>,</li>
+<li><a href="parsing-expressions.html">recursive descent parser</a>,</li>
+<li>biểu thức prefix và infix,</li>
+<li>biểu diễn runtime của object,</li>
+<li><a href="evaluating-expressions.html">execute code bằng Visitor pattern</a>,</li>
+<li><a href="statements-and-state.html">lexical scope</a>,</li>
+<li>chuỗi environment để lưu biến,</li>
+<li><a href="control-flow.html">control flow</a>,</li>
+<li><a href="functions.html">hàm với tham số</a>,</li>
+<li>closure,</li>
+<li><a href="resolving-and-binding.html">resolve biến tĩnh và phát hiện lỗi</a>,</li>
+<li><a href="classes.html">class</a>,</li>
+<li>constructor,</li>
+<li>field,</li>
+<li>method, và cuối cùng,</li>
+<li>kế thừa.</li>
+</ul>
+<aside name="superhero"><img src="image/inheritance/superhero.png" alt="Bạn, phiên bản ngầu nhất của chính mình." />
+</aside>
+<p>Ta đã làm tất cả từ con số 0, không phụ thuộc vào thư viện ngoài hay công cụ “ma thuật” nào. Chỉ có bạn và tôi, mỗi người với trình soạn thảo của mình, vài class collection trong Java standard library, và JVM runtime.</p>
+<p>Đây là dấu mốc kết thúc Phần II, nhưng chưa phải là hết sách. Hãy nghỉ ngơi một chút. Có thể viết vài chương trình Lox vui vẻ và chạy chúng trong interpreter của bạn. (Bạn có thể muốn thêm vài native method nữa, như đọc input từ người dùng.) Khi đã sẵn sàng, ta sẽ bắt đầu <a href="a-bytecode-virtual-machine.html">cuộc phiêu lưu tiếp theo</a>.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>13&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Lox chỉ hỗ trợ <em>kế thừa đơn</em> — một class chỉ có thể có một superclass và đó là cách duy nhất để tái sử dụng method giữa các class. Các ngôn ngữ khác đã khám phá nhiều cách khác nhau để tái sử dụng và chia sẻ khả năng giữa các class một cách linh hoạt hơn: mixin, trait, multiple inheritance, virtual inheritance, extension method, v.v.</p>
+<p>Nếu bạn muốn thêm một tính năng nào đó theo hướng này vào Lox, bạn sẽ chọn gì và tại sao? Nếu bạn cảm thấy đủ can đảm (và đến giờ thì bạn nên như vậy), hãy thử thêm nó vào.</p>
+</li>
+<li>
+<p>Trong Lox, cũng như hầu hết các ngôn ngữ hướng đối tượng khác, khi tìm một method, ta bắt đầu từ đáy của cây kế thừa và đi ngược lên — method của subclass sẽ được ưu tiên hơn method của superclass. Để gọi method của superclass từ bên trong một method override, bạn dùng <code>super</code>.</p>
+<p>Ngôn ngữ <a href="https://beta.cs.au.dk/">BETA</a> lại <a href="http://journal.stuffwithstuff.com/2012/12/19/the-impoliteness-of-overriding-methods/">tiếp cận theo hướng ngược lại</a>. Khi bạn gọi một method, nó bắt đầu từ <em>đỉnh</em> của cây kế thừa và đi <em>xuống</em>. Method của superclass sẽ thắng method của subclass. Để gọi method của subclass, method của superclass có thể gọi <code>inner</code>, về cơ bản là nghịch đảo của <code>super</code>. Nó sẽ nối chuỗi tới method tiếp theo bên dưới trong cây kế thừa.</p>
+<p>Method của superclass sẽ kiểm soát khi nào và ở đâu subclass được phép tinh chỉnh hành vi của nó. Nếu method của superclass không gọi <code>inner</code> chút nào, thì subclass sẽ không thể override hoặc thay đổi hành vi của superclass.</p>
+<p>Hãy bỏ cơ chế override và <code>super</code> hiện tại của Lox và thay bằng ngữ nghĩa của BETA. Tóm tắt:</p>
+<ul>
+<li>
+<p>Khi gọi một method trên một class, ưu tiên method <em>cao nhất</em> trong chuỗi kế thừa của class đó.</p>
+</li>
+<li>
+<p>Bên trong thân một method, lời gọi <code>inner</code> sẽ tìm method cùng tên trong subclass gần nhất dọc theo chuỗi kế thừa, nằm giữa class chứa <code>inner</code> và class của <code>this</code>. Nếu không có method khớp, lời gọi <code>inner</code> sẽ không làm gì.</p>
+</li>
+</ul>
+<p>Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Fry until golden brown.&quot;</span>;
+    <span class="i">inner</span>();
+    <span class="k">print</span> <span class="s">&quot;Place in a nice box.&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">BostonCream</span> &lt; <span class="t">Doughnut</span> {
+  <span class="i">cook</span>() {
+    <span class="k">print</span> <span class="s">&quot;Pipe full of custard and coat with chocolate.&quot;</span>;
+  }
+}
+
+<span class="t">BostonCream</span>().<span class="i">cook</span>();
+</pre></div>
+<p>Kết quả in ra sẽ là:</p>
+<div class="codehilite"><pre>Fry until golden brown.
+Pipe full of custard and coat with chocolate.
+Place in a nice box.
+</pre></div>
+</li>
+<li>
+<p>Trong chương giới thiệu về Lox, <a href="the-lox-language.html#challenges">tôi đã thách bạn</a> nghĩ ra một vài tính năng mà bạn cho là ngôn ngữ này còn thiếu. Giờ khi bạn đã biết cách xây dựng một interpreter, hãy implement một trong những tính năng đó.</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="a-bytecode-virtual-machine.html" class="next">
+  Đọc tiếp Part: &ldquo;A Bytecode Virtual Machine&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

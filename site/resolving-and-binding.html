@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Resolving and Binding &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Resolving and Binding<small>11</small></a></h3>
+
+<ul>
+    <li><a href="#static-scope"><small>11.1</small> Static Scope</a></li>
+    <li><a href="#phân-tích-ngữ-nghĩa-semantic-analysis"><small>11.2</small> Phân tích ngữ nghĩa (Semantic Analysis)</a></li>
+    <li><a href="#lớp-resolver"><small>11.3</small> Lớp Resolver</a></li>
+    <li><a href="#execute-các-biến-đã-được-resolve"><small>11.4</small> Execute các biến đã được resolve</a></li>
+    <li><a href="#lỗi-khi-resolve"><small>11.5</small> Lỗi khi resolve</a></li>
+    <li><a href="#thử-thách"><small>11.6</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="functions.html" title="Functions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="classes.html" title="Classes" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="functions.html" title="Functions" class="prev">←</a>
+<a href="classes.html" title="Classes" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Resolving and Binding<small>11</small></a></h3>
+
+<ul>
+    <li><a href="#static-scope"><small>11.1</small> Static Scope</a></li>
+    <li><a href="#phân-tích-ngữ-nghĩa-semantic-analysis"><small>11.2</small> Phân tích ngữ nghĩa (Semantic Analysis)</a></li>
+    <li><a href="#lớp-resolver"><small>11.3</small> Lớp Resolver</a></li>
+    <li><a href="#execute-các-biến-đã-được-resolve"><small>11.4</small> Execute các biến đã được resolve</a></li>
+    <li><a href="#lỗi-khi-resolve"><small>11.5</small> Lỗi khi resolve</a></li>
+    <li><a href="#thử-thách"><small>11.6</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="functions.html" title="Functions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="classes.html" title="Classes" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">11</div>
+  <h1>Resolving and Binding</h1>
+
+<blockquote>
+<p>Thỉnh thoảng bạn thấy mình rơi vào một tình huống kỳ lạ. Bạn bước vào đó từng chút một theo cách tự nhiên nhất, nhưng khi đang ở giữa, bạn bỗng ngạc nhiên và tự hỏi làm sao mọi chuyện lại thành ra như vậy.</p>
+<p><cite>Thor Heyerdahl, <em>Kon-Tiki</em></cite></p>
+</blockquote>
+<p>Ôi không! Hiện thực ngôn ngữ của chúng ta đang… thủng đáy! Hồi xa xưa khi <a href="statements-and-state.html">thêm biến và khối lệnh</a>, ta đã có cơ chế scoping gọn gàng, chặt chẽ. Nhưng khi <a href="functions.html">sau đó thêm closures</a>, một lỗ hổng đã xuất hiện trong interpreter vốn “chống nước” của ta. Phần lớn các chương trình thực tế khó mà lọt qua lỗ hổng này, nhưng với tư cách là những người hiện thực ngôn ngữ, ta thề sẽ quan tâm đến tính đúng đắn ngay cả ở những góc sâu và ẩm ướt nhất của ngữ nghĩa.</p>
+<p>Trong cả chương này, ta sẽ khám phá lỗ hổng đó và cẩn thận bịt nó lại. Trong quá trình này, ta sẽ hiểu rõ hơn về <em>lexical scoping</em> như Lox và các ngôn ngữ thuộc họ C sử dụng. Ta cũng sẽ có dịp tìm hiểu về <em>semantic analysis</em> — một kỹ thuật mạnh mẽ để trích xuất ý nghĩa từ mã nguồn của người dùng mà không cần chạy nó.</p>
+<h2><a href="#static-scope" id="static-scope"><small>11&#8202;.&#8202;1</small>Static Scope</a></h2>
+<p>Ôn lại nhanh: Lox, giống hầu hết các ngôn ngữ hiện đại, dùng <em>lexical</em> scoping. Điều này có nghĩa là bạn có thể xác định một tên biến tham chiếu đến khai báo nào chỉ bằng cách đọc văn bản chương trình. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;inner&quot;</span>;
+  <span class="k">print</span> <span class="i">a</span>;
+}
+</pre></div>
+<p>Ở đây, ta biết <code>a</code> được in ra là biến được khai báo ở dòng ngay trước đó, chứ không phải biến toàn cục. Việc chạy chương trình không — <em>không thể</em> — ảnh hưởng đến điều này. Các quy tắc scope là một phần của ngữ nghĩa <em>tĩnh</em> của ngôn ngữ, vì vậy chúng còn được gọi là <em>static scope</em>.</p>
+<p>Tôi chưa từng viết rõ các quy tắc scope đó, nhưng giờ là lúc cần <span name="precise">chính xác</span>:</p>
+<aside name="precise">
+<p>Điều này vẫn chưa đâu vào đâu so với một đặc tả ngôn ngữ thực sự. Những tài liệu đó phải rõ ràng đến mức ngay cả một người Sao Hỏa hay một lập trình viên cố tình phá hoại cũng buộc phải hiện thực đúng ngữ nghĩa nếu họ tuân thủ từng chữ trong đặc tả.</p>
+<p>Sự chính xác này rất quan trọng khi một ngôn ngữ có thể được hiện thực bởi các công ty cạnh tranh, những bên muốn sản phẩm của mình không tương thích với sản phẩm khác để “giam” khách hàng trên nền tảng của họ. May mắn là trong cuốn sách này, ta có thể bỏ qua những trò mờ ám kiểu đó.</p>
+</aside>
+<p><strong>Một lần sử dụng biến sẽ tham chiếu đến khai báo trước đó có cùng tên trong scope trong cùng bao quanh biểu thức nơi biến được sử dụng.</strong></p>
+<p>Có khá nhiều thứ để bóc tách ở đây:</p>
+<ul>
+<li>
+<p>Tôi nói “lần sử dụng biến” thay vì “biểu thức biến” để bao quát cả biểu thức biến và phép gán. Tương tự với “biểu thức nơi biến được sử dụng”.</p>
+</li>
+<li>
+<p>“Trước đó” nghĩa là xuất hiện trước <em>trong văn bản chương trình</em>.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer&quot;</span>;
+{
+  <span class="k">print</span> <span class="i">a</span>;
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;inner&quot;</span>;
+}
+</pre></div>
+<p>Ở đây, <code>a</code> được in ra là biến bên ngoài vì nó xuất hiện <span name="hoisting">trước</span> câu lệnh <code>print</code> sử dụng nó. Trong hầu hết các trường hợp, trong code tuyến tính, khai báo xuất hiện trước <em>trong văn bản</em> cũng sẽ xuất hiện trước <em>trong thời gian chạy</em>. Nhưng không phải lúc nào cũng vậy. Như ta sẽ thấy, hàm có thể trì hoãn một đoạn code sao cho thứ tự <em>thời gian động</em> khi execute không còn phản chiếu thứ tự <em>văn bản tĩnh</em> nữa.</p>
+<aside name="hoisting">
+<p>Trong JavaScript, các biến khai báo bằng <code>var</code> được “hoisting” ngầm lên đầu khối. Bất kỳ lần sử dụng tên đó trong khối sẽ tham chiếu đến biến đó, ngay cả khi lần sử dụng xuất hiện trước khai báo. Khi bạn viết thế này trong JavaScript:</p>
+<div class="codehilite"><pre>{
+  <span class="i">console</span>.<span class="i">log</span>(<span class="i">a</span>);
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;value&quot;</span>;
+}
+</pre></div>
+<p>Nó sẽ hoạt động như:</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span>; <span class="c">// Hoist.</span>
+  <span class="i">console</span>.<span class="i">log</span>(<span class="i">a</span>);
+  <span class="i">a</span> = <span class="s">&quot;value&quot;</span>;
+}
+</pre></div>
+<p>Điều này có nghĩa là trong một số trường hợp, bạn có thể đọc biến trước khi nó được khởi tạo — một nguồn gây lỗi khó chịu. Cú pháp <code>let</code> để khai báo biến được thêm vào sau này nhằm giải quyết vấn đề này.</p>
+</aside></li>
+<li>
+<p>“Trong cùng” ở đây là vì hiện tượng shadowing quen thuộc. Có thể có nhiều biến cùng tên trong các scope bao quanh, như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;inner&quot;</span>;
+  <span class="k">print</span> <span class="i">a</span>;
+}
+</pre></div>
+<p>Quy tắc của ta phân định trường hợp này bằng cách nói rằng scope trong cùng sẽ thắng.</p>
+</li>
+</ul>
+<p>Vì quy tắc này không đề cập đến bất kỳ hành vi runtime nào, nó ngụ ý rằng một biểu thức biến luôn tham chiếu đến cùng một khai báo trong suốt quá trình execute chương trình. Interpreter của ta cho đến giờ <em>hầu như</em> hiện thực đúng quy tắc này. Nhưng khi ta thêm closures, một lỗi đã len vào.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;global&quot;</span>;
+{
+  <span class="k">fun</span> <span class="i">showA</span>() {
+    <span class="k">print</span> <span class="i">a</span>;
+  }
+
+  <span class="i">showA</span>();
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;block&quot;</span>;
+  <span class="i">showA</span>();
+}
+</pre></div>
+<p><span name="tricky">Trước khi</span> bạn gõ và chạy đoạn này, hãy thử đoán xem nó <em>nên</em> in ra gì.</p>
+<aside name="tricky">
+<p>Tôi biết, đây là một chương trình hoàn toàn <em>dị</em>. Nó thật là <em>kỳ quặc</em>. Không ai tỉnh táo lại viết code như thế này. Nhưng đáng tiếc, nếu bạn gắn bó lâu với lĩnh vực ngôn ngữ lập trình, bạn sẽ dành nhiều thời gian hơn mình tưởng để xử lý những đoạn code dị” kiểu này.</p>
+</aside>
+<p>OK… hiểu ý chứ? Nếu bạn quen với closures trong các ngôn ngữ khác, hẳn bạn sẽ mong nó in ra <code>"global"</code> hai lần. Lần gọi đầu tiên tới <code>showA()</code> chắc chắn phải in <code>"global"</code> vì ta thậm chí chưa tới chỗ khai báo biến <code>a</code> bên trong. Và theo quy tắc rằng một biểu thức biến luôn được giải quyết tới cùng một biến, điều đó ngụ ý rằng lần gọi thứ hai tới <code>showA()</code> cũng phải in ra y như vậy.</p>
+<p>Tiếc thay, nó lại in:</p>
+<div class="codehilite"><pre>global
+block
+</pre></div>
+<p>Tôi muốn nhấn mạnh rằng chương trình này không hề gán lại bất kỳ biến nào và chỉ chứa đúng một câu lệnh <code>print</code>. Ấy vậy mà, câu lệnh <code>print</code> đó — cho một biến chưa từng được gán — lại in ra hai giá trị khác nhau ở hai thời điểm khác nhau. Rõ ràng là ta đã làm hỏng thứ gì đó.</p>
+<h3><a href="#scope-&-môi-trường-có-thể-thay-đổi" id="scope-&-môi-trường-có-thể-thay-đổi"><small>11&#8202;.&#8202;1&#8202;.&#8202;1</small>Scope &amp; môi trường có thể thay đổi</a></h3>
+<p>Trong interpreter của ta, environment là biểu hiện động của static scope. Hai thứ này hầu như luôn đồng bộ với nhau — ta tạo một environment mới khi vào một scope mới, và bỏ nó đi khi rời scope. Có một thao tác khác ta thực hiện trên environment: ràng buộc (bind) một biến trong đó. Và đây chính là chỗ lỗi xuất hiện.</p>
+<p>Hãy cùng đi qua ví dụ gây rắc rối này và xem environment trông thế nào ở từng bước. Đầu tiên, ta khai báo <code>a</code> trong global scope.</p><img src="image/resolving-and-binding/environment-1.png" alt="The global environment with 'a' defined in it." />
+<p>Lúc này ta có một environment duy nhất với một biến duy nhất. Sau đó ta vào block và execute khai báo <code>showA()</code>.</p><img src="image/resolving-and-binding/environment-2.png" alt="A block environment linking to the global one." />
+<p>Ta có một environment mới cho block. Trong đó, ta khai báo một tên <code>showA</code>, được bind tới đối tượng <code>LoxFunction</code> mà ta tạo ra để biểu diễn hàm. Đối tượng này có một trường <code>closure</code> lưu lại environment nơi hàm được khai báo, nên nó tham chiếu ngược về environment của block.</p>
+<p>Giờ ta gọi <code>showA()</code>.</p><img src="image/resolving-and-binding/environment-3.png" alt="An empty environment for showA()'s body linking to the previous two. 'a' is resolved in the global environment." />
+<p>Interpreter tạo động một environment mới cho phần thân hàm <code>showA()</code>. Nó trống vì hàm này không khai báo biến nào. Cha của environment này là closure của hàm — environment của block bên ngoài.</p>
+<p>Bên trong thân <code>showA()</code>, ta in giá trị của <code>a</code>. Interpreter tìm giá trị này bằng cách đi ngược chuỗi environment. Nó đi tới tận global environment mới tìm thấy và in <code>"global"</code>. Tuyệt.</p>
+<p>Tiếp theo, ta khai báo biến <code>a</code> thứ hai, lần này bên trong block.</p><img src="image/resolving-and-binding/environment-4.png" alt="The block environment has both 'a' and 'showA' now." />
+<p>Nó nằm trong cùng block — cùng scope — với <code>showA()</code>, nên nó được thêm vào cùng environment, cũng chính là environment mà closure của <code>showA()</code> tham chiếu tới. Đây là lúc mọi thứ trở nên thú vị. Ta gọi lại <code>showA()</code>.</p><img src="image/resolving-and-binding/environment-5.png" alt="An empty environment for showA()'s body linking to the previous two. 'a' is resolved in the block environment." />
+<p>Ta lại tạo một environment trống cho phần thân <code>showA()</code>, nối nó với closure đó, và chạy thân hàm. Khi interpreter đi ngược chuỗi environment để tìm <code>a</code>, giờ nó tìm thấy biến <code>a</code> <em>mới</em> trong environment của block. Thật tệ.</p>
+<p>Tôi đã chọn hiện thực environment theo cách mà tôi hy vọng sẽ phù hợp với trực giác của bạn về scope. Ta thường nghĩ toàn bộ code trong một block nằm trong cùng một scope, nên interpreter dùng một environment duy nhất để biểu diễn nó. Mỗi environment là một hash table có thể thay đổi. Khi một biến cục bộ mới được khai báo, nó được thêm vào environment hiện có của scope đó.</p>
+<p>Trực giác này, giống như nhiều thứ khác trong đời, không hoàn toàn đúng. Một block không nhất thiết là cùng một scope từ đầu đến cuối. Xem ví dụ:</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span>;
+  <span class="c">// 1.</span>
+  <span class="k">var</span> <span class="i">b</span>;
+  <span class="c">// 2.</span>
+}
+</pre></div>
+<p>Tại dòng đánh dấu 1, chỉ có <code>a</code> là trong scope. Tại dòng 2, cả <code>a</code> và <code>b</code> đều trong scope. Nếu bạn định nghĩa “scope” là tập hợp các khai báo, thì rõ ràng đây không phải cùng một scope — chúng không chứa cùng một tập khai báo. Giống như mỗi câu lệnh <code>var</code> <span name="split">tách</span> block thành hai scope riêng biệt: scope trước khi biến được khai báo và scope sau đó, bao gồm cả biến mới.</p>
+<aside name="split">
+<p>Một số ngôn ngữ thể hiện rõ sự tách này. Trong Scheme và ML, khi bạn khai báo biến cục bộ bằng <code>let</code>, bạn cũng đồng thời xác định rõ đoạn code tiếp theo nơi biến mới có hiệu lực. Không có khái niệm ngầm định “phần còn lại của block”.</p>
+</aside>
+<p>Nhưng trong hiện thực của ta, environment lại hoạt động như thể toàn bộ block là một scope duy nhất, chỉ là scope đó thay đổi theo thời gian. Closures thì không thích điều này. Khi một hàm được khai báo, nó lưu lại tham chiếu tới environment hiện tại. Hàm <em>đáng lẽ</em> phải lưu một bản chụp tĩnh (snapshot) của environment <em>tại thời điểm hàm được khai báo</em>. Nhưng thay vào đó, trong code Java, nó giữ tham chiếu tới chính đối tượng environment có thể thay đổi. Khi một biến được khai báo sau đó trong scope mà environment này tương ứng, closure sẽ thấy biến mới, dù khai báo đó <em>không</em> xuất hiện trước hàm.</p>
+<h3><a href="#persistent-environment" id="persistent-environment"><small>11&#8202;.&#8202;1&#8202;.&#8202;2</small>Persistent environment</a></h3>
+<p>Có một phong cách lập trình sử dụng cái gọi là <strong>persistent data structure</strong>. Không giống các cấu trúc dữ liệu “mềm” mà bạn quen thuộc trong lập trình mệnh lệnh, một persistent data structure không bao giờ bị thay đổi trực tiếp. Thay vào đó, bất kỳ “thay đổi” nào lên cấu trúc hiện có sẽ tạo ra một đối tượng <span name="copy">mới tinh</span> chứa toàn bộ dữ liệu gốc và phần thay đổi mới. Bản gốc vẫn giữ nguyên.</p>
+<aside name="copy">
+<p>Nghe có vẻ như điều này sẽ tốn rất nhiều bộ nhớ và thời gian để sao chép cấu trúc cho mỗi thao tác. Nhưng trên thực tế, persistent data structure chia sẻ phần lớn dữ liệu giữa các “bản sao” khác nhau.</p>
+</aside>
+<p>Nếu ta áp dụng kỹ thuật này cho <code>Environment</code>, thì mỗi khi bạn khai báo một biến, nó sẽ trả về một environment <em>mới</em> chứa tất cả các biến đã khai báo trước đó cùng với tên mới. Việc khai báo biến sẽ thực hiện “tách” ngầm định: bạn có một environment trước khi biến được khai báo và một environment sau đó:</p><img src="image/resolving-and-binding/split.png" alt="Separate environments before and after the variable is declared." />
+<p>Một closure giữ tham chiếu tới instance <code>Environment</code> đang tồn tại khi hàm được khai báo. Vì mọi khai báo sau đó trong block sẽ tạo ra các đối tượng <code>Environment</code> mới, closure sẽ không thấy các biến mới và lỗi của ta sẽ được sửa.</p>
+<p>Đây là một cách hợp lý để giải quyết vấn đề, và cũng là cách kinh điển để hiện thực environment trong các interpreter Scheme. Ta có thể làm vậy cho Lox, nhưng điều đó sẽ đồng nghĩa với việc phải quay lại và thay đổi một đống code hiện có.</p>
+<p>Tôi sẽ không bắt bạn đi qua con đường đó. Ta sẽ giữ nguyên cách biểu diễn environment như hiện tại. Thay vì làm cho dữ liệu có cấu trúc tĩnh hơn, ta sẽ “nướng” phần giải quyết tĩnh (static resolution) vào ngay trong thao tác <em>truy cập</em>.</p>
+<h2><a href="#phân-tích-ngữ-nghĩa-semantic-analysis" id="phân-tích-ngữ-nghĩa-semantic-analysis"><small>11&#8202;.&#8202;2</small>Phân tích ngữ nghĩa (Semantic Analysis)</a></h2>
+<p>Interpreter của chúng ta <strong>resolve</strong> một biến — tức là lần theo xem nó tham chiếu tới khai báo nào — <em>mỗi lần</em> biểu thức biến đó được đánh giá. Nếu biến đó nằm trong một vòng lặp chạy cả nghìn lần, thì nó sẽ bị resolve lại cả nghìn lần.</p>
+<p>Ta biết static scope có nghĩa là một lần sử dụng biến luôn resolve tới cùng một khai báo, và điều này có thể xác định chỉ bằng cách nhìn vào văn bản chương trình. Vậy thì, tại sao ta lại làm việc này động (dynamic) mỗi lần? Làm vậy không chỉ mở ra lỗ hổng dẫn tới lỗi khó chịu của ta, mà còn chậm một cách không cần thiết.</p>
+<p>Giải pháp tốt hơn là resolve mỗi lần sử dụng biến <em>một lần duy nhất</em>. Viết một đoạn code để duyệt qua chương trình của người dùng, tìm mọi biến được nhắc tới, và xác định mỗi biến đó tham chiếu tới khai báo nào. Quá trình này là một ví dụ của <strong>semantic analysis</strong>. Nếu parser chỉ cho biết chương trình có đúng ngữ pháp hay không (một dạng <em>syntactic analysis</em>), thì semantic analysis đi xa hơn và bắt đầu tìm hiểu các phần của chương trình <em>thực sự</em> có nghĩa gì. Trong trường hợp này, phân tích của ta sẽ resolve các variable binding. Ta sẽ biết không chỉ rằng một biểu thức <em>là</em> một biến, mà còn biết <em>đó là biến nào</em>.</p>
+<p>Có nhiều cách để lưu trữ mối liên kết giữa một biến và khai báo của nó. Khi tới interpreter C cho Lox, ta sẽ có một cách lưu trữ và truy cập biến cục bộ <em>hiệu quả hơn nhiều</em>. Nhưng với jlox, tôi muốn giảm thiểu tối đa tác động phụ lên codebase hiện tại. Tôi không muốn vứt bỏ một đống code vốn vẫn ổn.</p>
+<p>Thay vào đó, ta sẽ lưu thông tin resolution theo cách tận dụng tối đa class <code>Environment</code> hiện có. Hãy nhớ lại cách các lần truy cập <code>a</code> được interpreter xử lý trong ví dụ gây lỗi.</p><img src="image/resolving-and-binding/environment-3.png" alt="An empty environment for showA()'s body linking to the previous two. 'a' is resolved in the global environment." />
+<p>Trong lần đánh giá đầu tiên (đúng), ta phải đi qua ba environment trong chuỗi trước khi tìm thấy khai báo toàn cục của <code>a</code>. Sau đó, khi biến <code>a</code> bên trong được khai báo trong block scope, nó che khuất (shadow) biến toàn cục.</p><img src="image/resolving-and-binding/environment-5.png" alt="An empty environment for showA()'s body linking to the previous two. 'a' is resolved in the block environment." />
+<p>Lần lookup tiếp theo đi qua chuỗi, tìm thấy <code>a</code> trong environment <em>thứ hai</em> và dừng lại ở đó. Mỗi environment tương ứng với một lexical scope nơi biến được khai báo. Nếu ta có thể đảm bảo một lần lookup biến luôn đi qua <em>cùng</em> số bước trong chuỗi environment, thì ta sẽ đảm bảo nó luôn tìm thấy cùng một biến trong cùng một scope mỗi lần.</p>
+<p>Để “resolve” một lần sử dụng biến, ta chỉ cần tính xem biến được khai báo sẽ nằm cách bao nhiêu “bước” trong chuỗi environment. Câu hỏi thú vị là <em>khi nào</em> thực hiện phép tính này — hay nói cách khác, trong phần nào của hiện thực interpreter ta sẽ nhét đoạn code này vào?</p>
+<p>Vì ta đang tính một thuộc tính tĩnh dựa trên cấu trúc mã nguồn, câu trả lời hiển nhiên là trong parser. Đó là nơi truyền thống để làm việc này, và cũng là nơi ta sẽ đặt nó sau này trong clox. Nó cũng có thể hoạt động ở đây, nhưng tôi muốn có cớ để cho bạn thấy một kỹ thuật khác. Ta sẽ viết resolver như một bước (pass) riêng.</p>
+<h3><a href="#bước-resolve-biến" id="bước-resolve-biến"><small>11&#8202;.&#8202;2&#8202;.&#8202;1</small>Bước resolve biến</a></h3>
+<p>Sau khi parser tạo ra syntax tree, nhưng trước khi interpreter bắt đầu execute, ta sẽ duyệt qua cây một lần để resolve tất cả các biến mà nó chứa. Các bước bổ sung giữa parsing và execution là chuyện thường gặp. Nếu Lox có kiểu tĩnh, ta có thể chèn một bộ kiểm tra kiểu vào đó. Các tối ưu hóa cũng thường được hiện thực trong các bước riêng như thế này. Nói chung, bất kỳ công việc nào không phụ thuộc vào trạng thái chỉ có ở runtime đều có thể làm theo cách này.</p>
+<p>Bước resolve biến của ta hoạt động giống như một mini-interpreter. Nó duyệt cây, thăm từng node, nhưng static analysis khác với dynamic execution ở chỗ:</p>
+<ul>
+<li>
+<p><strong>Không có side effect.</strong> Khi static analysis thăm một câu lệnh <code>print</code>, nó sẽ không thực sự in gì cả. Các lời gọi tới hàm native hoặc các thao tác tác động ra thế giới bên ngoài sẽ bị bỏ qua và không gây hiệu ứng.</p>
+</li>
+<li>
+<p><strong>Không có control flow.</strong> Vòng lặp chỉ được thăm <span name="fix">một lần</span>. Cả hai nhánh trong câu lệnh <code>if</code> đều được thăm. Các toán tử logic không short-circuit.</p>
+</li>
+</ul>
+<aside name="fix">
+<p>Việc resolve biến chạm vào mỗi node một lần, nên hiệu năng của nó là <em>O(n)</em> với <em>n</em> là số node trong syntax tree. Các phân tích phức tạp hơn có thể có độ phức tạp lớn hơn, nhưng hầu hết đều được thiết kế cẩn thận để tuyến tính hoặc gần tuyến tính. Sẽ thật xấu hổ nếu compiler của bạn chậm theo cấp số nhân khi chương trình của người dùng lớn dần.</p>
+</aside>
+<h2><a href="#lớp-resolver" id="lớp-resolver"><small>11&#8202;.&#8202;3</small>Lớp Resolver</a></h2>
+<p>Giống như mọi thứ trong Java, bước resolve biến của ta được hiện thân trong một class.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.HashMap</span>;
+<span class="k">import</span> <span class="i">java.util.List</span>;
+<span class="k">import</span> <span class="i">java.util.Map</span>;
+<span class="k">import</span> <span class="i">java.util.Stack</span>;
+
+<span class="k">class</span> <span class="t">Resolver</span> <span class="k">implements</span> <span class="t">Expr</span>.<span class="t">Visitor</span>&lt;<span class="t">Void</span>&gt;, <span class="t">Stmt</span>.<span class="t">Visitor</span>&lt;<span class="t">Void</span>&gt; {
+  <span class="k">private</span> <span class="k">final</span> <span class="t">Interpreter</span> <span class="i">interpreter</span>;
+
+  <span class="t">Resolver</span>(<span class="t">Interpreter</span> <span class="i">interpreter</span>) {
+    <span class="k">this</span>.<span class="i">interpreter</span> = <span class="i">interpreter</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, create new file</div>
+
+<p>Vì resolver cần thăm mọi node trong syntax tree, nó hiện thực abstraction visitor mà ta đã có sẵn. Chỉ một vài loại node là đáng chú ý khi resolve biến:</p>
+<ul>
+<li>
+<p>Câu lệnh block tạo ra một scope mới cho các câu lệnh bên trong nó.</p>
+</li>
+<li>
+<p>Khai báo hàm tạo ra một scope mới cho phần thân và bind các tham số trong scope đó.</p>
+</li>
+<li>
+<p>Khai báo biến thêm một biến mới vào scope hiện tại.</p>
+</li>
+<li>
+<p>Biểu thức biến và biểu thức gán cần được resolve biến.</p>
+</li>
+</ul>
+<p>Các node còn lại không làm gì đặc biệt, nhưng ta vẫn cần hiện thực các phương thức <code>visit</code> cho chúng để duyệt vào các cây con. Dù một biểu thức <code>+</code> <em>tự nó</em> không có biến nào để resolve, nhưng một trong hai toán hạng của nó có thể có.</p>
+<h3><a href="#resolve-các-khối-lệnh-blocks" id="resolve-các-khối-lệnh-blocks"><small>11&#8202;.&#8202;3&#8202;.&#8202;1</small>Resolve các khối lệnh (blocks)</a></h3>
+<p>Ta bắt đầu với block vì chúng tạo ra các local scope — nơi mọi “phép màu” diễn ra.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>Resolver</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitBlockStmt</span>(<span class="t">Stmt</span>.<span class="t">Block</span> <span class="i">stmt</span>) {
+    <span class="i">beginScope</span>();
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">statements</span>);
+    <span class="i">endScope</span>();
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>Resolver</em>()</div>
+
+<p>Đoạn này bắt đầu một scope mới, duyệt vào các câu lệnh bên trong block, rồi bỏ scope đó đi. Phần thú vị nằm trong các hàm helper. Ta bắt đầu với cái đơn giản trước.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>Resolver</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">resolve</span>(<span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span>) {
+    <span class="k">for</span> (<span class="t">Stmt</span> <span class="i">statement</span> : <span class="i">statements</span>) {
+      <span class="i">resolve</span>(<span class="i">statement</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>Resolver</em>()</div>
+
+<p>Hàm này duyệt qua một danh sách các câu lệnh và resolve từng câu lệnh. Nó lại gọi tiếp:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">resolve</span>(<span class="t">Stmt</span> <span class="i">stmt</span>) {
+    <span class="i">stmt</span>.<span class="i">accept</span>(<span class="k">this</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Nhân tiện, ta thêm một overload khác mà sau này sẽ cần để resolve một biểu thức.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>resolve</em>(Stmt stmt)</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">resolve</span>(<span class="t">Expr</span> <span class="i">expr</span>) {
+    <span class="i">expr</span>.<span class="i">accept</span>(<span class="k">this</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>resolve</em>(Stmt stmt)</div>
+
+<p>Các phương thức này tương tự như <code>evaluate()</code> và <code>execute()</code> trong Interpreter — chúng áp dụng Visitor pattern lên node của syntax tree được truyền vào.</p>
+<p>Phần hành vi thú vị thực sự nằm ở scope. Một block scope mới được tạo như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>resolve</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">beginScope</span>() {
+    <span class="i">scopes</span>.<span class="i">push</span>(<span class="k">new</span> <span class="t">HashMap</span>&lt;<span class="t">String</span>, <span class="t">Boolean</span>&gt;());
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>resolve</em>()</div>
+
+<p>Lexical scope được lồng nhau cả trong interpreter lẫn resolver. Chúng hoạt động như một stack. Interpreter hiện thực stack này bằng một linked list — chuỗi các đối tượng <code>Environment</code>. Trong resolver, ta dùng hẳn một <code>Stack</code> của Java.</p>
+<div class="codehilite"><pre class="insert-before">  private final Interpreter interpreter;
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in class <em>Resolver</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">Stack</span>&lt;<span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">Boolean</span>&gt;&gt; <span class="i">scopes</span> = <span class="k">new</span> <span class="t">Stack</span>&lt;&gt;();
+</pre><pre class="insert-after">
+
+  Resolver(Interpreter interpreter) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in class <em>Resolver</em></div>
+
+<p>Trường này lưu stack các scope hiện đang… trong scope. Mỗi phần tử trong stack là một <code>Map</code> biểu diễn một block scope duy nhất. Key, giống như trong <code>Environment</code>, là tên biến. Value là Boolean, lý do sẽ được giải thích ngay sau đây.</p>
+<p>Stack scope này chỉ dùng cho các local block scope. Các biến khai báo ở cấp cao nhất (global scope) không được resolver theo dõi vì chúng mang tính động hơn trong Lox. Khi resolve một biến, nếu không tìm thấy nó trong stack các local scope, ta giả định nó là biến global.</p>
+<p>Vì scope được lưu trong một stack tường minh, việc thoát khỏi một scope khá đơn giản.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>beginScope</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">endScope</span>() {
+    <span class="i">scopes</span>.<span class="i">pop</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>beginScope</em>()</div>
+
+<p>Giờ ta có thể push và pop một stack các scope rỗng. Hãy đặt một vài thứ vào chúng.</p>
+<h3><a href="#resolve-khai-báo-biến" id="resolve-khai-báo-biến"><small>11&#8202;.&#8202;3&#8202;.&#8202;2</small>Resolve khai báo biến</a></h3>
+<p>Resolve một khai báo biến sẽ thêm một entry mới vào map của scope trong cùng hiện tại. Nghe có vẻ đơn giản, nhưng ta cần một chút “múa” ở đây.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitVarStmt</span>(<span class="t">Stmt</span>.<span class="t">Var</span> <span class="i">stmt</span>) {
+    <span class="i">declare</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">initializer</span> != <span class="k">null</span>) {
+      <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">initializer</span>);
+    }
+    <span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Ta tách việc bind thành hai bước: declare rồi define, để xử lý các trường hợp “oái oăm” như sau:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="i">a</span>;
+}
+</pre></div>
+<p>Điều gì xảy ra khi phần initializer của một biến cục bộ lại tham chiếu tới một biến có cùng tên với biến đang được khai báo? Ta có vài lựa chọn:</p>
+<ol>
+<li>
+<p><strong>Chạy initializer, rồi mới đưa biến mới vào scope.</strong> Khi đó, biến cục bộ <code>a</code> mới sẽ được khởi tạo bằng <code>"outer"</code>, giá trị của biến <code>a</code> <em>global</em>. Nói cách khác, khai báo trước đó sẽ được “desugar” thành:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">temp</span> = <span class="i">a</span>; <span class="c">// Chạy initializer.</span>
+<span class="k">var</span> <span class="i">a</span>;        <span class="c">// Khai báo biến.</span>
+<span class="i">a</span> = <span class="i">temp</span>;     <span class="c">// Khởi tạo.</span>
+</pre></div>
+</li>
+<li>
+<p><strong>Đưa biến mới vào scope, rồi chạy initializer.</strong> Nghĩa là bạn có thể “thấy” biến trước khi nó được khởi tạo, nên ta cần xác định giá trị của nó lúc đó là gì. Có lẽ là <code>nil</code>. Khi đó, biến cục bộ <code>a</code> mới sẽ được gán lại chính giá trị khởi tạo ngầm định của nó, <code>nil</code>. Desugar sẽ trông như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span>; <span class="c">// Định nghĩa biến.</span>
+<span class="i">a</span> = <span class="i">a</span>; <span class="c">// Chạy initializer.</span>
+</pre></div>
+</li>
+<li>
+<p><strong>Báo lỗi nếu tham chiếu tới biến trong chính initializer của nó.</strong> Interpreter sẽ fail ở compile time hoặc runtime nếu initializer nhắc tới biến đang được khởi tạo.</p>
+</li>
+</ol>
+<p>Hai lựa chọn đầu có giống thứ mà người dùng <em>thực sự</em> muốn không? Shadowing là hiếm và thường là lỗi, nên việc khởi tạo một biến shadow dựa trên giá trị của biến bị shadow có vẻ khó là chủ ý.</p>
+<p>Lựa chọn thứ hai còn ít hữu ích hơn. Biến mới sẽ <em>luôn</em> có giá trị <code>nil</code>. Không bao giờ có lý do để nhắc tới nó bằng tên. Bạn có thể dùng <code>nil</code> tường minh thay thế.</p>
+<p>Vì hai lựa chọn đầu dễ che giấu lỗi của người dùng, ta sẽ chọn cách thứ ba. Hơn nữa, ta sẽ biến nó thành lỗi compile-time thay vì runtime. Như vậy, người dùng sẽ được cảnh báo trước khi code chạy.</p>
+<p>Để làm được điều đó, khi duyệt các biểu thức, ta cần biết mình có đang ở trong initializer của một biến nào đó hay không. Ta làm điều này bằng cách tách việc bind thành hai bước. Bước đầu tiên là <strong>declare</strong> nó.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>endScope</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">declare</span>(<span class="t">Token</span> <span class="i">name</span>) {
+    <span class="k">if</span> (<span class="i">scopes</span>.<span class="i">isEmpty</span>()) <span class="k">return</span>;
+
+    <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">Boolean</span>&gt; <span class="i">scope</span> = <span class="i">scopes</span>.<span class="i">peek</span>();
+    <span class="i">scope</span>.<span class="i">put</span>(<span class="i">name</span>.<span class="i">lexeme</span>, <span class="k">false</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>endScope</em>()</div>
+
+<p>Khai báo sẽ thêm biến vào scope trong cùng để nó shadow bất kỳ biến bên ngoài nào và để ta biết biến đó tồn tại. Ta đánh dấu nó là “chưa sẵn sàng” bằng cách bind tên của nó với <code>false</code> trong scope map. Giá trị gắn với một key trong scope map biểu thị việc ta đã hoàn tất resolve initializer của biến đó hay chưa.</p>
+<p>Sau khi khai báo biến, ta resolve biểu thức initializer của nó trong cùng scope đó — nơi biến mới tồn tại nhưng chưa thể dùng. Khi biểu thức initializer xong, biến đã sẵn sàng để dùng. Ta làm điều này bằng cách <strong>define</strong> nó.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>declare</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">define</span>(<span class="t">Token</span> <span class="i">name</span>) {
+    <span class="k">if</span> (<span class="i">scopes</span>.<span class="i">isEmpty</span>()) <span class="k">return</span>;
+    <span class="i">scopes</span>.<span class="i">peek</span>().<span class="i">put</span>(<span class="i">name</span>.<span class="i">lexeme</span>, <span class="k">true</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>declare</em>()</div>
+
+<p>Ta đặt giá trị của biến trong scope map thành <code>true</code> để đánh dấu nó đã được khởi tạo đầy đủ và sẵn sàng sử dụng. Nó đã “sống” rồi!</p>
+<h3><a href="#resolve-biểu-thức-biến" id="resolve-biểu-thức-biến"><small>11&#8202;.&#8202;3&#8202;.&#8202;3</small>Resolve biểu thức biến</a></h3>
+<p>Khai báo biến — và cả khai báo hàm (mà ta sẽ nói tới sau) — sẽ ghi vào scope map. Các map này sẽ được đọc khi ta resolve các biểu thức biến.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitVarStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitVariableExpr</span>(<span class="t">Expr</span>.<span class="t">Variable</span> <span class="i">expr</span>) {
+    <span class="k">if</span> (!<span class="i">scopes</span>.<span class="i">isEmpty</span>() &amp;&amp;
+        <span class="i">scopes</span>.<span class="i">peek</span>().<span class="i">get</span>(<span class="i">expr</span>.<span class="i">name</span>.<span class="i">lexeme</span>) == <span class="t">Boolean</span>.<span class="i">FALSE</span>) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">expr</span>.<span class="i">name</span>,
+          <span class="s">&quot;Can&#39;t read local variable in its own initializer.&quot;</span>);
+    }
+
+    <span class="i">resolveLocal</span>(<span class="i">expr</span>, <span class="i">expr</span>.<span class="i">name</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitVarStmt</em>()</div>
+
+<p>Đầu tiên, ta kiểm tra xem biến có đang được truy cập bên trong chính initializer của nó hay không. Đây là lúc giá trị trong scope map phát huy tác dụng. Nếu biến tồn tại trong scope hiện tại nhưng giá trị của nó là <code>false</code>, nghĩa là ta đã khai báo nhưng chưa define nó. Ta sẽ báo lỗi.</p>
+<p>Sau khi kiểm tra xong, ta thực sự resolve biến đó bằng helper này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>define</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">resolveLocal</span>(<span class="t">Expr</span> <span class="i">expr</span>, <span class="t">Token</span> <span class="i">name</span>) {
+    <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="i">scopes</span>.<span class="i">size</span>() - <span class="n">1</span>; <span class="i">i</span> &gt;= <span class="n">0</span>; <span class="i">i</span>--) {
+      <span class="k">if</span> (<span class="i">scopes</span>.<span class="i">get</span>(<span class="i">i</span>).<span class="i">containsKey</span>(<span class="i">name</span>.<span class="i">lexeme</span>)) {
+        <span class="i">interpreter</span>.<span class="i">resolve</span>(<span class="i">expr</span>, <span class="i">scopes</span>.<span class="i">size</span>() - <span class="n">1</span> - <span class="i">i</span>);
+        <span class="k">return</span>;
+      }
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>define</em>()</div>
+
+<p>Nhìn quen quen đúng không? Nó khá giống code trong <code>Environment</code> để evaluate một biến. Ta bắt đầu từ scope trong cùng và đi ra ngoài, tìm trong từng map xem có tên khớp không. Nếu tìm thấy biến, ta resolve nó, truyền vào số scope giữa scope trong cùng hiện tại và scope nơi biến được tìm thấy. Vậy nên, nếu biến được tìm thấy trong scope hiện tại, ta truyền vào 0. Nếu nó nằm trong scope bao ngoài ngay lập tức, là 1. Bạn hiểu ý rồi đấy.</p>
+<p>Nếu ta duyệt qua tất cả block scope mà vẫn không tìm thấy biến, ta để nó chưa resolve và giả định nó là biến global. Việc hiện thực phương thức <code>resolve()</code> đó ta sẽ nói sau. Giờ thì tiếp tục xử lý các node cú pháp khác.</p>
+<h3><a href="#resolve-biểu-thức-gán" id="resolve-biểu-thức-gán"><small>11&#8202;.&#8202;3&#8202;.&#8202;4</small>Resolve biểu thức gán</a></h3>
+<p>Biểu thức khác tham chiếu tới biến là phép gán. Resolve nó như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitVarStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitAssignExpr</span>(<span class="t">Expr</span>.<span class="t">Assign</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">value</span>);
+    <span class="i">resolveLocal</span>(<span class="i">expr</span>, <span class="i">expr</span>.<span class="i">name</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitVarStmt</em>()</div>
+
+<p>Đầu tiên, ta resolve biểu thức giá trị được gán, phòng khi nó cũng chứa tham chiếu tới biến khác. Sau đó, ta dùng lại phương thức <code>resolveLocal()</code> để resolve biến đang được gán.</p>
+<h3><a href="#resolve-khai-báo-h&agrave;m" id="resolve-khai-báo-h&agrave;m"><small>11&#8202;.&#8202;3&#8202;.&#8202;5</small>Resolve khai báo h&agrave;m</a></h3>
+<p>Cuối cùng là hàm. Hàm vừa bind tên vừa tạo ra một scope. Tên của hàm được bind trong scope bao quanh nơi hàm được khai báo. Khi ta bước vào thân hàm, ta cũng bind các tham số của nó vào scope bên trong của hàm.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitFunctionStmt</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">stmt</span>) {
+    <span class="i">declare</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+    <span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>);
+
+    <span class="i">resolveFunction</span>(<span class="i">stmt</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Tương tự <code>visitVariableStmt()</code>, ta declare và define tên hàm trong scope hiện tại. Nhưng khác với biến, ta define tên ngay lập tức, trước khi resolve thân hàm. Điều này cho phép hàm tự gọi đệ quy bên trong thân của chính nó.</p>
+<p>Sau đó, ta resolve thân hàm bằng cách này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>resolve</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">resolveFunction</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">function</span>) {
+    <span class="i">beginScope</span>();
+    <span class="k">for</span> (<span class="t">Token</span> <span class="i">param</span> : <span class="i">function</span>.<span class="i">params</span>) {
+      <span class="i">declare</span>(<span class="i">param</span>);
+      <span class="i">define</span>(<span class="i">param</span>);
+    }
+    <span class="i">resolve</span>(<span class="i">function</span>.<span class="i">body</span>);
+    <span class="i">endScope</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>resolve</em>()</div>
+
+<p>Đây là một phương thức riêng vì sau này ta cũng sẽ dùng nó để resolve các method của Lox khi thêm class. Nó tạo một scope mới cho thân hàm rồi bind biến cho từng tham số của hàm.</p>
+<p>Khi xong, nó resolve thân hàm trong scope đó. Điều này khác với cách interpreter xử lý khai báo hàm. Ở <em>runtime</em>, khai báo hàm không làm gì với thân hàm cả. Thân hàm chỉ được “đụng” tới khi hàm được gọi. Trong <em>static analysis</em>, ta duyệt ngay vào thân hàm tại chỗ.</p>
+<h3><a href="#resolve-các-node-cú-pháp-khác" id="resolve-các-node-cú-pháp-khác"><small>11&#8202;.&#8202;3&#8202;.&#8202;6</small>Resolve các node cú pháp khác</a></h3>
+<p>Vậy là ta đã xử lý những góc thú vị của ngữ pháp. Ta xử lý mọi nơi biến được khai báo, đọc hoặc ghi, và mọi nơi scope được tạo hoặc bị hủy. Dù không bị ảnh hưởng bởi việc resolve biến, ta vẫn cần các phương thức <code>visit</code> cho tất cả node cú pháp khác để đệ quy vào các cây con của chúng. <span name="boring">Xin lỗi</span> đoạn này hơi chán, nhưng hãy kiên nhẫn. Ta sẽ đi kiểu “top-down” và bắt đầu với statement.</p>
+<aside name="boring">
+<p>Tôi đã nói cuốn sách này sẽ có từng dòng code của các interpreter. Tôi đâu có nói tất cả đều thú vị.</p>
+</aside>
+<p>Một expression statement chứa một biểu thức duy nhất để duyệt.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBlockStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitExpressionStmt</span>(<span class="t">Stmt</span>.<span class="t">Expression</span> <span class="i">stmt</span>) {
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">expression</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBlockStmt</em>()</div>
+
+<p>Một if statement có một biểu thức điều kiện và một hoặc hai statement cho các nhánh.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitFunctionStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitIfStmt</span>(<span class="t">Stmt</span>.<span class="t">If</span> <span class="i">stmt</span>) {
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">condition</span>);
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">thenBranch</span>);
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">elseBranch</span> != <span class="k">null</span>) <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">elseBranch</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitFunctionStmt</em>()</div>
+
+<p>Ở đây, ta thấy sự khác biệt giữa resolution và interpretation. Khi resolve một <code>if</code>, không có control flow. Ta resolve điều kiện và <em>cả hai</em> nhánh. Trong khi execute động chỉ bước vào nhánh <em>được</em> chạy, static analysis thì thận trọng — nó phân tích mọi nhánh <em>có thể</em> được chạy. Vì ở runtime có thể đi vào bất kỳ nhánh nào, ta resolve cả hai.</p>
+<p>Giống như expression statement, một <code>print</code> statement chứa một subexpression duy nhất.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitIfStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitPrintStmt</span>(<span class="t">Stmt</span>.<span class="t">Print</span> <span class="i">stmt</span>) {
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">expression</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitIfStmt</em>()</div>
+
+<p><code>return</code> cũng tương tự.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitPrintStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitReturnStmt</span>(<span class="t">Stmt</span>.<span class="t">Return</span> <span class="i">stmt</span>) {
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">value</span> != <span class="k">null</span>) {
+      <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">value</span>);
+    }
+
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitPrintStmt</em>()</div>
+
+<p>Như với <code>if</code>, với <code>while</code> ta resolve điều kiện và resolve thân vòng lặp đúng một lần.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitVarStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitWhileStmt</span>(<span class="t">Stmt</span>.<span class="t">While</span> <span class="i">stmt</span>) {
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">condition</span>);
+    <span class="i">resolve</span>(<span class="i">stmt</span>.<span class="i">body</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitVarStmt</em>()</div>
+
+<p>Vậy là xong các statement. Giờ sang expression<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<p>Người bạn cũ binary expression. Ta duyệt và resolve cả hai toán hạng.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitAssignExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitBinaryExpr</span>(<span class="t">Expr</span>.<span class="t">Binary</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">left</span>);
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">right</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitAssignExpr</em>()</div>
+
+<p>Call cũng tương tự — ta duyệt danh sách đối số và resolve tất cả. Thứ được gọi cũng là một expression (thường là variable expression), nên cũng được resolve.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitBinaryExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitCallExpr</span>(<span class="t">Expr</span>.<span class="t">Call</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">callee</span>);
+
+    <span class="k">for</span> (<span class="t">Expr</span> <span class="i">argument</span> : <span class="i">expr</span>.<span class="i">arguments</span>) {
+      <span class="i">resolve</span>(<span class="i">argument</span>);
+    }
+
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitBinaryExpr</em>()</div>
+
+<p>Ngoặc đơn thì dễ.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitCallExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitGroupingExpr</span>(<span class="t">Expr</span>.<span class="t">Grouping</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">expression</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitCallExpr</em>()</div>
+
+<p>Literal thì dễ nhất.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitGroupingExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitLiteralExpr</span>(<span class="t">Expr</span>.<span class="t">Literal</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitGroupingExpr</em>()</div>
+
+<p>Literal expression không nhắc tới biến nào và không chứa subexpression, nên không có gì để làm.</p>
+<p>Vì static analysis không có control flow hay short-circuiting, logical expression giống hệt các toán tử nhị phân khác.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitLiteralExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitLogicalExpr</span>(<span class="t">Expr</span>.<span class="t">Logical</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">left</span>);
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">right</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitLiteralExpr</em>()</div>
+
+<p>Và cuối cùng, node cuối. Ta resolve toán hạng duy nhất của nó.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>visitLogicalExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitUnaryExpr</span>(<span class="t">Expr</span>.<span class="t">Unary</span> <span class="i">expr</span>) {
+    <span class="i">resolve</span>(<span class="i">expr</span>.<span class="i">right</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>visitLogicalExpr</em>()</div>
+
+<p>Với tất cả các phương thức <code>visit</code> này, Java compiler sẽ hài lòng rằng <code>Resolver</code> đã hiện thực đầy đủ <code>Stmt.Visitor</code> và <code>Expr.Visitor</code>. Đây là lúc thích hợp để nghỉ ngơi, ăn nhẹ, hoặc chợp mắt một chút.</p>
+<h2><a href="#execute-các-biến-đã-được-resolve" id="execute-các-biến-đã-được-resolve"><small>11&#8202;.&#8202;4</small>Execute các biến đã được resolve</a></h2>
+<p>Hãy xem resolver của ta hữu ích thế nào. Mỗi lần nó thăm một biến, nó sẽ báo cho interpreter biết có bao nhiêu scope giữa scope hiện tại và scope nơi biến đó được khai báo. Khi runtime, con số này tương ứng chính xác với số lượng <em>environment</em> giữa environment hiện tại và environment bao ngoài nơi interpreter có thể tìm thấy giá trị của biến. Resolver chuyển con số đó cho interpreter bằng cách gọi:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>execute</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">resolve</span>(<span class="t">Expr</span> <span class="i">expr</span>, <span class="t">int</span> <span class="i">depth</span>) {
+    <span class="i">locals</span>.<span class="i">put</span>(<span class="i">expr</span>, <span class="i">depth</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>execute</em>()</div>
+
+<p>Ta muốn lưu thông tin resolution này ở đâu đó để có thể dùng khi biểu thức biến hoặc gán được execute sau này, nhưng ở đâu? Một chỗ hiển nhiên là ngay trong node của syntax tree. Đây là một cách ổn, và cũng là nơi nhiều compiler lưu kết quả của các phân tích kiểu này.</p>
+<p>Ta có thể làm vậy, nhưng sẽ phải đụng chạm vào trình sinh syntax tree của mình. Thay vào đó, ta sẽ dùng một cách phổ biến khác: lưu nó ở <span name="side">bên ngoài</span> trong một map liên kết mỗi node của syntax tree với dữ liệu đã được resolve của nó.</p>
+<aside name="side">
+<p>Tôi <em>nghĩ</em> mình đã nghe ai đó gọi map này là “side table” vì nó là một cấu trúc dữ liệu dạng bảng lưu trữ dữ liệu tách biệt với các đối tượng mà nó liên quan. Nhưng mỗi lần tôi thử Google cụm từ đó, tôi lại nhận được toàn trang về… đồ nội thất.</p>
+</aside>
+<p>Các công cụ tương tác như IDE thường parse lại và resolve lại từng phần của chương trình người dùng một cách gia tăng. Sẽ khó tìm ra tất cả các phần trạng thái cần tính toán lại khi chúng ẩn sâu trong “tán lá” của syntax tree. Một lợi ích của việc lưu dữ liệu này bên ngoài các node là ta có thể dễ dàng <em>loại bỏ</em> nó — chỉ cần xóa map.</p>
+<div class="codehilite"><pre class="insert-before">  private Environment environment = globals;
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in class <em>Interpreter</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">Map</span>&lt;<span class="t">Expr</span>, <span class="t">Integer</span>&gt; <span class="i">locals</span> = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+</pre><pre class="insert-after">
+
+  Interpreter() {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in class <em>Interpreter</em></div>
+
+<p>Bạn có thể nghĩ rằng ta cần một cấu trúc cây lồng nhau nào đó để tránh nhầm lẫn khi có nhiều biểu thức cùng tham chiếu tới một biến, nhưng mỗi node biểu thức là một đối tượng Java riêng với định danh duy nhất của nó. Một map đơn khối duy nhất sẽ không gặp vấn đề gì trong việc giữ chúng tách biệt.</p>
+<p>Như thường lệ, dùng một collection yêu cầu ta import một vài tên.</p>
+<div class="codehilite"><pre class="insert-before">import java.util.ArrayList;
+</pre><div class="source-file"><em>lox/Interpreter.java</em></div>
+<pre class="insert"><span class="k">import</span> <span class="i">java.util.HashMap</span>;
+</pre><pre class="insert-after">import java.util.List;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em></div>
+
+<p>Và:</p>
+<div class="codehilite"><pre class="insert-before">import java.util.List;
+</pre><div class="source-file"><em>lox/Interpreter.java</em></div>
+<pre class="insert"><span class="k">import</span> <span class="i">java.util.Map</span>;
+</pre><pre class="insert-after">
+
+class Interpreter implements Expr.Visitor&lt;Object&gt;,
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em></div>
+
+<h3><a href="#truy-cập-một-biến-đã-được-resolve" id="truy-cập-một-biến-đã-được-resolve"><small>11&#8202;.&#8202;4&#8202;.&#8202;1</small>Truy cập một biến đã được resolve</a></h3>
+<p>Interpreter của ta giờ đã có quyền truy cập vị trí đã resolve của từng biến. Cuối cùng thì ta cũng được dùng nó. Ta thay thế phương thức <code>visit</code> cho biểu thức biến bằng:</p>
+<div class="codehilite"><pre class="insert-before">  public Object visitVariableExpr(Expr.Variable expr) {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitVariableExpr</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">return</span> <span class="i">lookUpVariable</span>(<span class="i">expr</span>.<span class="i">name</span>, <span class="i">expr</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitVariableExpr</em>(), replace 1 line</div>
+
+<p>Phương thức này ủy quyền cho:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitVariableExpr</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Object</span> <span class="i">lookUpVariable</span>(<span class="t">Token</span> <span class="i">name</span>, <span class="t">Expr</span> <span class="i">expr</span>) {
+    <span class="t">Integer</span> <span class="i">distance</span> = <span class="i">locals</span>.<span class="i">get</span>(<span class="i">expr</span>);
+    <span class="k">if</span> (<span class="i">distance</span> != <span class="k">null</span>) {
+      <span class="k">return</span> <span class="i">environment</span>.<span class="i">getAt</span>(<span class="i">distance</span>, <span class="i">name</span>.<span class="i">lexeme</span>);
+    } <span class="k">else</span> {
+      <span class="k">return</span> <span class="i">globals</span>.<span class="i">get</span>(<span class="i">name</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitVariableExpr</em>()</div>
+
+<p>Có vài thứ diễn ra ở đây. Đầu tiên, ta tra khoảng cách đã resolve trong map. Nhớ rằng ta chỉ resolve các biến <em>local</em>. Biến global được xử lý đặc biệt và không nằm trong map (vì thế map mới tên là <code>locals</code>). Vậy nên, nếu không tìm thấy khoảng cách trong map, chắc chắn nó là biến global. Trong trường hợp đó, ta tra nó một cách động, trực tiếp trong global environment. Nếu biến chưa được định nghĩa, điều đó sẽ ném ra lỗi runtime.</p>
+<p>Nếu ta <em>có</em> khoảng cách, tức là biến local, và ta có thể tận dụng kết quả của phân tích tĩnh. Thay vì gọi <code>get()</code>, ta gọi phương thức mới này trên <code>Environment</code>:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+add after <em>define</em>()</div>
+<pre>  <span class="t">Object</span> <span class="i">getAt</span>(<span class="t">int</span> <span class="i">distance</span>, <span class="t">String</span> <span class="i">name</span>) {
+    <span class="k">return</span> <span class="i">ancestor</span>(<span class="i">distance</span>).<span class="i">values</span>.<span class="i">get</span>(<span class="i">name</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, add after <em>define</em>()</div>
+
+<p>Phương thức <code>get()</code> cũ sẽ duyệt động qua chuỗi các environment bao ngoài, rà soát từng cái để xem biến có “ẩn” ở đâu đó không. Nhưng giờ ta biết chính xác environment nào trong chuỗi sẽ chứa biến. Ta tiếp cận nó bằng helper này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+add after <em>define</em>()</div>
+<pre>  <span class="t">Environment</span> <span class="i">ancestor</span>(<span class="t">int</span> <span class="i">distance</span>) {
+    <span class="t">Environment</span> <span class="i">environment</span> = <span class="k">this</span>;
+    <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">distance</span>; <span class="i">i</span>++) {
+      <span class="i">environment</span> = <span class="i">environment</span>.<span class="i">enclosing</span>;<span name="coupled"> </span>
+    }
+
+    <span class="k">return</span> <span class="i">environment</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, add after <em>define</em>()</div>
+
+<p>Helper này đi một số bước cố định lên chuỗi cha và trả về environment ở đó. Khi đã có environment đó, <code>getAt()</code> chỉ đơn giản trả về giá trị của biến trong map của environment đó. Nó thậm chí không cần kiểm tra xem biến có ở đó không — ta biết chắc là có vì resolver đã tìm thấy nó từ trước.</p>
+<aside name="coupled">
+<p>Cách interpreter giả định biến có trong map này giống như đang “bay mù”. Code interpreter tin tưởng rằng resolver đã làm đúng việc và resolve biến chính xác. Điều này ngụ ý một sự phụ thuộc chặt chẽ giữa hai class này. Trong resolver, mỗi dòng code đụng tới scope phải có một dòng tương ứng trong interpreter để chỉnh sửa environment.</p>
+<p>Tôi đã cảm nhận sự phụ thuộc này trực tiếp vì khi viết code cho cuốn sách, tôi đã gặp vài lỗi tinh vi khi resolver và interpreter hơi lệch nhau. Lần ra chúng khá khó khăn. Một công cụ giúp việc này dễ hơn là để interpreter kiểm tra rõ ràng — dùng câu lệnh <code>assert</code> của Java hoặc công cụ xác thực khác — hợp đồng mà nó mong resolver đã đảm bảo.</p>
+</aside>
+<h3><a href="#gán-giá-trị-cho-một-biến-đã-được-resolve" id="gán-giá-trị-cho-một-biến-đã-được-resolve"><small>11&#8202;.&#8202;4&#8202;.&#8202;2</small>Gán giá trị cho một biến đã được resolve</a></h3>
+<p>Ta cũng có thể sử dụng một biến bằng cách gán giá trị cho nó. Việc thay đổi khi thăm một biểu thức gán cũng tương tự.</p>
+<div class="codehilite"><pre class="insert-before">  public Object visitAssignExpr(Expr.Assign expr) {
+    Object value = evaluate(expr.value);
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitAssignExpr</em>()<br>
+replace 1 line</div>
+<pre class="insert">
+
+    <span class="t">Integer</span> <span class="i">distance</span> = <span class="i">locals</span>.<span class="i">get</span>(<span class="i">expr</span>);
+    <span class="k">if</span> (<span class="i">distance</span> != <span class="k">null</span>) {
+      <span class="i">environment</span>.<span class="i">assignAt</span>(<span class="i">distance</span>, <span class="i">expr</span>.<span class="i">name</span>, <span class="i">value</span>);
+    } <span class="k">else</span> {
+      <span class="i">globals</span>.<span class="i">assign</span>(<span class="i">expr</span>.<span class="i">name</span>, <span class="i">value</span>);
+    }
+
+</pre><pre class="insert-after">    return value;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitAssignExpr</em>(), replace 1 line</div>
+
+<p>Một lần nữa, ta tra khoảng cách scope của biến. Nếu không tìm thấy, ta giả định nó là biến global và xử lý giống như trước. Ngược lại, ta gọi phương thức mới này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+add after <em>getAt</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">assignAt</span>(<span class="t">int</span> <span class="i">distance</span>, <span class="t">Token</span> <span class="i">name</span>, <span class="t">Object</span> <span class="i">value</span>) {
+    <span class="i">ancestor</span>(<span class="i">distance</span>).<span class="i">values</span>.<span class="i">put</span>(<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, add after <em>getAt</em>()</div>
+
+<p>Nếu <code>getAt()</code> là phiên bản của <code>get()</code>, thì <code>assignAt()</code> là phiên bản của <code>assign()</code>. Nó đi qua một số lượng cố định các environment, rồi nhét giá trị mới vào map của environment đó.</p>
+<p>Đó là tất cả thay đổi đối với Interpreter. Đây là lý do tôi chọn cách biểu diễn dữ liệu đã resolve sao cho ít xâm lấn nhất. Tất cả các node còn lại vẫn hoạt động như trước. Ngay cả code để chỉnh sửa environment cũng không thay đổi.</p>
+<h3><a href="#chạy-resolver" id="chạy-resolver"><small>11&#8202;.&#8202;4&#8202;.&#8202;3</small>Chạy resolver</a></h3>
+<p>Tất nhiên, ta cần thực sự <em>chạy</em> resolver. Ta chèn bước mới này sau khi parser đã hoàn thành công việc của nó.</p>
+<div class="codehilite"><pre class="insert-before">    // Stop if there was a syntax error.
+    if (hadError) return;
+
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>run</em>()</div>
+<pre class="insert">    <span class="t">Resolver</span> <span class="i">resolver</span> = <span class="k">new</span> <span class="t">Resolver</span>(<span class="i">interpreter</span>);
+    <span class="i">resolver</span>.<span class="i">resolve</span>(<span class="i">statements</span>);
+
+</pre><pre class="insert-after">    interpreter.interpret(statements);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>run</em>()</div>
+
+<p>Ta không chạy resolver nếu có bất kỳ lỗi parse nào. Nếu code có lỗi cú pháp, nó sẽ không bao giờ chạy, nên việc resolve là vô nghĩa. Nếu cú pháp sạch, ta bảo resolver làm việc của nó. Resolver có tham chiếu tới interpreter và chèn trực tiếp dữ liệu resolution vào đó khi nó duyệt qua các biến. Khi interpreter chạy tiếp theo, nó đã có mọi thứ cần thiết.</p>
+<p>Ít nhất, điều đó đúng nếu resolver <em>thành công</em>. Nhưng nếu có lỗi trong quá trình resolve thì sao?</p>
+<h2><a href="#lỗi-khi-resolve" id="lỗi-khi-resolve"><small>11&#8202;.&#8202;5</small>Lỗi khi resolve</a></h2>
+<p>Vì ta đang thực hiện một bước phân tích ngữ nghĩa, ta có cơ hội làm cho ngữ nghĩa của Lox chính xác hơn, và giúp người dùng bắt lỗi sớm trước khi chạy code. Xem ví dụ “xấu” này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">bad</span>() {
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;first&quot;</span>;
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;second&quot;</span>;
+}
+</pre></div>
+<p>Ta cho phép khai báo nhiều biến cùng tên trong scope <em>global</em>, nhưng làm vậy trong scope cục bộ thì có lẽ là một sai lầm. Nếu họ biết biến đã tồn tại, họ sẽ gán cho nó thay vì dùng <code>var</code>. Và nếu họ <em>không</em> biết nó tồn tại, họ có lẽ cũng không định ghi đè biến trước đó.</p>
+<p>Ta có thể phát hiện lỗi này một cách tĩnh khi resolve.</p>
+<div class="codehilite"><pre class="insert-before">    Map&lt;String, Boolean&gt; scope = scopes.peek();
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>declare</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">scope</span>.<span class="i">containsKey</span>(<span class="i">name</span>.<span class="i">lexeme</span>)) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">name</span>,
+          <span class="s">&quot;Already a variable with this name in this scope.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    scope.put(name.lexeme, false);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>declare</em>()</div>
+
+<p>Khi ta khai báo một biến trong scope cục bộ, ta đã biết tên của mọi biến được khai báo trước đó trong cùng scope. Nếu thấy trùng, ta báo lỗi.</p>
+<h3><a href="#lỗi-return-không-hợp-lệ" id="lỗi-return-không-hợp-lệ"><small>11&#8202;.&#8202;5&#8202;.&#8202;1</small>Lỗi return không hợp lệ</a></h3>
+<p>Đây là một đoạn script “khó chịu” khác:</p>
+<div class="codehilite"><pre><span class="k">return</span> <span class="s">&quot;at top level&quot;</span>;
+</pre></div>
+<p>Nó execute một câu lệnh <code>return</code>, nhưng thậm chí không nằm trong hàm nào cả. Đây là code ở cấp cao nhất. Tôi không biết người dùng <em>nghĩ</em> điều gì sẽ xảy ra, nhưng tôi không nghĩ ta muốn Lox cho phép điều này.</p>
+<p>Ta có thể mở rộng resolver để phát hiện điều này một cách tĩnh. Giống như cách ta theo dõi scope khi duyệt cây, ta có thể theo dõi xem code hiện tại ta đang thăm có nằm trong một khai báo hàm hay không.</p>
+<div class="codehilite"><pre class="insert-before">  private final Stack&lt;Map&lt;String, Boolean&gt;&gt; scopes = new Stack&lt;&gt;();
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in class <em>Resolver</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="t">FunctionType</span> <span class="i">currentFunction</span> = <span class="t">FunctionType</span>.<span class="i">NONE</span>;
+</pre><pre class="insert-after">
+
+  Resolver(Interpreter interpreter) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in class <em>Resolver</em></div>
+
+<p>Thay vì một Boolean đơn giản, ta dùng một enum “vui vẻ” này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+add after <em>Resolver</em>()</div>
+<pre>  <span class="k">private</span> <span class="k">enum</span> <span class="t">FunctionType</span> {
+    <span class="i">NONE</span>,
+    <span class="i">FUNCTION</span>
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, add after <em>Resolver</em>()</div>
+
+<p>Bây giờ thì có vẻ hơi thừa, nhưng sau này ta sẽ thêm vài trường hợp nữa và nó sẽ hợp lý hơn. Khi ta resolve một khai báo hàm, ta truyền giá trị này vào.</p>
+<div class="codehilite"><pre class="insert-before">    define(stmt.name);
+
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitFunctionStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="i">resolveFunction</span>(<span class="i">stmt</span>, <span class="t">FunctionType</span>.<span class="i">FUNCTION</span>);
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitFunctionStmt</em>(), replace 1 line</div>
+
+<p>Trong <code>resolveFunction()</code>, ta nhận tham số đó và lưu vào field trước khi resolve thân hàm.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Resolver.java</em><br>
+method <em>resolveFunction</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">private</span> <span class="t">void</span> <span class="i">resolveFunction</span>(
+      <span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">function</span>, <span class="t">FunctionType</span> <span class="i">type</span>) {
+    <span class="t">FunctionType</span> <span class="i">enclosingFunction</span> = <span class="i">currentFunction</span>;
+    <span class="i">currentFunction</span> = <span class="i">type</span>;
+
+</pre><pre class="insert-after">    beginScope();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, method <em>resolveFunction</em>(), replace 1 line</div>
+
+<p>Trước tiên, ta lưu giá trị cũ của field vào một biến cục bộ. Nhớ rằng, Lox có hàm cục bộ, nên bạn có thể lồng khai báo hàm sâu tùy ý. Ta cần theo dõi không chỉ là đang ở trong một hàm, mà còn <em>bao nhiêu</em> hàm.</p>
+<p>Ta có thể dùng một stack tường minh của các giá trị FunctionType cho việc này, nhưng thay vào đó ta tận dụng JVM. Ta lưu giá trị cũ vào một biến cục bộ trên Java stack. Khi resolve xong thân hàm, ta khôi phục field về giá trị đó.</p>
+<div class="codehilite"><pre class="insert-before">    endScope();
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>resolveFunction</em>()</div>
+<pre class="insert">    <span class="i">currentFunction</span> = <span class="i">enclosingFunction</span>;
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>resolveFunction</em>()</div>
+
+<p>Giờ thì ta luôn biết mình có đang ở trong một khai báo hàm hay không, và ta kiểm tra điều đó khi resolve một câu lệnh <code>return</code>.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitReturnStmt(Stmt.Return stmt) {
+</pre><div class="source-file"><em>lox/Resolver.java</em><br>
+in <em>visitReturnStmt</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">currentFunction</span> == <span class="t">FunctionType</span>.<span class="i">NONE</span>) {
+      <span class="t">Lox</span>.<span class="i">error</span>(<span class="i">stmt</span>.<span class="i">keyword</span>, <span class="s">&quot;Can&#39;t return from top-level code.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    if (stmt.value != null) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Resolver.java</em>, in <em>visitReturnStmt</em>()</div>
+
+<p>Hay ho, đúng không?</p>
+<p>Còn một phần nữa. Quay lại class <code>Lox</code> chính, nơi kết nối mọi thứ lại với nhau, ta cẩn thận không chạy interpreter nếu gặp bất kỳ lỗi parse nào. Việc kiểm tra này chạy <em>trước</em> resolver để ta không cố resolve code sai cú pháp.</p>
+<p>Nhưng ta cũng cần bỏ qua interpreter nếu có lỗi khi resolve, nên ta thêm <em>một</em> kiểm tra nữa.</p>
+<div class="codehilite"><pre class="insert-before">    resolver.resolve(statements);
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>run</em>()</div>
+<pre class="insert">
+
+    <span class="c">// Stop if there was a resolution error.</span>
+    <span class="k">if</span> (<span class="i">hadError</span>) <span class="k">return</span>;
+</pre><pre class="insert-after">
+
+    interpreter.interpret(statements);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>run</em>()</div>
+
+<p>Bạn có thể tưởng tượng thêm nhiều phân tích khác ở đây. Ví dụ, nếu ta thêm câu lệnh <code>break</code> vào Lox, ta có thể muốn đảm bảo chúng chỉ được dùng bên trong vòng lặp.</p>
+<p>Ta có thể tiến xa hơn và báo cảnh báo cho code không hẳn là <em>sai</em> nhưng có lẽ không hữu ích. Ví dụ, nhiều IDE sẽ cảnh báo nếu bạn có code không thể tới được sau một câu lệnh <code>return</code>, hoặc một biến cục bộ mà giá trị của nó không bao giờ được đọc. Tất cả những điều đó khá dễ để thêm vào bước duyệt tĩnh này, hoặc như các bước <span name="separate">riêng biệt</span>.</p>
+<aside name="separate">
+<p>Việc quyết định gộp bao nhiêu loại phân tích khác nhau vào một pass duy nhất là một lựa chọn khó. Nhiều pass nhỏ, tách biệt, mỗi pass đảm nhận một trách nhiệm riêng, sẽ dễ hiện thực và bảo trì hơn. Tuy nhiên, việc duyệt qua syntax tree bản thân nó cũng có chi phí runtime đáng kể, nên gộp nhiều phân tích vào một pass thường sẽ nhanh hơn.</p>
+</aside>
+<p>Nhưng hiện tại, ta sẽ giữ nguyên mức phân tích hạn chế đó. Phần quan trọng là ta đã sửa được lỗi “góc cạnh” khó chịu kia, dù có thể bạn sẽ ngạc nhiên là phải tốn nhiều công sức đến vậy mới làm được.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>11&#8202;.&#8202;6</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Tại sao có thể an toàn khi define ngay lập tức biến gắn với tên của một hàm, trong khi các biến khác phải đợi đến sau khi được khởi tạo mới có thể sử dụng?</p>
+</li>
+<li>
+<p>Các ngôn ngữ khác mà bạn biết xử lý thế nào với biến cục bộ tham chiếu tới chính tên đó trong initializer, như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="i">a</span>;
+}
+</pre></div>
+<p>Đây có phải là lỗi runtime? Lỗi compile? Được phép? Họ có xử lý biến global khác đi không? Bạn có đồng ý với lựa chọn của họ không? Hãy giải thích câu trả lời của bạn.</p>
+</li>
+<li>
+<p>Mở rộng resolver để báo lỗi nếu một biến cục bộ không bao giờ được sử dụng.</p>
+</li>
+<li>
+<p>Resolver của ta tính toán <em>biến</em> nằm trong environment nào, nhưng nó vẫn được tra cứu theo tên trong map. Một cách biểu diễn environment hiệu quả hơn là lưu biến cục bộ trong một mảng và tra cứu theo chỉ số.</p>
+<p>Mở rộng resolver để gán một chỉ số duy nhất cho mỗi biến cục bộ được khai báo trong một scope. Khi resolve một lần truy cập biến, tra cứu cả scope chứa biến và chỉ số của nó rồi lưu lại. Trong interpreter, dùng thông tin đó để truy cập nhanh biến theo chỉ số thay vì dùng map.</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="classes.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Classes&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

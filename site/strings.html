@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Strings &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Strings<small>19</small></a></h3>
+
+<ul>
+    <li><a href="#value-&amp;-object"><small>19.1</small> Value &amp; Object</a></li>
+    <li><a href="#kế-thừa-struct"><small>19.2</small> Kế thừa Struct</a></li>
+    <li><a href="#string"><small>19.3</small> String</a></li>
+    <li><a href="#các-thao-tác-trên-string"><small>19.4</small> Các thao tác trên String</a></li>
+    <li><a href="#giải-phóng-object"><small>19.5</small> Giải phóng Object</a></li>
+    <li><a href="#thử-thách"><small>19.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-mã-hóa-chuỗi-string-encoding"><small>19.7</small> Ghi chú thiết kế: Mã hóa chuỗi (String Encoding)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="types-of-values.html" title="Types of Values" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="hash-tables.html" title="Hash Tables" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="types-of-values.html" title="Types of Values" class="prev">←</a>
+<a href="hash-tables.html" title="Hash Tables" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Strings<small>19</small></a></h3>
+
+<ul>
+    <li><a href="#value-&amp;-object"><small>19.1</small> Value &amp; Object</a></li>
+    <li><a href="#kế-thừa-struct"><small>19.2</small> Kế thừa Struct</a></li>
+    <li><a href="#string"><small>19.3</small> String</a></li>
+    <li><a href="#các-thao-tác-trên-string"><small>19.4</small> Các thao tác trên String</a></li>
+    <li><a href="#giải-phóng-object"><small>19.5</small> Giải phóng Object</a></li>
+    <li><a href="#thử-thách"><small>19.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-mã-hóa-chuỗi-string-encoding"><small>19.7</small> Ghi chú thiết kế: Mã hóa chuỗi (String Encoding)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="types-of-values.html" title="Types of Values" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="hash-tables.html" title="Hash Tables" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">19</div>
+  <h1>Strings</h1>
+
+<blockquote>
+<p>&ldquo;Ồ? Một chút ác cảm với công việc lặt vặt ư?&rdquo; Vị bác sĩ nhướn mày.
+&ldquo;Có thể hiểu được, nhưng lại đặt sai chỗ. Người ta nên trân trọng những công việc tầm thường
+giữ cho cơ thể bận rộn nhưng để cho tâm trí và trái tim được tự do.&rdquo;</p>
+<p><cite>Tad Williams, <em>The Dragonbone Chair</em></cite></p>
+</blockquote>
+<p>VM nhỏ bé của chúng ta hiện có thể biểu diễn ba loại giá trị: số, Boolean và <code>nil</code>. Những loại này có hai điểm chung quan trọng: chúng là immutable và nhỏ gọn. Số là loại lớn nhất, nhưng vẫn vừa trong hai từ 64-bit. Đây là một mức chi phí đủ nhỏ để ta có thể chấp nhận cho mọi giá trị, kể cả Boolean và nil vốn không cần nhiều không gian đến vậy.</p>
+<p>Tiếc là string thì không nhỏ nhắn như vậy. Không có giới hạn độ dài tối đa cho string. Ngay cả khi ta đặt một giới hạn nhân tạo, ví dụ như <span name="pascal">255</span> ký tự, thì vẫn là quá nhiều bộ nhớ để dành cho mọi giá trị.</p>
+<aside name="pascal">
+<p>UCSD Pascal, một trong những hiện thực đầu tiên của Pascal, có đúng giới hạn này. Thay vì dùng một byte null kết thúc để đánh dấu cuối chuỗi như C, string trong Pascal bắt đầu bằng một giá trị độ dài. Vì UCSD chỉ dùng một byte để lưu độ dài, string không thể dài hơn 255 ký tự.</p><img src="image/strings/pstring.png" alt="Chuỗi Pascal 'hello' với một byte độ dài 5 đứng trước." />
+</aside>
+<p>Ta cần một cách để hỗ trợ các giá trị có kích thước thay đổi, đôi khi rất lớn. Đây chính xác là điều mà cấp phát động trên heap được thiết kế để làm. Ta có thể cấp phát bao nhiêu byte tùy ý. Ta nhận lại một con trỏ để dùng theo dõi giá trị khi nó di chuyển qua VM.</p>
+<h2><a href="#value-&-object" id="value-&-object"><small>19&#8202;.&#8202;1</small>Value &amp; Object</a></h2>
+<p>Dùng heap cho các giá trị lớn, kích thước thay đổi và stack cho các giá trị nhỏ, nguyên tử dẫn đến một mô hình biểu diễn hai tầng. Mỗi giá trị Lox mà bạn có thể lưu trong biến hoặc trả về từ một expression sẽ là một Value. Với các loại nhỏ, kích thước cố định như số, payload được lưu trực tiếp bên trong struct Value.</p>
+<p>Nếu object lớn hơn, dữ liệu của nó nằm trên heap. Khi đó, payload của Value là một <em>con trỏ</em> tới khối bộ nhớ đó. Cuối cùng, trong clox ta sẽ có một vài loại được cấp phát trên heap: string, instance, function, v.v. Mỗi loại có dữ liệu riêng, nhưng cũng có trạng thái chung mà <a href="garbage-collection.html">bộ gom rác tương lai của chúng ta</a> sẽ dùng để quản lý bộ nhớ.</p><img src="image/strings/value.png" class="wide" alt="Bố cục trường của number và obj value." />
+<p>Ta sẽ gọi phần biểu diễn chung này là <span name="short">&ldquo;Obj&rdquo;</span>. Mỗi giá trị Lox có trạng thái nằm trên heap là một Obj. Nhờ vậy, ta có thể dùng một trường ValueType mới duy nhất để tham chiếu tới tất cả các loại được cấp phát trên heap.</p>
+<aside name="short">
+<p>&ldquo;Obj&rdquo; là viết tắt của &ldquo;object&rdquo;.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  VAL_NUMBER,
+</pre><div class="source-file"><em>value.h</em><br>
+in enum <em>ValueType</em></div>
+<pre class="insert">  <span class="a">VAL_OBJ</span>
+</pre><pre class="insert-after">} ValueType;
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, in enum <em>ValueType</em></div>
+
+<p>Khi kiểu của Value là <code>VAL_OBJ</code>, payload là một con trỏ tới bộ nhớ trên heap, nên ta thêm một trường nữa vào union cho trường hợp này.</p>
+<div class="codehilite"><pre class="insert-before">    double number;
+</pre><div class="source-file"><em>value.h</em><br>
+in struct <em>Value</em></div>
+<pre class="insert">    <span class="t">Obj</span>* <span class="i">obj</span>;
+</pre><pre class="insert-after">  } as;<span name="as"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, in struct <em>Value</em></div>
+
+<p>Giống như với các loại value khác, ta tạo thêm một vài macro tiện lợi để làm việc với Obj value.</p>
+<div class="codehilite"><pre class="insert-before">#define IS_NUMBER(value)  ((value).type == VAL_NUMBER)
+</pre><div class="source-file"><em>value.h</em><br>
+add after struct <em>Value</em></div>
+<pre class="insert"><span class="a">#define IS_OBJ(value)     ((value).type == VAL_OBJ)</span>
+</pre><pre class="insert-after">
+
+#define AS_BOOL(value)    ((value).as.boolean)
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em>, add after struct <em>Value</em></div>
+
+<p>Macro này trả về <code>true</code> nếu Value được truyền vào là một Obj. Nếu đúng, ta có thể dùng macro này:</p>
+<div class="codehilite"><pre class="insert-before">#define IS_OBJ(value)     ((value).type == VAL_OBJ)
+
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert"><span class="a">#define AS_OBJ(value)     ((value).as.obj)</span>
+</pre><pre class="insert-after">#define AS_BOOL(value)    ((value).as.boolean)
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<p>Nó trích xuất con trỏ Obj từ value. Ta cũng có thể đi theo hướng ngược lại.</p>
+<div class="codehilite"><pre class="insert-before">#define NUMBER_VAL(value) ((Value){VAL_NUMBER, {.number = value}})
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert"><span class="a">#define OBJ_VAL(object)   ((Value){VAL_OBJ, {.obj = (Obj*)object}})</span>
+</pre><pre class="insert-after">
+
+typedef struct {
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<p>Macro này nhận một con trỏ Obj thuần và bọc nó thành một Value đầy đủ.</p>
+<h2><a href="#kế-thừa-struct" id="kế-thừa-struct"><small>19&#8202;.&#8202;2</small>Kế thừa Struct</a></h2>
+<p>Mỗi giá trị được cấp phát trên heap là một Obj, nhưng <span name="objs">các Obj</span> không phải đều giống nhau. Với string, ta cần mảng ký tự. Khi đến instance, chúng sẽ cần các trường dữ liệu. Một function object sẽ cần chunk bytecode của nó. Làm sao để xử lý các payload và kích thước khác nhau? Ta không thể dùng một union khác như với Value vì kích thước của chúng rất khác nhau.</p>
+<aside name="objs">
+<p>Không, tôi cũng không biết phát âm “objs” thế nào. Cảm giác như nên có nguyên âm ở đâu đó.</p>
+</aside>
+<p>Thay vào đó, ta sẽ dùng một kỹ thuật khác. Nó đã tồn tại từ lâu, đến mức đặc tả C còn dành riêng hỗ trợ cho nó, nhưng tôi không biết nó có tên gọi chính thức không. Đây là một ví dụ của <a href="https://en.wikipedia.org/wiki/Type_punning"><em>type punning</em></a>, nhưng thuật ngữ đó quá rộng. Khi chưa có ý tưởng hay hơn, tôi sẽ gọi nó là <strong>struct inheritance</strong> (kế thừa struct), vì nó dựa vào struct và gần giống cách kế thừa đơn trạng thái hoạt động trong các ngôn ngữ hướng đối tượng.</p>
+<p>Giống như một tagged union, mỗi Obj bắt đầu với một trường tag xác định loại object — string, instance, v.v. Theo sau là các trường payload. Thay vì một union với các case cho từng loại, mỗi loại là một struct riêng biệt. Phần khó là làm sao xử lý các struct này một cách thống nhất vì C không có khái niệm kế thừa hay đa hình. Tôi sẽ giải thích điều đó sớm thôi, nhưng trước hết hãy xử lý phần chuẩn bị.</p>
+<p>Tên &ldquo;Obj&rdquo; bản thân nó chỉ một struct chứa trạng thái chung cho tất cả các loại object. Nó giống như “lớp cơ sở” cho object. Vì có một số phụ thuộc vòng giữa value và object, ta forward-declare nó trong module &ldquo;value&rdquo;.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">struct</span> <span class="t">Obj</span> <span class="t">Obj</span>;
+
+</pre><pre class="insert-after">typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<p>Và định nghĩa thực sự nằm trong một module mới.</p>
+<div class="codehilite"><div class="source-file"><em>object.h</em><br>
+create new file</div>
+<pre><span class="a">#ifndef clox_object_h</span>
+<span class="a">#define clox_object_h</span>
+
+<span class="a">#include &quot;common.h&quot;</span>
+<span class="a">#include &quot;value.h&quot;</span>
+
+<span class="k">struct</span> <span class="t">Obj</span> {
+  <span class="t">ObjType</span> <span class="i">type</span>;
+};
+
+<span class="a">#endif</span>
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, create new file</div>
+
+<p>Hiện tại, nó chỉ chứa type tag. Chẳng bao lâu nữa, ta sẽ thêm một số thông tin quản lý bộ nhớ khác. Enum type như sau:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;value.h&quot;
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert">
+
+<span class="k">typedef</span> <span class="k">enum</span> {
+  <span class="a">OBJ_STRING</span>,
+} <span class="t">ObjType</span>;
+</pre><pre class="insert-after">
+
+struct Obj {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Rõ ràng, enum này sẽ hữu ích hơn ở các chương sau khi ta thêm nhiều loại cấp phát trên heap hơn. Vì ta sẽ truy cập các tag type này thường xuyên, đáng để tạo một macro nhỏ trích xuất tag type của object từ một Value.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;value.h&quot;
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert">
+
+<span class="a">#define OBJ_TYPE(value)        (AS_OBJ(value)-&gt;type)</span>
+</pre><pre class="insert-after">
+
+typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Đó là nền tảng của ta.</p>
+<p>Giờ, hãy xây dựng string dựa trên nó. Payload cho string được định nghĩa trong một struct riêng. Một lần nữa, ta cần forward-declare nó.</p>
+<div class="codehilite"><pre class="insert-before">typedef struct Obj Obj;
+</pre><div class="source-file"><em>value.h</em></div>
+<pre class="insert"><span class="k">typedef</span> <span class="k">struct</span> <span class="t">ObjString</span> <span class="t">ObjString</span>;
+</pre><pre class="insert-after">
+
+typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>value.h</em></div>
+
+<p>Định nghĩa nằm cùng với Obj.</p>
+<div class="codehilite"><pre class="insert-before">};
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>Obj</em></div>
+<pre class="insert">
+
+<span class="k">struct</span> <span class="t">ObjString</span> {
+  <span class="t">Obj</span> <span class="i">obj</span>;
+  <span class="t">int</span> <span class="i">length</span>;
+  <span class="t">char</span>* <span class="i">chars</span>;
+};
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>Obj</em></div>
+
+<p>Một string object chứa một mảng ký tự. Chúng được lưu trong một mảng riêng trên heap để ta chỉ dành đúng lượng bộ nhớ cần cho mỗi string. Ta cũng lưu số byte trong mảng. Điều này không hoàn toàn bắt buộc nhưng cho phép ta biết lượng bộ nhớ đã cấp phát cho string mà không cần duyệt mảng ký tự để tìm ký tự null kết thúc.</p>
+<p>Vì ObjString là một Obj, nó cũng cần trạng thái chung của tất cả Obj. Nó đạt được điều đó bằng cách để trường đầu tiên của nó là một Obj. C quy định rằng các trường trong struct được sắp xếp trong bộ nhớ theo thứ tự khai báo. Ngoài ra, khi bạn lồng struct, các trường của struct bên trong sẽ được “trải” ngay tại chỗ. Vì vậy, bộ nhớ cho Obj và ObjString trông như thế này:</p><img src="image/strings/obj.png" alt="The memory layout for the fields in Obj and ObjString." />
+<p>Hãy để ý rằng các byte đầu tiên của ObjString khớp chính xác với Obj. Đây không phải là sự trùng hợp — C <span name="spec">quy định</span> điều này. Nó được thiết kế để cho phép một mẫu lập trình thông minh: bạn có thể lấy một con trỏ tới struct và an toàn chuyển đổi nó thành con trỏ tới trường đầu tiên của struct đó và ngược lại.</p>
+<aside name="spec">
+<p>Phần quan trọng trong đặc tả là:</p>
+<blockquote>
+<p>&sect; 6.7.2.1 13</p>
+<p>Bên trong một đối tượng struct, các thành viên không phải bit-field và các đơn vị chứa bit-field có địa chỉ tăng dần theo thứ tự chúng được khai báo. Một con trỏ tới một đối tượng struct, khi được chuyển đổi thích hợp, sẽ trỏ tới thành viên đầu tiên của nó (hoặc nếu thành viên đó là một bit-field, thì trỏ tới đơn vị chứa nó), và ngược lại. Có thể có phần đệm không tên bên trong một đối tượng struct, nhưng không được có ở phần đầu.</p>
+</blockquote>
+</aside>
+<p>Với một <code>ObjString*</code>, bạn có thể an toàn cast nó sang <code>Obj*</code> và sau đó truy cập trường <code>type</code> từ đó. Mỗi ObjString “là” một Obj theo nghĩa OOP của từ “là”. Sau này khi ta thêm các loại object khác, mỗi struct sẽ có một Obj làm trường đầu tiên. Bất kỳ code nào muốn làm việc với tất cả object có thể coi chúng như <code>Obj*</code> cơ sở và bỏ qua các trường khác theo sau.</p>
+<p>Bạn cũng có thể đi theo hướng ngược lại. Với một <code>Obj*</code>, bạn có thể “downcast” nó thành <code>ObjString*</code>. Tất nhiên, bạn cần đảm bảo rằng con trỏ <code>Obj*</code> bạn có thực sự trỏ tới trường <code>obj</code> của một ObjString hợp lệ. Nếu không, bạn đang diễn giải lại một cách không an toàn những bit bộ nhớ ngẫu nhiên. Để phát hiện việc cast như vậy có an toàn hay không, ta thêm một macro khác.</p>
+<div class="codehilite"><pre class="insert-before">#define OBJ_TYPE(value)        (AS_OBJ(value)-&gt;type)
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert">
+
+<span class="a">#define IS_STRING(value)       isObjType(value, OBJ_STRING)</span>
+</pre><pre class="insert-after">
+
+typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Macro này nhận một Value, không phải <code>Obj*</code> thuần, vì hầu hết code trong VM làm việc với Value. Nó dựa vào hàm inline sau:</p>
+<div class="codehilite"><pre class="insert-before">};
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjString</em></div>
+<pre class="insert"><span class="k">static</span> <span class="k">inline</span> <span class="t">bool</span> <span class="i">isObjType</span>(<span class="t">Value</span> <span class="i">value</span>, <span class="t">ObjType</span> <span class="i">type</span>) {
+  <span class="k">return</span> <span class="a">IS_OBJ</span>(<span class="i">value</span>) &amp;&amp; <span class="a">AS_OBJ</span>(<span class="i">value</span>)-&gt;<span class="i">type</span> == <span class="i">type</span>;
+}
+
+</pre><pre class="insert-after">#endif
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjString</em></div>
+
+<p>Câu đố nhanh: Tại sao không đặt luôn phần thân của hàm này vào macro? Nó khác gì so với các macro khác? Đúng vậy, là vì phần thân dùng <code>value</code> hai lần. Macro được mở rộng bằng cách chèn <em>biểu thức</em> đối số vào mọi chỗ tên tham số xuất hiện trong thân. Nếu một macro dùng tham số nhiều hơn một lần, biểu thức đó sẽ được đánh giá nhiều lần.</p>
+<p>Điều này tệ nếu biểu thức có side effect. Nếu ta đặt phần thân của <code>isObjType()</code> vào macro và bạn viết, ví dụ:</p>
+<div class="codehilite"><pre><span class="a">IS_STRING</span>(<span class="a">POP</span>())
+</pre></div>
+<p>thì nó sẽ pop hai giá trị khỏi stack! Dùng hàm sẽ khắc phục điều đó.</p>
+<p>Miễn là ta đảm bảo gán đúng type tag mỗi khi tạo một Obj thuộc loại nào đó, macro này sẽ cho ta biết khi nào an toàn để cast một value sang một loại object cụ thể. Ta có thể làm điều đó bằng các macro sau:</p>
+<div class="codehilite"><pre class="insert-before">#define IS_STRING(value)       isObjType(value, OBJ_STRING)
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert">
+
+<span class="a">#define AS_STRING(value)       ((ObjString*)AS_OBJ(value))</span>
+<span class="a">#define AS_CSTRING(value)      (((ObjString*)AS_OBJ(value))-&gt;chars)</span>
+</pre><pre class="insert-after">
+
+typedef enum {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Hai macro này nhận một Value được kỳ vọng chứa con trỏ tới một ObjString hợp lệ trên heap. Macro đầu trả về con trỏ <code>ObjString*</code>. Macro thứ hai đi sâu hơn để trả về mảng ký tự bên trong, vì đó thường là thứ ta cần.</p>
+<h2><a href="#string" id="string"><small>19&#8202;.&#8202;3</small>String</a></h2>
+<p>OK, VM của ta giờ có thể biểu diễn giá trị string. Đã đến lúc thêm string vào chính ngôn ngữ. Như thường lệ, ta bắt đầu ở front end. Lexer đã tokenize string literal, nên giờ tới lượt parser.</p>
+<div class="codehilite"><pre class="insert-before">  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+</pre><div class="source-file"><em>compiler.c</em><br>
+replace 1 line</div>
+<pre class="insert">  [<span class="a">TOKEN_STRING</span>]        = {<span class="i">string</span>,   <span class="a">NULL</span>,   <span class="a">PREC_NONE</span>},
+</pre><pre class="insert-after">  [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, replace 1 line</div>
+
+<p>Khi parser gặp một token string, nó gọi hàm parse này:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>number</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">string</span>() {
+  <span class="i">emitConstant</span>(<span class="a">OBJ_VAL</span>(<span class="i">copyString</span>(<span class="i">parser</span>.<span class="i">previous</span>.<span class="i">start</span> + <span class="n">1</span>,
+                                  <span class="i">parser</span>.<span class="i">previous</span>.<span class="i">length</span> - <span class="n">2</span>)));
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>number</em>()</div>
+
+<p>Hàm này lấy các ký tự của string <span name="escape">trực tiếp</span> từ lexeme. Phần <code>+ 1</code> và <code>- 2</code> sẽ bỏ dấu ngoặc kép ở đầu và cuối. Sau đó, nó tạo một string object, bọc nó trong một Value và nhét vào constant table.</p>
+<aside name="escape">
+<p>Nếu Lox hỗ trợ các escape sequence như <code>\n</code>, ta sẽ dịch chúng ở đây. Vì không có, ta có thể lấy nguyên các ký tự như chúng vốn có.</p>
+</aside>
+<p>Để tạo string, ta dùng <code>copyString()</code>, được khai báo trong <code>object.h</code>.</p>
+<div class="codehilite"><pre class="insert-before">};
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjString</em></div>
+<pre class="insert"><span class="t">ObjString</span>* <span class="i">copyString</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">chars</span>, <span class="t">int</span> <span class="i">length</span>);
+
+</pre><pre class="insert-after">static inline bool isObjType(Value value, ObjType type) {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjString</em></div>
+
+<p>Module compiler cần include file này.</p>
+<div class="codehilite"><pre class="insert-before">#define clox_compiler_h
+
+</pre><div class="source-file"><em>compiler.h</em></div>
+<pre class="insert"><span class="a">#include &quot;object.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;vm.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.h</em></div>
+
+<p>Module “object” của ta sẽ có một file hiện thực nơi ta định nghĩa hàm mới này.</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+create new file</div>
+<pre><span class="a">#include &lt;stdio.h&gt;</span>
+<span class="a">#include &lt;string.h&gt;</span>
+
+<span class="a">#include &quot;memory.h&quot;</span>
+<span class="a">#include &quot;object.h&quot;</span>
+<span class="a">#include &quot;value.h&quot;</span>
+<span class="a">#include &quot;vm.h&quot;</span>
+
+<span class="t">ObjString</span>* <span class="i">copyString</span>(<span class="k">const</span> <span class="t">char</span>* <span class="i">chars</span>, <span class="t">int</span> <span class="i">length</span>) {
+  <span class="t">char</span>* <span class="i">heapChars</span> = <span class="a">ALLOCATE</span>(<span class="t">char</span>, <span class="i">length</span> + <span class="n">1</span>);
+  <span class="i">memcpy</span>(<span class="i">heapChars</span>, <span class="i">chars</span>, <span class="i">length</span>);
+  <span class="i">heapChars</span>[<span class="i">length</span>] = <span class="s">&#39;\0&#39;</span>;
+  <span class="k">return</span> <span class="i">allocateString</span>(<span class="i">heapChars</span>, <span class="i">length</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, create new file</div>
+
+<p>Đầu tiên, ta cấp phát một mảng mới trên heap, vừa đủ cho các ký tự của string và <span name="terminator">ký tự kết thúc</span>, dùng macro cấp thấp này để cấp phát một mảng với kiểu phần tử và số lượng cho trước:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+
+</pre><div class="source-file"><em>memory.h</em></div>
+<pre class="insert"><span class="a">#define ALLOCATE(type, count) \</span>
+<span class="a">    (type*)reallocate(NULL, 0, sizeof(type) * (count))</span>
+
+</pre><pre class="insert-after">#define GROW_CAPACITY(capacity) \
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em></div>
+
+<p>Khi đã có mảng, ta copy các ký tự từ lexeme sang và thêm ký tự kết thúc.</p>
+<aside name="terminator" class="bottom">
+<p>Ta cần tự thêm ký tự kết thúc vì lexeme trỏ tới một đoạn ký tự bên trong chuỗi nguồn lớn và không có ký tự kết thúc.</p>
+<p>Vì ObjString lưu độ dài một cách tường minh, ta <em>có thể</em> bỏ qua ký tự kết thúc, nhưng thêm nó chỉ tốn một byte và cho phép ta truyền mảng ký tự này tới các hàm thư viện chuẩn C vốn mong đợi một chuỗi kết thúc null.</p>
+</aside>
+<p>Bạn có thể thắc mắc tại sao ObjString không thể trỏ ngược lại các ký tự gốc trong chuỗi nguồn. Một số ObjString sẽ được tạo động khi runtime do các thao tác string như nối chuỗi. Những string này rõ ràng cần cấp phát động bộ nhớ cho ký tự, đồng nghĩa với việc string cần <em>giải phóng</em> bộ nhớ đó khi không còn dùng.</p>
+<p>Nếu ta có một ObjString cho một string literal, và cố giải phóng mảng ký tự của nó vốn trỏ vào chuỗi nguồn gốc, thì sẽ xảy ra lỗi nghiêm trọng. Vì vậy, với literal, ta chủ động copy các ký tự sang heap. Cách này đảm bảo mọi ObjString đều sở hữu mảng ký tự của mình và có thể giải phóng nó.</p>
+<p>Phần công việc chính để tạo string object diễn ra trong hàm này:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;vm.h&quot;
+
+</pre><div class="source-file"><em>object.c</em></div>
+<pre class="insert"><span class="k">static</span> <span class="t">ObjString</span>* <span class="i">allocateString</span>(<span class="t">char</span>* <span class="i">chars</span>, <span class="t">int</span> <span class="i">length</span>) {
+  <span class="t">ObjString</span>* <span class="i">string</span> = <span class="a">ALLOCATE_OBJ</span>(<span class="t">ObjString</span>, <span class="a">OBJ_STRING</span>);
+  <span class="i">string</span>-&gt;<span class="i">length</span> = <span class="i">length</span>;
+  <span class="i">string</span>-&gt;<span class="i">chars</span> = <span class="i">chars</span>;
+  <span class="k">return</span> <span class="i">string</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em></div>
+
+<p>Hàm này tạo một ObjString mới trên heap rồi khởi tạo các trường của nó. Nó giống như constructor trong ngôn ngữ OOP. Vì vậy, nó gọi constructor “lớp cơ sở” trước để khởi tạo trạng thái Obj, dùng một macro mới.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;vm.h&quot;
+</pre><div class="source-file"><em>object.c</em></div>
+<pre class="insert">
+
+<span class="a">#define ALLOCATE_OBJ(type, objectType) \</span>
+<span class="a">    (type*)allocateObject(sizeof(type), objectType)</span>
+</pre><pre class="insert-after">
+
+static ObjString* allocateString(char* chars, int length) {
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em></div>
+
+<p><span name="factored">Giống</span> macro trước, macro này tồn tại chủ yếu để tránh phải cast <code>void*</code> về kiểu mong muốn một cách lặp lại. Chức năng thực sự nằm ở đây:</p>
+<aside name="factored">
+<p>Tôi thừa nhận chương này có rất nhiều hàm và macro tiện ích cần phải lội qua. Tôi cố gắng giữ code được tách bạch hợp lý, nhưng điều đó dẫn đến việc rải rác nhiều hàm nhỏ. Chúng sẽ phát huy tác dụng khi ta tái sử dụng chúng sau này.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">#define ALLOCATE_OBJ(type, objectType) \
+    (type*)allocateObject(sizeof(type), objectType)
+</pre><div class="source-file"><em>object.c</em></div>
+<pre class="insert">
+
+<span class="k">static</span> <span class="t">Obj</span>* <span class="i">allocateObject</span>(<span class="t">size_t</span> <span class="i">size</span>, <span class="t">ObjType</span> <span class="i">type</span>) {
+  <span class="t">Obj</span>* <span class="i">object</span> = (<span class="t">Obj</span>*)<span class="i">reallocate</span>(<span class="a">NULL</span>, <span class="n">0</span>, <span class="i">size</span>);
+  <span class="i">object</span>-&gt;<span class="i">type</span> = <span class="i">type</span>;
+  <span class="k">return</span> <span class="i">object</span>;
+}
+</pre><pre class="insert-after">
+
+static ObjString* allocateString(char* chars, int length) {
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em></div>
+
+<p>Hàm này cấp phát một object với kích thước cho trước trên heap. Lưu ý rằng kích thước này <em>không</em> chỉ là kích thước của riêng Obj. Hàm gọi sẽ truyền vào số byte để có đủ chỗ cho các trường payload bổ sung cần thiết cho loại object cụ thể đang được tạo.</p>
+<p>Sau đó, nó khởi tạo trạng thái Obj — hiện tại chỉ là type tag. Hàm này trả về cho <code>allocateString()</code>, hàm sẽ hoàn tất việc khởi tạo các trường của ObjString. <span name="viola"><em>Voilà</em></span>, ta đã có thể biên dịch và execute string literal.</p>
+<aside name="viola"><img src="image/strings/viola.png" class="above" alt="Một cây viola." />
+<p>Đừng nhầm “voilà” với “viola”. Một từ nghĩa là “đây rồi”, còn từ kia là một nhạc cụ dây, “đứa con giữa” giữa violin và cello. Vâng, tôi đã mất hai tiếng để vẽ cây viola này chỉ để nhắc đến nó.</p>
+</aside>
+<h2><a href="#các-thao-tác-trên-string" id="các-thao-tác-trên-string"><small>19&#8202;.&#8202;4</small>Các thao tác trên String</a></h2>
+<p>String “xịn” của ta đã có, nhưng chúng chưa làm được gì nhiều. Bước đầu tiên hợp lý là khiến code in hiện tại không bị “nghẹn” khi gặp kiểu giá trị mới.</p>
+<div class="codehilite"><pre class="insert-before">    case VAL_NUMBER: printf(&quot;%g&quot;, AS_NUMBER(value)); break;
+</pre><div class="source-file"><em>value.c</em><br>
+in <em>printValue</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">VAL_OBJ</span>: <span class="i">printObject</span>(<span class="i">value</span>); <span class="k">break</span>;
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, in <em>printValue</em>()</div>
+
+<p>Nếu value là một object được cấp phát trên heap, nó sẽ chuyển tiếp sang một hàm helper trong module “object”.</p>
+<div class="codehilite"><pre class="insert-before">ObjString* copyString(const char* chars, int length);
+</pre><div class="source-file"><em>object.h</em><br>
+add after <em>copyString</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">printObject</span>(<span class="t">Value</span> <span class="i">value</span>);
+</pre><pre class="insert-after">
+
+static inline bool isObjType(Value value, ObjType type) {
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after <em>copyString</em>()</div>
+
+<p>Phần hiện thực trông như sau:</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+add after <em>copyString</em>()</div>
+<pre><span class="t">void</span> <span class="i">printObject</span>(<span class="t">Value</span> <span class="i">value</span>) {
+  <span class="k">switch</span> (<span class="a">OBJ_TYPE</span>(<span class="i">value</span>)) {
+    <span class="k">case</span> <span class="a">OBJ_STRING</span>:
+      <span class="i">printf</span>(<span class="s">&quot;%s&quot;</span>, <span class="a">AS_CSTRING</span>(<span class="i">value</span>));
+      <span class="k">break</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, add after <em>copyString</em>()</div>
+
+<p>Hiện tại ta mới chỉ có một loại object, nhưng hàm này sẽ mọc thêm nhiều case trong switch ở các chương sau. Với string object, nó đơn giản <span name="term-2">in</span> mảng ký tự như một chuỗi C.</p>
+<aside name="term-2">
+<p>Tôi đã nói rồi, việc thêm ký tự kết thúc chuỗi sẽ có ích mà.</p>
+</aside>
+<p>Các toán tử so sánh bằng cũng cần xử lý string một cách hợp lý. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="s">&quot;string&quot;</span> == <span class="s">&quot;string&quot;</span>
+</pre></div>
+<p>Đây là hai string literal riêng biệt. Compiler sẽ gọi <code>copyString()</code> hai lần, tạo ra hai ObjString khác nhau và lưu chúng thành hai hằng số trong chunk. Chúng là hai object khác nhau trên heap. Nhưng người dùng (và vì thế là chúng ta) mong string so sánh bằng theo giá trị. Biểu thức trên phải trả về <code>true</code>. Điều này cần một chút hỗ trợ đặc biệt.</p>
+<div class="codehilite"><pre class="insert-before">    case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
+</pre><div class="source-file"><em>value.c</em><br>
+in <em>valuesEqual</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">VAL_OBJ</span>: {
+      <span class="t">ObjString</span>* <span class="i">aString</span> = <span class="a">AS_STRING</span>(<span class="i">a</span>);
+      <span class="t">ObjString</span>* <span class="i">bString</span> = <span class="a">AS_STRING</span>(<span class="i">b</span>);
+      <span class="k">return</span> <span class="i">aString</span>-&gt;<span class="i">length</span> == <span class="i">bString</span>-&gt;<span class="i">length</span> &amp;&amp;
+          <span class="i">memcmp</span>(<span class="i">aString</span>-&gt;<span class="i">chars</span>, <span class="i">bString</span>-&gt;<span class="i">chars</span>,
+                 <span class="i">aString</span>-&gt;<span class="i">length</span>) == <span class="n">0</span>;
+    }
+</pre><pre class="insert-after">    default:         return false; // Unreachable.
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em>, in <em>valuesEqual</em>()</div>
+
+<p>Nếu cả hai value đều là string, thì chúng bằng nhau nếu mảng ký tự của chúng chứa cùng một chuỗi ký tự, bất kể chúng là hai object khác nhau hay cùng một object. Điều này đồng nghĩa so sánh string sẽ chậm hơn so với các loại khác vì phải duyệt toàn bộ chuỗi. Ta sẽ cải thiện điều đó <a href="hash-tables.html">sau này</a>, nhưng hiện tại cách này cho ta ngữ nghĩa đúng.</p>
+<p>Cuối cùng, để dùng <code>memcmp()</code> và các phần mới trong module “object”, ta cần thêm một vài include. Ở đây:</p>
+<div class="codehilite"><pre class="insert-before">#include &lt;stdio.h&gt;
+</pre><div class="source-file"><em>value.c</em></div>
+<pre class="insert"><span class="a">#include &lt;string.h&gt;</span>
+</pre><pre class="insert-after">
+
+#include &quot;memory.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em></div>
+
+<p>Và ở đây:</p>
+<div class="codehilite"><pre class="insert-before">#include &lt;string.h&gt;
+
+</pre><div class="source-file"><em>value.c</em></div>
+<pre class="insert"><span class="a">#include &quot;object.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;memory.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>value.c</em></div>
+
+<h3><a href="#nối-chuỗi-concatenation" id="nối-chuỗi-concatenation"><small>19&#8202;.&#8202;4&#8202;.&#8202;1</small>Nối chuỗi (Concatenation)</a></h3>
+<p>Các ngôn ngữ hoàn chỉnh cung cấp rất nhiều thao tác với string — truy cập ký tự riêng lẻ, lấy độ dài, đổi chữ hoa/thường, tách, nối, tìm kiếm, v.v. Khi bạn hiện thực ngôn ngữ của mình, có thể bạn sẽ muốn tất cả những thứ đó. Nhưng trong cuốn sách này, ta sẽ giữ mọi thứ <em>rất</em> tối giản.</p>
+<p>Thao tác thú vị duy nhất ta hỗ trợ trên string là <code>+</code>. Nếu bạn dùng toán tử này trên hai string object, nó sẽ tạo ra một string mới là kết quả nối của hai toán hạng. Vì Lox là ngôn ngữ kiểu động, ta không thể biết hành vi nào cần dùng ở compile time vì chưa biết kiểu của toán hạng cho tới khi runtime. Do đó, lệnh <code>OP_ADD</code> sẽ kiểm tra kiểu toán hạng khi chạy và chọn thao tác phù hợp.</p>
+<div class="codehilite"><pre class="insert-before">      case OP_LESS:     BINARY_OP(BOOL_VAL, &lt;); break;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 1 line</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_ADD</span>: {
+        <span class="k">if</span> (<span class="a">IS_STRING</span>(<span class="i">peek</span>(<span class="n">0</span>)) &amp;&amp; <span class="a">IS_STRING</span>(<span class="i">peek</span>(<span class="n">1</span>))) {
+          <span class="i">concatenate</span>();
+        } <span class="k">else</span> <span class="k">if</span> (<span class="a">IS_NUMBER</span>(<span class="i">peek</span>(<span class="n">0</span>)) &amp;&amp; <span class="a">IS_NUMBER</span>(<span class="i">peek</span>(<span class="n">1</span>))) {
+          <span class="t">double</span> <span class="i">b</span> = <span class="a">AS_NUMBER</span>(<span class="i">pop</span>());
+          <span class="t">double</span> <span class="i">a</span> = <span class="a">AS_NUMBER</span>(<span class="i">pop</span>());
+          <span class="i">push</span>(<span class="a">NUMBER_VAL</span>(<span class="i">a</span> + <span class="i">b</span>));
+        } <span class="k">else</span> {
+          <span class="i">runtimeError</span>(
+              <span class="s">&quot;Operands must be two numbers or two strings.&quot;</span>);
+          <span class="k">return</span> <span class="a">INTERPRET_RUNTIME_ERROR</span>;
+        }
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 1 line</div>
+
+<p>Nếu cả hai toán hạng là string, nó sẽ nối chúng. Nếu cả hai là số, nó sẽ cộng. Bất kỳ <span name="convert">kết hợp</span> kiểu nào khác sẽ là lỗi runtime.</p>
+<aside name="convert" class="bottom">
+<p>Cách này thận trọng hơn hầu hết các ngôn ngữ khác. Ở nhiều ngôn ngữ, nếu một toán hạng là string, toán hạng còn lại có thể thuộc bất kỳ kiểu nào và sẽ được ngầm chuyển sang string trước khi nối.</p>
+<p>Tôi nghĩ đó là một tính năng hay, nhưng sẽ đòi hỏi viết code “chuyển sang string” tẻ nhạt cho từng kiểu, nên tôi đã bỏ qua trong Lox.</p>
+</aside>
+<p>Để nối string, ta định nghĩa một hàm mới.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>isFalsey</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">concatenate</span>() {
+  <span class="t">ObjString</span>* <span class="i">b</span> = <span class="a">AS_STRING</span>(<span class="i">pop</span>());
+  <span class="t">ObjString</span>* <span class="i">a</span> = <span class="a">AS_STRING</span>(<span class="i">pop</span>());
+
+  <span class="t">int</span> <span class="i">length</span> = <span class="i">a</span>-&gt;<span class="i">length</span> + <span class="i">b</span>-&gt;<span class="i">length</span>;
+  <span class="t">char</span>* <span class="i">chars</span> = <span class="a">ALLOCATE</span>(<span class="t">char</span>, <span class="i">length</span> + <span class="n">1</span>);
+  <span class="i">memcpy</span>(<span class="i">chars</span>, <span class="i">a</span>-&gt;<span class="i">chars</span>, <span class="i">a</span>-&gt;<span class="i">length</span>);
+  <span class="i">memcpy</span>(<span class="i">chars</span> + <span class="i">a</span>-&gt;<span class="i">length</span>, <span class="i">b</span>-&gt;<span class="i">chars</span>, <span class="i">b</span>-&gt;<span class="i">length</span>);
+  <span class="i">chars</span>[<span class="i">length</span>] = <span class="s">&#39;\0&#39;</span>;
+
+  <span class="t">ObjString</span>* <span class="i">result</span> = <span class="i">takeString</span>(<span class="i">chars</span>, <span class="i">length</span>);
+  <span class="i">push</span>(<span class="a">OBJ_VAL</span>(<span class="i">result</span>));
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>isFalsey</em>()</div>
+
+<p>Hàm này khá dài dòng, như thường thấy với code C làm việc với string. Đầu tiên, ta tính độ dài của string kết quả dựa trên độ dài của các toán hạng. Ta cấp phát một mảng ký tự cho kết quả rồi copy hai phần vào. Như mọi khi, ta đảm bảo chuỗi được kết thúc đúng cách.</p>
+<p>Để gọi <code>memcpy()</code>, VM cần include này:</p>
+<div class="codehilite"><pre class="insert-before">#include &lt;stdio.h&gt;
+</pre><div class="source-file"><em>vm.c</em></div>
+<pre class="insert"><span class="a">#include &lt;string.h&gt;</span>
+</pre><pre class="insert-after">
+
+#include &quot;common.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em></div>
+
+<p>Cuối cùng, ta tạo một ObjString để chứa các ký tự đó. Lần này ta dùng một hàm mới, <code>takeString()</code>.</p>
+<div class="codehilite"><pre class="insert-before">};
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjString</em></div>
+<pre class="insert"><span class="t">ObjString</span>* <span class="i">takeString</span>(<span class="t">char</span>* <span class="i">chars</span>, <span class="t">int</span> <span class="i">length</span>);
+</pre><pre class="insert-after">ObjString* copyString(const char* chars, int length);
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjString</em></div>
+
+<p>Phần hiện thực trông như sau:</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+add after <em>allocateString</em>()</div>
+<pre><span class="t">ObjString</span>* <span class="i">takeString</span>(<span class="t">char</span>* <span class="i">chars</span>, <span class="t">int</span> <span class="i">length</span>) {
+  <span class="k">return</span> <span class="i">allocateString</span>(<span class="i">chars</span>, <span class="i">length</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, add after <em>allocateString</em>()</div>
+
+<p>Hàm <code>copyString()</code> trước đây giả định rằng nó <em>không thể</em> nhận quyền sở hữu mảng ký tự bạn truyền vào. Thay vào đó, nó sẽ tạo một bản copy trên heap để ObjString sở hữu. Đây là cách đúng cho string literal, nơi mảng ký tự truyền vào nằm giữa chuỗi nguồn.</p>
+<p>Nhưng với nối chuỗi, ta đã cấp phát động một mảng ký tự trên heap. Tạo thêm một bản copy nữa sẽ thừa (và buộc <code>concatenate()</code> phải nhớ giải phóng bản copy của nó). Thay vào đó, hàm này sẽ nhận quyền sở hữu chuỗi bạn đưa vào.</p>
+<p>Như thường lệ, để ghép nối các chức năng này, ta cần thêm một vài include.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;debug.h&quot;
+</pre><div class="source-file"><em>vm.c</em></div>
+<pre class="insert"><span class="a">#include &quot;object.h&quot;</span>
+<span class="a">#include &quot;memory.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;vm.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em></div>
+
+<h2><a href="#giải-phóng-object" id="giải-phóng-object"><small>19&#8202;.&#8202;5</small>Giải phóng Object</a></h2>
+<p>Hãy xem biểu thức tưởng chừng vô hại này:</p>
+<div class="codehilite"><pre><span class="s">&quot;st&quot;</span> + <span class="s">&quot;ri&quot;</span> + <span class="s">&quot;ng&quot;</span>
+</pre></div>
+<p>Khi compiler xử lý đoạn này, nó sẽ cấp phát một ObjString cho từng string literal trong ba cái trên, lưu chúng vào constant table của chunk và sinh ra <span name="stack">bytecode</span> như sau:</p>
+<aside name="stack">
+<p>Đây là trạng thái stack sau mỗi lệnh:</p><img src="image/strings/stack.png" alt="Trạng thái của stack tại mỗi lệnh." />
+</aside>
+<div class="codehilite"><pre>0000    OP_CONSTANT         0 &quot;st&quot;
+0002    OP_CONSTANT         1 &quot;ri&quot;
+0004    OP_ADD
+0005    OP_CONSTANT         2 &quot;ng&quot;
+0007    OP_ADD
+0008    OP_RETURN
+</pre></div>
+<p>Hai lệnh đầu đẩy <code>"st"</code> và <code>"ri"</code> lên stack. Sau đó, <code>OP_ADD</code> pop hai giá trị này và nối chúng lại. Việc này cấp phát động một string <code>"stri"</code> mới trên heap. VM đẩy string đó lên stack rồi đẩy tiếp hằng <code>"ng"</code>. Lệnh <code>OP_ADD</code> cuối cùng pop <code>"stri"</code> và <code>"ng"</code>, nối chúng lại và đẩy kết quả <code>"string"</code>. Hoàn hảo, đúng như mong đợi.</p>
+<p>Nhưng, khoan đã. <code>"stri"</code> kia đâu rồi? Ta đã cấp phát động nó, rồi VM loại bỏ nó sau khi nối với <code>"ng"</code>. Ta pop nó khỏi stack và không còn tham chiếu nào tới nó nữa, nhưng lại chưa bao giờ giải phóng bộ nhớ của nó. Đây chính là một ví dụ kinh điển của memory leak.</p>
+<p>Tất nhiên, với <em>chương trình Lox</em>, việc “quên” các string trung gian và không bận tâm giải phóng chúng là hoàn toàn ổn. Lox tự động quản lý bộ nhớ thay người dùng. Nhưng trách nhiệm quản lý bộ nhớ không <em>biến mất</em>, mà rơi vào tay chúng ta — những người hiện thực VM.</p>
+<p>Giải pháp <span name="borrowed">đầy đủ</span> là một <a href="garbage-collection.html">garbage collector</a> thu hồi bộ nhớ không dùng tới khi chương trình đang chạy. Nhưng ta còn vài thứ khác cần chuẩn bị trước khi bắt tay vào dự án đó. Cho tới lúc đó, ta đang “sống nhờ” thời gian vay mượn. Càng để lâu mới thêm GC, việc tích hợp sẽ càng khó.</p>
+<aside name="borrowed">
+<p>Tôi từng thấy nhiều người hiện thực gần như toàn bộ ngôn ngữ của họ trước khi bắt đầu viết GC. Với các chương trình nhỏ kiểu “đồ chơi” thường chạy trong giai đoạn phát triển ngôn ngữ, bạn thực sự sẽ không hết bộ nhớ trước khi chương trình kết thúc, nên cách này có thể đi khá xa.</p>
+<p>Nhưng điều đó đánh giá thấp mức độ <em>khó</em> khi thêm GC sau này. GC <em>phải</em> đảm bảo tìm được mọi vùng nhớ vẫn đang được dùng để không thu gom nhầm dữ liệu sống. Có hàng trăm chỗ trong một hiện thực ngôn ngữ có thể giữ tham chiếu tới object. Nếu bỏ sót, bạn sẽ gặp những bug ác mộng.</p>
+<p>Tôi đã thấy những hiện thực ngôn ngữ “chết” vì quá khó để thêm GC về sau. Nếu ngôn ngữ của bạn cần GC, hãy làm nó hoạt động càng sớm càng tốt. Đây là một mối quan tâm “xuyên suốt” ảnh hưởng tới toàn bộ codebase.</p>
+</aside>
+<p>Hôm nay, ta ít nhất nên làm điều tối thiểu: tránh <em>rò rỉ</em> bộ nhớ bằng cách đảm bảo VM vẫn có thể tìm thấy mọi object đã cấp phát, ngay cả khi bản thân chương trình Lox không còn tham chiếu tới chúng. Có nhiều kỹ thuật tinh vi mà các bộ quản lý bộ nhớ tiên tiến dùng để cấp phát và theo dõi object. Ta sẽ chọn cách đơn giản và thực tế nhất.</p>
+<p>Ta sẽ tạo một linked list lưu mọi Obj. VM có thể duyệt danh sách này để tìm tất cả object đã được cấp phát trên heap, bất kể chương trình người dùng hay stack của VM còn giữ tham chiếu tới chúng hay không.</p>
+<p>Ta có thể định nghĩa một struct node linked list riêng, nhưng như vậy lại phải cấp phát thêm. Thay vào đó, ta sẽ dùng <strong>intrusive list</strong> — chính struct Obj sẽ đóng vai trò node của linked list. Mỗi Obj có một con trỏ tới Obj tiếp theo trong chuỗi.</p>
+<div class="codehilite"><pre class="insert-before">struct Obj {
+  ObjType type;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>Obj</em></div>
+<pre class="insert">  <span class="k">struct</span> <span class="t">Obj</span>* <span class="i">next</span>;
+</pre><pre class="insert-after">};
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>Obj</em></div>
+
+<p>VM lưu một con trỏ tới head của danh sách.</p>
+<div class="codehilite"><pre class="insert-before">  Value* stackTop;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">Obj</span>* <span class="i">objects</span>;
+</pre><pre class="insert-after">} VM;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Khi khởi tạo VM, chưa có object nào được cấp phát.</p>
+<div class="codehilite"><pre class="insert-before">  resetStack();
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>initVM</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">objects</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>initVM</em>()</div>
+
+<p>Mỗi khi cấp phát một Obj, ta chèn nó vào danh sách.</p>
+<div class="codehilite"><pre class="insert-before">  object-&gt;type = type;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>allocateObject</em>()</div>
+<pre class="insert">
+
+  <span class="i">object</span>-&gt;<span class="i">next</span> = <span class="i">vm</span>.<span class="i">objects</span>;
+  <span class="i">vm</span>.<span class="i">objects</span> = <span class="i">object</span>;
+</pre><pre class="insert-after">  return object;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>allocateObject</em>()</div>
+
+<p>Vì đây là singly linked list, chèn vào đầu là dễ nhất. Như vậy, ta không cần lưu thêm con trỏ tới tail và cập nhật nó.</p>
+<p>Module “object” đang dùng trực tiếp biến toàn cục <code>vm</code> từ module “vm”, nên ta cần export nó ra ngoài.</p>
+<div class="codehilite"><pre class="insert-before">} InterpretResult;
+
+</pre><div class="source-file"><em>vm.h</em><br>
+add after enum <em>InterpretResult</em></div>
+<pre class="insert"><span class="k">extern</span> <span class="a">VM</span> <span class="i">vm</span>;
+
+</pre><pre class="insert-after">void initVM();
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, add after enum <em>InterpretResult</em></div>
+
+<p>Cuối cùng, GC sẽ giải phóng bộ nhớ khi VM vẫn đang chạy. Nhưng ngay cả khi đó, thường vẫn còn những object không dùng nữa nằm lại trong bộ nhớ khi chương trình người dùng kết thúc. VM cũng nên giải phóng chúng.</p>
+<p>Không cần logic phức tạp cho việc này. Khi chương trình kết thúc, ta có thể giải phóng <em>mọi</em> object. Ta có thể và nên hiện thực điều đó ngay bây giờ.</p>
+<div class="codehilite"><pre class="insert-before">void freeVM() {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>freeVM</em>()</div>
+<pre class="insert">  <span class="i">freeObjects</span>();
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>freeVM</em>()</div>
+
+<p>Hàm trống mà ta định nghĩa <a href="a-virtual-machine.html#an-instruction-execution-machine">từ trước</a> giờ cuối cùng cũng có việc! Nó gọi hàm này:</p>
+<div class="codehilite"><pre class="insert-before">void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+</pre><div class="source-file"><em>memory.h</em><br>
+add after <em>reallocate</em>()</div>
+<pre class="insert"><span class="t">void</span> <span class="i">freeObjects</span>();
+</pre><pre class="insert-after">
+
+#endif
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em>, add after <em>reallocate</em>()</div>
+
+<p>Cách ta giải phóng object như sau:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>reallocate</em>()</div>
+<pre><span class="t">void</span> <span class="i">freeObjects</span>() {
+  <span class="t">Obj</span>* <span class="i">object</span> = <span class="i">vm</span>.<span class="i">objects</span>;
+  <span class="k">while</span> (<span class="i">object</span> != <span class="a">NULL</span>) {
+    <span class="t">Obj</span>* <span class="i">next</span> = <span class="i">object</span>-&gt;<span class="i">next</span>;
+    <span class="i">freeObject</span>(<span class="i">object</span>);
+    <span class="i">object</span> = <span class="i">next</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>reallocate</em>()</div>
+
+<p>Đây là hiện thực “sách giáo khoa” của CS 101 về việc duyệt linked list và giải phóng các node. Với mỗi node, ta gọi:</p>
+<div class="codehilite"><div class="source-file"><em>memory.c</em><br>
+add after <em>reallocate</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">freeObject</span>(<span class="t">Obj</span>* <span class="i">object</span>) {
+  <span class="k">switch</span> (<span class="i">object</span>-&gt;<span class="i">type</span>) {
+    <span class="k">case</span> <span class="a">OBJ_STRING</span>: {
+      <span class="t">ObjString</span>* <span class="i">string</span> = (<span class="t">ObjString</span>*)<span class="i">object</span>;
+      <span class="a">FREE_ARRAY</span>(<span class="t">char</span>, <span class="i">string</span>-&gt;<span class="i">chars</span>, <span class="i">string</span>-&gt;<span class="i">length</span> + <span class="n">1</span>);
+      <span class="a">FREE</span>(<span class="t">ObjString</span>, <span class="i">object</span>);
+      <span class="k">break</span>;
+    }
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, add after <em>reallocate</em>()</div>
+
+<p>Ta không chỉ giải phóng bản thân Obj. Vì một số loại object cũng cấp phát bộ nhớ khác mà chúng sở hữu, ta cần thêm chút code đặc thù cho từng loại để xử lý nhu cầu riêng. Ở đây, điều đó nghĩa là ta giải phóng mảng ký tự rồi mới giải phóng ObjString. Cả hai đều dùng một macro quản lý bộ nhớ cuối cùng.</p>
+<div class="codehilite"><pre class="insert-before">    (type*)reallocate(NULL, 0, sizeof(type) * (count))
+</pre><div class="source-file"><em>memory.h</em></div>
+<pre class="insert">
+
+<span class="a">#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0)</span>
+</pre><pre class="insert-after">
+
+#define GROW_CAPACITY(capacity) \
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em></div>
+
+<p>Đây là một <span name="free">wrapper</span> nhỏ quanh <code>reallocate()</code> để “resize” một vùng nhớ xuống 0 byte.</p>
+<aside name="free">
+<p>Việc dùng <code>reallocate()</code> để giải phóng bộ nhớ có thể trông như vô nghĩa. Sao không gọi thẳng <code>free()</code>? Sau này, điều này sẽ giúp VM theo dõi lượng bộ nhớ vẫn đang được sử dụng. Nếu mọi thao tác cấp phát và giải phóng đều đi qua <code>reallocate()</code>, ta có thể dễ dàng duy trì một bộ đếm số byte bộ nhớ đã được cấp phát.</p>
+</aside>
+<p>Như thường lệ, ta cần một include để kết nối mọi thứ lại.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;common.h&quot;
+</pre><div class="source-file"><em>memory.h</em></div>
+<pre class="insert"><span class="a">#include &quot;object.h&quot;</span>
+</pre><pre class="insert-after">
+
+#define ALLOCATE(type, count) \
+</pre></div>
+<div class="source-file-narrow"><em>memory.h</em></div>
+
+<p>Sau đó, trong file hiện thực:</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;memory.h&quot;
+</pre><div class="source-file"><em>memory.c</em></div>
+<pre class="insert"><span class="a">#include &quot;vm.h&quot;</span>
+</pre><pre class="insert-after">
+
+void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em></div>
+
+<p>Với điều này, VM của ta sẽ không còn rò rỉ bộ nhớ nữa. Giống như một chương trình C tốt, nó sẽ dọn dẹp “mớ hỗn độn” của mình trước khi thoát. Nhưng nó sẽ không giải phóng bất kỳ object nào khi VM đang chạy. Sau này, khi có thể viết các chương trình Lox chạy lâu hơn, VM sẽ tiêu tốn ngày càng nhiều bộ nhớ mà không trả lại một byte nào cho tới khi toàn bộ chương trình kết thúc.</p>
+<p>Ta sẽ chưa xử lý điều đó cho tới khi thêm <a href="garbage-collection.html">một garbage collector thực sự</a>, nhưng đây là một bước tiến lớn. Giờ ta đã có hạ tầng để hỗ trợ nhiều loại object được cấp phát động khác nhau. Và ta đã dùng nó để thêm string vào clox — một trong những kiểu được sử dụng nhiều nhất trong hầu hết các ngôn ngữ lập trình. String lại mở đường cho ta xây dựng một kiểu dữ liệu nền tảng khác, đặc biệt trong các ngôn ngữ động: <a href="hash-tables.html">hash table</a> “lão làng”. Nhưng đó sẽ là chuyện của chương sau…</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>19&#8202;.&#8202;6</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Mỗi string hiện cần hai lần cấp phát động riêng biệt — một cho ObjString và một cho mảng ký tự. Việc truy cập ký tự từ một value cần hai lần gián tiếp qua con trỏ, điều này có thể gây ảnh hưởng tới hiệu năng. Một giải pháp hiệu quả hơn dựa trên kỹ thuật gọi là <strong><a href="https://en.wikipedia.org/wiki/Flexible_array_member">flexible array members</a></strong>. Hãy dùng kỹ thuật này để lưu ObjString và mảng ký tự của nó trong cùng một vùng cấp phát liên tục.</p>
+</li>
+<li>
+<p>Khi ta tạo ObjString cho mỗi string literal, ta copy các ký tự lên heap. Cách này đảm bảo rằng khi string được giải phóng sau này, ta biết chắc là an toàn để giải phóng cả mảng ký tự.</p>
+<p>Đây là cách tiếp cận đơn giản hơn nhưng lãng phí một chút bộ nhớ, điều này có thể là vấn đề trên các thiết bị bị giới hạn tài nguyên. Thay vào đó, ta có thể theo dõi xem ObjString nào sở hữu mảng ký tự của nó và ObjString nào là “constant string” chỉ trỏ ngược lại chuỗi nguồn gốc hoặc một vị trí khác không được phép giải phóng. Hãy thêm hỗ trợ cho điều này.</p>
+</li>
+<li>
+<p>Nếu Lox là ngôn ngữ của bạn, bạn muốn nó làm gì khi người dùng thử dùng <code>+</code> với một toán hạng là string và toán hạng còn lại là kiểu khác? Hãy giải thích lựa chọn của bạn. Các ngôn ngữ khác làm gì trong trường hợp này?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-mã-hóa-chuỗi-string-encoding" id="ghi-chú-thiết-kế-mã-hóa-chuỗi-string-encoding"><small>19&#8202;.&#8202;7</small>Ghi chú thiết kế: Mã hóa chuỗi (String Encoding)</a></h2>
+<p>Trong cuốn sách này, tôi cố gắng không né tránh những vấn đề rắc rối mà bạn sẽ gặp phải khi hiện thực một ngôn ngữ thực thụ. Chúng ta có thể không phải lúc nào cũng dùng giải pháp <em>tinh vi</em> nhất — dù sao đây cũng là sách nhập môn — nhưng tôi không nghĩ là trung thực nếu giả vờ như vấn đề đó không tồn tại. Tuy nhiên, tôi đã lướt qua một nan đề thực sự khó nhằn: quyết định cách biểu diễn chuỗi.</p>
+<p>Có hai khía cạnh trong việc mã hóa chuỗi:</p>
+<ul>
+<li>
+<p><strong>Thế nào là một “ký tự” trong chuỗi?</strong> Có bao nhiêu giá trị khác nhau và chúng biểu diễn điều gì? Câu trả lời tiêu chuẩn đầu tiên được chấp nhận rộng rãi là <a href="https://en.wikipedia.org/wiki/ASCII">ASCII</a>. Nó cho bạn 127 giá trị ký tự khác nhau và quy định rõ chúng là gì. Rất tuyệt… nếu bạn chỉ quan tâm đến tiếng Anh. Dù có những ký tự kỳ lạ, hầu như đã bị lãng quên như “record separator” hay “synchronous idle”, nó lại không có nổi một ký tự umlaut, acute hay grave nào. Nó không thể biểu diễn “jalapeño”, “naïve”, <span name="gruyere">“Gruyère”</span>, hay “Mötley Crüe”.</p>
+<aside name="gruyere">
+<p>Không cần phải nói, một ngôn ngữ không cho phép bạn bàn về Gruyère hay Mötley Crüe thì chẳng đáng để dùng.</p>
+</aside>
+<p>Tiếp theo là <a href="https://en.wikipedia.org/wiki/Unicode">Unicode</a>. Ban đầu, nó hỗ trợ 16.384 ký tự khác nhau (<strong>code point</strong>), vừa khít trong 16 bit và vẫn dư vài bit. Sau đó con số này tăng dần, và giờ đã có hơn 100.000 code point khác nhau, bao gồm cả những “công cụ” giao tiếp thiết yếu của loài người như 💩 (Unicode Character &lsquo;PILE OF POO&rsquo;, <code>U+1F4A9</code>).</p>
+<p>Ngay cả danh sách dài code point đó cũng chưa đủ để biểu diễn mọi glyph hiển thị mà một ngôn ngữ có thể hỗ trợ. Để xử lý điều này, Unicode còn có <strong>combining character</strong> để biến đổi code point đứng trước. Ví dụ, “a” theo sau bởi combining character “¨” sẽ thành “ä”. (Để mọi thứ rối hơn, Unicode <em>cũng</em> có một code point đơn lẻ trông giống hệt “ä”.)</p>
+<p>Nếu người dùng truy cập “ký tự” thứ tư trong “naïve”, họ mong nhận về “v” hay &ldquo;¨&rdquo;? Trường hợp đầu nghĩa là họ coi mỗi code point và combining character của nó là một đơn vị duy nhất — thứ mà Unicode gọi là <strong>extended grapheme cluster</strong> — trường hợp sau nghĩa là họ đang nghĩ theo từng code point riêng lẻ. Người dùng của bạn sẽ mong điều gì?</p>
+</li>
+<li>
+<p><strong>Một đơn vị được biểu diễn trong bộ nhớ như thế nào?</strong> Hầu hết các hệ thống dùng ASCII cấp một byte cho mỗi ký tự và bỏ trống bit cao. Unicode có một vài cách mã hóa phổ biến. UTF-16 nhét hầu hết code point vào 16 bit. Điều này rất ổn khi mọi code point đều vừa trong kích thước đó. Khi vượt quá, họ thêm <em>surrogate pair</em> dùng nhiều đơn vị 16-bit để biểu diễn một code point. UTF-32 là bước tiến tiếp theo của UTF-16 — cấp hẳn 32 bit cho từng code point.</p>
+<p>UTF-8 phức tạp hơn cả hai. Nó dùng số byte biến đổi để mã hóa một code point. Code point có giá trị nhỏ hơn thì dùng ít byte hơn. Vì mỗi ký tự có thể chiếm số byte khác nhau, bạn không thể truy cập trực tiếp vào một vị trí trong chuỗi để tìm code point cụ thể. Nếu muốn lấy code point thứ 10, bạn sẽ không biết nó nằm ở byte thứ bao nhiêu nếu không duyệt và giải mã tất cả các code point trước đó.</p>
+</li>
+</ul>
+<p>Việc chọn cách biểu diễn ký tự và mã hóa liên quan đến những đánh đổi cơ bản. Giống như nhiều thứ trong kỹ thuật, không có giải pháp <span name="python">hoàn hảo</span>:</p>
+<aside name="python">
+<p>Một ví dụ cho thấy vấn đề này khó thế nào đến từ Python. Quá trình chuyển đổi kéo dài từ Python 2 sang 3 đau đớn chủ yếu vì những thay đổi liên quan đến mã hóa chuỗi.</p>
+</aside>
+<ul>
+<li>
+<p>ASCII tiết kiệm bộ nhớ và nhanh, nhưng bỏ rơi các ngôn ngữ phi Latin.</p>
+</li>
+<li>
+<p>UTF-32 nhanh và hỗ trợ toàn bộ dải Unicode, nhưng lãng phí nhiều bộ nhớ vì hầu hết code point nằm ở vùng giá trị thấp, nơi không cần tới 32 bit đầy đủ.</p>
+</li>
+<li>
+<p>UTF-8 tiết kiệm bộ nhớ và hỗ trợ toàn bộ dải Unicode, nhưng mã hóa độ dài biến đổi khiến việc truy cập ngẫu nhiên code point chậm.</p>
+</li>
+<li>
+<p>UTF-16 tệ hơn tất cả — một hệ quả xấu xí của việc Unicode vượt quá phạm vi 16-bit ban đầu. Nó kém hiệu quả về bộ nhớ hơn UTF-8 nhưng vẫn là mã hóa độ dài biến đổi do có surrogate pair. Tránh nó nếu có thể. Tiếc là nếu ngôn ngữ của bạn cần chạy trên hoặc tương tác với trình duyệt, JVM, hoặc CLR, bạn có thể sẽ phải dùng nó, vì tất cả những nền tảng đó dùng UTF-16 cho string và bạn sẽ không muốn phải chuyển đổi mỗi khi truyền string xuống hệ thống bên dưới.</p>
+</li>
+</ul>
+<p>Một lựa chọn là tiếp cận tối đa và làm “đúng” nhất. Hỗ trợ toàn bộ code point Unicode. Nội bộ, chọn mã hóa cho từng chuỗi dựa trên nội dung của nó — dùng ASCII nếu mọi code point vừa trong một byte, UTF-16 nếu không có surrogate pair, v.v. Cung cấp API cho phép người dùng duyệt cả code point và extended grapheme cluster.</p>
+<p>Cách này bao quát mọi trường hợp nhưng rất phức tạp. Rất nhiều việc để hiện thực, debug và tối ưu. Khi tuần tự hóa chuỗi hoặc tương tác với hệ thống khác, bạn phải xử lý tất cả các dạng mã hóa. Người dùng cần hiểu cả hai API duyệt và biết khi nào dùng cái nào. Đây là cách mà các ngôn ngữ mới, lớn thường chọn — như Raku và Swift.</p>
+<p>Một thỏa hiệp đơn giản hơn là luôn mã hóa bằng UTF-8 và chỉ cung cấp API làm việc với code point. Với người dùng muốn làm việc với grapheme cluster, hãy để họ dùng thư viện bên thứ ba. Cách này ít thiên vị Latin hơn ASCII nhưng không phức tạp hơn nhiều. Bạn mất khả năng truy cập trực tiếp nhanh theo code point, nhưng thường có thể sống mà không cần hoặc chấp nhận độ phức tạp <em>O(n)</em> thay vì <em>O(1)</em>.</p>
+<p>Nếu tôi thiết kế một ngôn ngữ “trâu cày” lớn cho những người viết ứng dụng quy mô lớn, có lẽ tôi sẽ chọn cách tiếp cận tối đa. Với ngôn ngữ script nhúng nhỏ <a href="http://wren.io">Wren</a> của mình, tôi chọn UTF-8 và code point.</p>
+</div>
+
+<footer>
+<a href="hash-tables.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Hash Tables&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

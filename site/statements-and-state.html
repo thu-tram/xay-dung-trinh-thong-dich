@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Statements and State &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Statements and State<small>8</small></a></h3>
+
+<ul>
+    <li><a href="#statement"><small>8.1</small> Statement</a></li>
+    <li><a href="#biến-to&amp;agrave;n-cục-global-variables"><small>8.2</small> Biến to&amp;agrave;n cục (Global Variables)</a></li>
+    <li><a href="#environment"><small>8.3</small> Environment</a></li>
+    <li><a href="#gán-giá-trị-assignment"><small>8.4</small> Gán giá trị (Assignment)</a></li>
+    <li><a href="#scope-phạm-vi"><small>8.5</small> Scope (Phạm vi)</a></li>
+    <li><a href="#thử-thách"><small>8.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-khai-báo-biến-ngầm-định-implicit-variable-declaration"><small>8.7</small> Ghi chú thiết kế: Khai báo biến ngầm định (Implicit Variable Declaration)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="evaluating-expressions.html" title="Evaluating Expressions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="control-flow.html" title="Control Flow" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="evaluating-expressions.html" title="Evaluating Expressions" class="prev">←</a>
+<a href="control-flow.html" title="Control Flow" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Statements and State<small>8</small></a></h3>
+
+<ul>
+    <li><a href="#statement"><small>8.1</small> Statement</a></li>
+    <li><a href="#biến-to&amp;agrave;n-cục-global-variables"><small>8.2</small> Biến to&amp;agrave;n cục (Global Variables)</a></li>
+    <li><a href="#environment"><small>8.3</small> Environment</a></li>
+    <li><a href="#gán-giá-trị-assignment"><small>8.4</small> Gán giá trị (Assignment)</a></li>
+    <li><a href="#scope-phạm-vi"><small>8.5</small> Scope (Phạm vi)</a></li>
+    <li><a href="#thử-thách"><small>8.6</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-khai-báo-biến-ngầm-định-implicit-variable-declaration"><small>8.7</small> Ghi chú thiết kế: Khai báo biến ngầm định (Implicit Variable Declaration)</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="evaluating-expressions.html" title="Evaluating Expressions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="control-flow.html" title="Control Flow" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">8</div>
+  <h1>Statements and State</h1>
+
+<blockquote>
+<p>Suốt cuộc đời mình, trái tim tôi luôn khao khát một điều mà tôi không thể gọi tên.
+<cite>Andr&eacute; Breton, <em>Mad Love</em></cite></p>
+</blockquote>
+<p>Interpreter mà ta có cho đến giờ cảm giác giống như đang bấm nút trên một chiếc máy tính bỏ túi hơn là lập trình một ngôn ngữ thực thụ. “Lập trình” với tôi nghĩa là xây dựng một hệ thống từ những mảnh ghép nhỏ hơn. Ta chưa thể làm điều đó vì chưa có cách nào để gán một tên cho một dữ liệu hoặc hàm. Ta không thể ghép nối phần mềm nếu không có cách tham chiếu tới các mảnh ghép.</p>
+<p>Để hỗ trợ việc gán tên (binding), interpreter của ta cần có trạng thái bên trong. Khi bạn định nghĩa một biến ở đầu chương trình và sử dụng nó ở cuối, interpreter phải giữ lại giá trị của biến đó trong suốt thời gian đó. Vậy nên trong chương này, ta sẽ cho interpreter một “bộ não” không chỉ biết xử lý, mà còn biết <em>ghi nhớ</em>.</p><img src="image/statements-and-state/brain.png" alt="Một bộ não, có lẽ đang ghi nhớ gì đó." />
+<p>State và <span name="expr">statement</span> luôn đi cùng nhau. Vì statement, theo định nghĩa, không trả về giá trị, nên chúng cần làm điều gì khác để hữu ích. Điều đó được gọi là <strong>side effect</strong> (tác dụng phụ). Nó có thể là tạo ra đầu ra mà người dùng nhìn thấy hoặc thay đổi một trạng thái nào đó trong interpreter để có thể được phát hiện sau này. Cách thứ hai khiến chúng rất phù hợp để định nghĩa biến hoặc các thực thể có tên khác.</p>
+<aside name="expr">
+<p>Bạn hoàn toàn có thể tạo ra một ngôn ngữ coi khai báo biến là một expression vừa tạo binding vừa trả về giá trị. Ngôn ngữ duy nhất tôi biết làm vậy là Tcl. Scheme có vẻ cũng gần giống, nhưng lưu ý rằng sau khi một expression <code>let</code> được đánh giá, biến mà nó bind sẽ bị quên đi. Cú pháp <code>define</code> không phải là một expression.</p>
+</aside>
+<p>Trong chương này, ta sẽ làm tất cả những điều đó. Ta sẽ định nghĩa các statement tạo ra đầu ra (<code>print</code>) và tạo state (<code>var</code>). Ta sẽ thêm expression để truy cập và gán giá trị cho biến. Cuối cùng, ta sẽ thêm block và scope cục bộ. Nghe có vẻ nhiều cho một chương, nhưng ta sẽ xử lý từng phần một.</p>
+<h2><a href="#statement" id="statement"><small>8&#8202;.&#8202;1</small>Statement</a></h2>
+<p>Ta bắt đầu bằng cách mở rộng grammar của Lox với statement. Chúng không khác nhiều so với expression. Ta sẽ bắt đầu với hai loại đơn giản nhất:</p>
+<ol>
+<li>
+<p><strong>Expression statement</strong> cho phép bạn đặt một expression ở vị trí mà một statement được mong đợi. Chúng tồn tại để đánh giá các expression có side effect. Bạn có thể không để ý, nhưng bạn dùng chúng mọi lúc trong <span name="expr-stmt">C</span>, Java và nhiều ngôn ngữ khác. Bất cứ khi nào bạn thấy một lời gọi hàm hoặc phương thức theo sau bởi <code>;</code>, đó chính là một expression statement.</p>
+<aside name="expr-stmt">
+<p>Pascal là một ngoại lệ. Nó phân biệt giữa <em>procedure</em> và <em>function</em>. Function trả về giá trị, còn procedure thì không. Có một dạng statement để gọi procedure, nhưng function chỉ có thể được gọi ở nơi một expression được mong đợi. Pascal không có expression statement.</p>
+</aside></li>
+<li>
+<p><strong><code>print</code> statement</strong> đánh giá một expression và hiển thị kết quả cho người dùng. Tôi thừa nhận rằng việc “nướng” tính năng in ra ngay trong ngôn ngữ thay vì biến nó thành một hàm thư viện là hơi lạ. Nhưng đây là sự nhượng bộ trước thực tế rằng ta đang xây dựng interpreter này từng chương một và muốn có thể thử nghiệm với nó trước khi hoàn thiện. Để biến print thành một hàm thư viện, ta sẽ phải đợi cho đến khi có đầy đủ cơ chế định nghĩa và gọi hàm <span name="print">trước</span> khi có thể chứng kiến bất kỳ side effect nào.</p>
+<aside name="print">
+<p>Tôi chỉ xin nói một chút để bảo vệ rằng BASIC và Python có <code>print</code> statement riêng và chúng là những ngôn ngữ thực thụ. Tất nhiên, Python đã bỏ <code>print</code> statement trong phiên bản 3.0…</p>
+</aside></li>
+</ol>
+<p>Cú pháp mới đồng nghĩa với các quy tắc grammar mới. Trong chương này, cuối cùng ta cũng có khả năng parse toàn bộ một script Lox. Vì Lox là một ngôn ngữ imperative, kiểu động, “tầng trên cùng” của một script đơn giản là một danh sách statement. Các quy tắc mới là:</p>
+<div class="codehilite"><pre><span class="i">program</span>        → <span class="i">statement</span>* <span class="t">EOF</span> ;
+
+<span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">printStmt</span> ;
+
+<span class="i">exprStmt</span>       → <span class="i">expression</span> <span class="s">&quot;;&quot;</span> ;
+<span class="i">printStmt</span>      → <span class="s">&quot;print&quot;</span> <span class="i">expression</span> <span class="s">&quot;;&quot;</span> ;
+</pre></div>
+<p>Quy tắc đầu tiên giờ là <code>program</code>, điểm bắt đầu của grammar và đại diện cho một script Lox hoàn chỉnh hoặc một mục nhập trong REPL. Một program là danh sách các statement theo sau bởi token đặc biệt “end of file”. Token kết thúc bắt buộc này đảm bảo parser tiêu thụ toàn bộ input và không âm thầm bỏ qua các token thừa lỗi ở cuối script.</p>
+<p>Hiện tại, <code>statement</code> chỉ có hai trường hợp cho hai loại statement mà ta vừa mô tả. Ta sẽ bổ sung thêm sau trong chương này và các chương tiếp theo. Bước tiếp theo là biến grammar này thành thứ mà ta có thể lưu trữ trong bộ nhớ — syntax tree.</p>
+<h3><a href="#syntax-tree-cây-cú-pháp-cho-statement" id="syntax-tree-cây-cú-pháp-cho-statement"><small>8&#8202;.&#8202;1&#8202;.&#8202;1</small>Syntax Tree (Cây cú pháp) cho Statement</a></h3>
+<p>Không có chỗ nào trong grammar mà cả expression và statement đều được phép xuất hiện. Toán hạng của, ví dụ, <code>+</code> luôn là expression, không bao giờ là statement. Thân của một vòng lặp <code>while</code> thì luôn là một statement.</p>
+<p>Vì hai cú pháp này tách biệt, ta không cần một base class chung mà tất cả đều kế thừa. Việc tách expression và statement thành hai hệ phân cấp class riêng cho phép trình biên dịch Java giúp ta phát hiện những lỗi ngớ ngẩn như truyền một statement vào một phương thức Java đang mong đợi một expression.</p>
+<p>Điều đó có nghĩa là ta cần một base class mới cho statement. Như các bậc tiền bối đã làm trước đây, ta sẽ dùng cái tên “Stmt” đầy bí ẩn. Với tầm nhìn <span name="foresight">xa</span>, tôi đã thiết kế script metaprogramming AST nhỏ của chúng ta để chuẩn bị cho việc này. Đó là lý do ta đã truyền “Expr” làm tham số cho <code>defineAst()</code>. Giờ ta thêm một lời gọi khác để định nghĩa Stmt và các <span name="stmt-ast">subclass</span> của nó.</p>
+<aside name="foresight">
+<p>Thực ra cũng chẳng phải tầm nhìn gì: tôi đã viết toàn bộ code cho cuốn sách trước khi chia nó thành các chương.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">      &quot;Unary    : Token operator, Expr right&quot;
+    ));
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">
+
+    <span class="i">defineAst</span>(<span class="i">outputDir</span>, <span class="s">&quot;Stmt&quot;</span>, <span class="t">Arrays</span>.<span class="i">asList</span>(
+      <span class="s">&quot;Expression : Expr expression&quot;</span>,
+      <span class="s">&quot;Print      : Expr expression&quot;</span>
+    ));
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="stmt-ast">
+<p>Code được generated cho các node mới nằm ở <a href="appendix-ii.html">Phụ lục II</a>: <a href="appendix-ii.html#expression-statement">Expression statement</a>, <a href="appendix-ii.html#print-statement">Print statement</a>.</p>
+</aside>
+<p>Chạy script sinh AST và chiêm ngưỡng file “Stmt.java” kết quả với các class cây cú pháp mà ta cần cho expression và <code>print</code> statement. Đừng quên thêm file này vào project IDE hoặc makefile hay bất cứ công cụ build nào bạn dùng.</p>
+<h3><a href="#parse-statement" id="parse-statement"><small>8&#8202;.&#8202;1&#8202;.&#8202;2</small>Parse statement</a></h3>
+<p>Phương thức <code>parse()</code> của parser, vốn parse và trả về một expression duy nhất, chỉ là một mẹo tạm thời để chương trước chạy được. Giờ khi grammar của ta đã có quy tắc bắt đầu đúng là <code>program</code>, ta có thể biến <code>parse()</code> thành phiên bản “xịn”.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+method <em>parse</em>()<br>
+replace 7 lines</div>
+<pre>  <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">parse</span>() {
+    <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+    <span class="k">while</span> (!<span class="i">isAtEnd</span>()) {
+      <span class="i">statements</span>.<span class="i">add</span>(<span class="i">statement</span>());
+    }
+
+    <span class="k">return</span> <span class="i">statements</span>;<span name="parse-error-handling"> </span>
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, method <em>parse</em>(), replace 7 lines</div>
+
+<aside name="parse-error-handling">
+<p>Còn đoạn code bắt exception <code>ParseError</code> trước đây thì sao? Ta sẽ sớm bổ sung xử lý lỗi parse tốt hơn khi thêm hỗ trợ cho các loại statement khác.</p>
+</aside>
+<p>Hàm này parse một loạt statement, càng nhiều càng tốt cho đến khi gặp cuối input. Đây là bản dịch khá trực tiếp của quy tắc <code>program</code> sang phong cách đệ quy xuống (recursive descent). Ta cũng phải khấn một lời cầu nguyện nhỏ tới “các vị thần” Java verbosity vì giờ ta đang dùng ArrayList.</p>
+<div class="codehilite"><pre class="insert-before">package com.craftinginterpreters.lox;
+
+</pre><div class="source-file"><em>lox/Parser.java</em></div>
+<pre class="insert"><span class="k">import</span> <span class="i">java.util.ArrayList</span>;
+</pre><pre class="insert-after">import java.util.List;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em></div>
+
+<p>Một program là một danh sách statement, và ta parse từng statement bằng phương thức này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expression</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">statement</span>() {
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">PRINT</span>)) <span class="k">return</span> <span class="i">printStatement</span>();
+
+    <span class="k">return</span> <span class="i">expressionStatement</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expression</em>()</div>
+
+<p>Hơi sơ sài, nhưng ta sẽ bổ sung thêm các loại statement khác sau. Ta xác định quy tắc statement cụ thể nào được khớp bằng cách nhìn vào token hiện tại. Một token <code>print</code> thì rõ ràng là một <code>print</code> statement.</p>
+<p>Nếu token tiếp theo không giống bất kỳ loại statement nào đã biết, ta giả định nó là một expression statement. Đây là trường hợp rơi xuống cuối cùng điển hình khi parse statement, vì khó mà nhận diện một expression chỉ từ token đầu tiên của nó.</p>
+<p>Mỗi loại statement có phương thức riêng. Đầu tiên là <code>print</code>:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>statement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">printStatement</span>() {
+    <span class="t">Expr</span> <span class="i">value</span> = <span class="i">expression</span>();
+    <span class="i">consume</span>(<span class="i">SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after value.&quot;</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Print</span>(<span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>statement</em>()</div>
+
+<p>Vì ta đã khớp và tiêu thụ token <code>print</code> rồi, nên không cần làm lại ở đây. Ta parse expression tiếp theo, tiêu thụ dấu chấm phẩy kết thúc, và tạo ra cây cú pháp.</p>
+<p>Nếu không khớp <code>print</code> statement, ta sẽ có một trong số này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>printStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">expressionStatement</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">expression</span>();
+    <span class="i">consume</span>(<span class="i">SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after expression.&quot;</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Expression</span>(<span class="i">expr</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>printStatement</em>()</div>
+
+<p>Tương tự phương thức trước, ta parse một expression theo sau bởi dấu chấm phẩy. Ta bọc Expr đó trong một Stmt đúng loại và trả về.</p>
+<h3><a href="#execute-statement" id="execute-statement"><small>8&#8202;.&#8202;1&#8202;.&#8202;3</small>Execute statement</a></h3>
+<p>Ta đang đi lại những bước của vài chương trước ở dạng thu nhỏ, lần lượt qua phần front end. Parser của ta giờ có thể tạo ra cây cú pháp statement, nên bước tiếp theo và cuối cùng là thông dịch chúng. Giống như với expression, ta dùng Visitor pattern, nhưng ta có một interface visitor mới, <code>Stmt.Visitor</code>, để hiện thực vì statement có base class riêng.</p>
+<p>Ta thêm interface đó vào danh sách các interface mà Interpreter implements.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+replace 1 line</div>
+<pre class="insert"><span class="k">class</span> <span class="t">Interpreter</span> <span class="k">implements</span> <span class="t">Expr</span>.<span class="t">Visitor</span>&lt;<span class="t">Object</span>&gt;,
+                             <span class="t">Stmt</span>.<span class="t">Visitor</span>&lt;<span class="t">Void</span>&gt; {
+</pre><pre class="insert-after">  void interpret(Expr expression) {<span name="void"> </span>
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, replace 1 line</div>
+
+<aside name="void">
+<p>Java không cho bạn dùng “void” viết thường làm đối số kiểu generic vì những lý do mơ hồ liên quan đến type erasure và stack. Thay vào đó, có một kiểu riêng “Void” dành cho mục đích này. Kiểu này giống như một “boxed void”, tương tự như “Integer” là cho “int”.</p>
+</aside>
+<p>Không giống expression, statement không tạo ra giá trị, nên kiểu trả về của các phương thức visit là Void, không phải Object. Ta có hai loại statement, và cần một phương thức visit cho mỗi loại. Dễ nhất là expression statement.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>evaluate</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitExpressionStmt</span>(<span class="t">Stmt</span>.<span class="t">Expression</span> <span class="i">stmt</span>) {
+    <span class="i">evaluate</span>(<span class="i">stmt</span>.<span class="i">expression</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>evaluate</em>()</div>
+
+<p>Ta đánh giá expression bên trong bằng phương thức <code>evaluate()</code> hiện có và <span name="discard">bỏ qua</span> giá trị trả về. Sau đó ta trả về <code>null</code>. Java yêu cầu điều đó để thỏa mãn kiểu trả về Void viết hoa đặc biệt. Kỳ lạ, nhưng biết làm sao được.</p>
+<aside name="discard">
+<p>Thật hợp lý, ta bỏ qua giá trị trả về từ <code>evaluate()</code> bằng cách đặt lời gọi đó bên trong một expression statement <em>của Java</em>.</p>
+</aside>
+<p>Phương thức visit cho <code>print</code> statement cũng không khác mấy.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitExpressionStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitPrintStmt</span>(<span class="t">Stmt</span>.<span class="t">Print</span> <span class="i">stmt</span>) {
+    <span class="t">Object</span> <span class="i">value</span> = <span class="i">evaluate</span>(<span class="i">stmt</span>.<span class="i">expression</span>);
+    <span class="t">System</span>.<span class="i">out</span>.<span class="i">println</span>(<span class="i">stringify</span>(<span class="i">value</span>));
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitExpressionStmt</em>()</div>
+
+<p>Trước khi bỏ qua giá trị của expression, ta chuyển nó thành chuỗi bằng phương thức <code>stringify()</code> mà ta đã giới thiệu ở chương trước, rồi in nó ra stdout.</p>
+<p>Interpreter của ta giờ đã có thể “thăm” các statement, nhưng ta cần làm thêm chút việc để đưa chúng vào. Đầu tiên, sửa phương thức <code>interpret()</code> cũ trong class Interpreter để nhận một danh sách statement — nói cách khác là một chương trình.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+method <em>interpret</em>()<br>
+replace 8 lines</div>
+<pre>  <span class="t">void</span> <span class="i">interpret</span>(<span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span>) {
+    <span class="k">try</span> {
+      <span class="k">for</span> (<span class="t">Stmt</span> <span class="i">statement</span> : <span class="i">statements</span>) {
+        <span class="i">execute</span>(<span class="i">statement</span>);
+      }
+    } <span class="k">catch</span> (<span class="t">RuntimeError</span> <span class="i">error</span>) {
+      <span class="t">Lox</span>.<span class="i">runtimeError</span>(<span class="i">error</span>);
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, method <em>interpret</em>(), replace 8 lines</div>
+
+<p>Điều này thay thế đoạn code cũ vốn nhận một expression duy nhất. Code mới dựa vào helper nhỏ này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>evaluate</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">void</span> <span class="i">execute</span>(<span class="t">Stmt</span> <span class="i">stmt</span>) {
+    <span class="i">stmt</span>.<span class="i">accept</span>(<span class="k">this</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>evaluate</em>()</div>
+
+<p>Đây là “phiên bản statement” của phương thức <code>evaluate()</code> mà ta có cho expression. Vì giờ ta làm việc với danh sách, ta cần cho Java biết điều đó.</p>
+<div class="codehilite"><pre class="insert-before">package com.craftinginterpreters.lox;
+</pre><div class="source-file"><em>lox/Interpreter.java</em></div>
+<pre class="insert">
+
+<span class="k">import</span> <span class="i">java.util.List</span>;
+</pre><pre class="insert-after">
+
+class Interpreter implements Expr.Visitor&lt;Object&gt;,
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em></div>
+
+<p>Class Lox chính vẫn đang cố parse một expression duy nhất và truyền nó vào interpreter. Ta sửa dòng parse như sau:</p>
+<div class="codehilite"><pre class="insert-before">    Parser parser = new Parser(tokens);
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>run</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span> = <span class="i">parser</span>.<span class="i">parse</span>();
+</pre><pre class="insert-after">
+
+    // Stop if there was a syntax error.
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>run</em>(), replace 1 line</div>
+
+<p>Rồi thay lời gọi interpreter bằng:</p>
+<div class="codehilite"><pre class="insert-before">    if (hadError) return;
+
+</pre><div class="source-file"><em>lox/Lox.java</em><br>
+in <em>run</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="i">interpreter</span>.<span class="i">interpret</span>(<span class="i">statements</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Lox.java</em>, in <em>run</em>(), replace 1 line</div>
+
+<p>Về cơ bản chỉ là “đi đường ống” cho cú pháp mới. OK, chạy interpreter và thử xem. Lúc này, đáng để phác thảo một chương trình Lox nhỏ trong file văn bản để chạy như script. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="s">&quot;one&quot;</span>;
+<span class="k">print</span> <span class="k">true</span>;
+<span class="k">print</span> <span class="n">2</span> + <span class="n">1</span>;
+</pre></div>
+<p>Trông gần giống một chương trình thực sự rồi! Lưu ý rằng REPL giờ cũng yêu cầu bạn nhập một statement đầy đủ thay vì chỉ một expression. Đừng quên dấu chấm phẩy.</p>
+<h2><a href="#biến-to&agrave;n-cục-global-variables" id="biến-to&agrave;n-cục-global-variables"><small>8&#8202;.&#8202;2</small>Biến to&agrave;n cục (Global Variables)</a></h2>
+<p>Giờ ta đã có statement, ta có thể bắt đầu làm việc với state. Trước khi đi vào toàn bộ sự phức tạp của lexical scoping, ta sẽ bắt đầu với loại biến dễ nhất — <span name="globals">biến toàn cục</span>. Ta cần hai cấu trúc mới.</p>
+<ol>
+<li>
+<p><strong>Variable declaration</strong> statement tạo ra một biến mới.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">beverage</span> = <span class="s">&quot;espresso&quot;</span>;
+</pre></div>
+<p>Điều này tạo một binding mới, gắn một tên (ở đây là <code>"beverage"</code>) với một giá trị (ở đây là chuỗi <code>"espresso"</code>).</p>
+</li>
+<li>
+<p>Sau đó, một <strong>variable expression</strong> truy cập binding đó. Khi identifier <code>"beverage"</code> được dùng như một expression, nó sẽ tìm giá trị gắn với tên đó và trả về.</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="i">beverage</span>; <span class="c">// &quot;espresso&quot;.</span>
+</pre></div>
+</li>
+</ol>
+<p>Sau này, ta sẽ thêm gán giá trị và block scope, nhưng chừng đó là đủ để bắt đầu.</p>
+<aside name="globals">
+<p>Global state thường bị mang tiếng xấu. Đúng là nhiều global state — đặc biệt là state <em>mutable</em> — khiến việc bảo trì các chương trình lớn trở nên khó khăn. Về mặt kỹ thuật phần mềm, việc giảm thiểu sử dụng chúng là điều tốt.</p>
+<p>Nhưng khi bạn đang ráp một ngôn ngữ lập trình đơn giản, hoặc thậm chí đang học ngôn ngữ đầu tiên, sự đơn giản “phẳng” của biến toàn cục lại hữu ích. Ngôn ngữ đầu tiên của tôi là BASIC và, dù cuối cùng tôi đã vượt qua nó, nhưng thật tuyệt khi tôi không phải đau đầu với quy tắc scope trước khi có thể khiến máy tính làm những điều thú vị.</p>
+</aside>
+<h3><a href="#cú-pháp-biến" id="cú-pháp-biến"><small>8&#8202;.&#8202;2&#8202;.&#8202;1</small>Cú pháp biến</a></h3>
+<p>Như trước, ta sẽ triển khai từ trước ra sau, bắt đầu với cú pháp. Variable declaration là statement, nhưng chúng khác với các statement khác, và ta sẽ tách grammar của statement thành hai phần để xử lý chúng. Lý do là grammar giới hạn nơi một số loại statement được phép xuất hiện.</p>
+<p>Các mệnh đề trong statement điều khiển luồng — như nhánh then và else của <code>if</code> hoặc thân của <code>while</code> — mỗi cái là một statement duy nhất. Nhưng statement đó không được phép là một statement khai báo tên. Ví dụ này OK:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">monday</span>) <span class="k">print</span> <span class="s">&quot;Ugh, already?&quot;</span>;
+</pre></div>
+<p>Nhưng ví dụ này thì không:</p>
+<div class="codehilite"><pre><span class="k">if</span> (<span class="i">monday</span>) <span class="k">var</span> <span class="i">beverage</span> = <span class="s">&quot;espresso&quot;</span>;
+</pre></div>
+<p>Ta <em>có thể</em> cho phép trường hợp sau, nhưng nó gây rối. Scope của biến <code>beverage</code> đó là gì? Nó có tồn tại sau câu lệnh <code>if</code> không? Nếu có, giá trị của nó là gì vào những ngày khác Monday? Biến đó có tồn tại chút nào vào những ngày đó không?</p>
+<p>Code như vậy thật kỳ quặc, nên C, Java và các “bạn bè” của chúng đều không cho phép. Cứ như thể có hai mức <span name="brace">“độ ưu tiên”</span> cho statement. Một số nơi mà statement được phép xuất hiện — như bên trong block hoặc ở top-level — cho phép mọi loại statement, bao gồm cả declaration. Những nơi khác chỉ cho phép các statement “ưu tiên cao” hơn, tức là không khai báo tên.</p>
+<aside name="brace">
+<p>Trong phép so sánh này, block statement hoạt động giống như dấu ngoặc đơn đối với expression. Bản thân block nằm ở “mức ưu tiên cao” và có thể dùng ở bất kỳ đâu, như trong các mệnh đề của <code>if</code>. Nhưng các statement <em>bên trong</em> nó có thể ở mức ưu tiên thấp hơn. Bạn được phép khai báo biến và các tên khác bên trong block. Dấu ngoặc nhọn cho phép bạn “thoát” trở lại grammar statement đầy đủ từ một nơi mà chỉ một số statement được phép.</p>
+</aside>
+<p>Để đáp ứng sự khác biệt này, ta thêm một quy tắc mới cho các loại statement khai báo tên.</p>
+<div class="codehilite"><pre><span class="i">program</span>        → <span class="i">declaration</span>* <span class="t">EOF</span> ;
+
+<span class="i">declaration</span>    → <span class="i">varDecl</span>
+               | <span class="i">statement</span> ;
+
+<span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">printStmt</span> ;
+</pre></div>
+<p>Các statement khai báo sẽ nằm dưới quy tắc <code>declaration</code> mới. Hiện tại, nó chỉ có biến, nhưng sau này sẽ bao gồm cả hàm và class. Bất kỳ nơi nào cho phép declaration cũng cho phép statement không khai báo, nên quy tắc <code>declaration</code> sẽ rơi xuống <code>statement</code>. Rõ ràng, bạn có thể khai báo ở top-level của script, nên <code>program</code> sẽ dẫn tới quy tắc mới này.</p>
+<p>Quy tắc khai báo biến trông như sau:</p>
+<div class="codehilite"><pre><span class="i">varDecl</span>        → <span class="s">&quot;var&quot;</span> <span class="t">IDENTIFIER</span> ( <span class="s">&quot;=&quot;</span> <span class="i">expression</span> )? <span class="s">&quot;;&quot;</span> ;
+</pre></div>
+<p>Giống hầu hết các statement, nó bắt đầu bằng một keyword. Trong trường hợp này là <code>var</code>. Sau đó là một token identifier cho tên biến được khai báo, theo sau là một expression khởi tạo tùy chọn. Cuối cùng, ta “thắt nơ” bằng dấu chấm phẩy.</p>
+<p>Để truy cập một biến, ta định nghĩa một loại primary expression mới:</p>
+<div class="codehilite"><pre><span class="i">primary</span>        → <span class="s">&quot;true&quot;</span> | <span class="s">&quot;false&quot;</span> | <span class="s">&quot;nil&quot;</span>
+               | <span class="t">NUMBER</span> | <span class="t">STRING</span>
+               | <span class="s">&quot;(&quot;</span> <span class="i">expression</span> <span class="s">&quot;)&quot;</span>
+               | <span class="t">IDENTIFIER</span> ;
+</pre></div>
+<p>Mệnh đề <code>IDENTIFIER</code> này khớp với một token identifier duy nhất, được hiểu là tên của biến đang được truy cập.</p>
+<p>Các quy tắc grammar mới này sẽ có cây cú pháp tương ứng. Trong AST generator, ta thêm một node <span name="var-stmt-ast">statement mới</span> cho khai báo biến.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Expression : Expr expression&quot;,
+</pre><pre class="insert-before">      <span class="s">&quot;Print      : Expr expression&quot;</span><span class="insert-comma">,</span>
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()<br>
+add <em>&ldquo;,&rdquo;</em> to previous line</div>
+<pre class="insert">      <span class="s">&quot;Var        : Token name, Expr initializer&quot;</span>
+</pre><pre class="insert-after">    ));
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>(), add <em>&ldquo;,&rdquo;</em> to previous line</div>
+
+<aside name="var-stmt-ast">
+<p>Code được generated cho node mới này nằm ở <a href="appendix-ii.html#variable-statement">Phụ lục II</a>.</p>
+</aside>
+<p>Nó lưu token tên để biết đang khai báo gì, cùng với expression khởi tạo. (Nếu không có khởi tạo, trường này sẽ là <code>null</code>.)</p>
+<p>Tiếp theo, ta thêm một node expression để truy cập biến.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Literal  : Object value&quot;,
+</pre><pre class="insert-before">      <span class="s">&quot;Unary    : Token operator, Expr right&quot;</span><span class="insert-comma">,</span>
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()<br>
+add <em>&ldquo;,&rdquo;</em> to previous line</div>
+<pre class="insert">      <span class="s">&quot;Variable : Token name&quot;</span>
+</pre><pre class="insert-after">    ));
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>(), add <em>&ldquo;,&rdquo;</em> to previous line</div>
+
+<p><span name="var-expr-ast">Nó</span> chỉ đơn giản là một lớp bọc quanh token tên biến. Hết. Như mọi khi, đừng quên chạy script sinh AST để có các file &ldquo;Expr.java&rdquo; và &ldquo;Stmt.java&rdquo; đã được cập nhật.</p>
+<aside name="var-expr-ast">
+<p>Code được generated cho node mới này nằm ở <a href="appendix-ii.html#variable-expression">Phụ lục II</a>.</p>
+</aside>
+<h3><a href="#parse-biến" id="parse-biến"><small>8&#8202;.&#8202;2&#8202;.&#8202;2</small>Parse biến</a></h3>
+<p>Trước khi parse variable statement, ta cần sắp xếp lại một chút code để dành chỗ cho quy tắc <code>declaration</code> mới trong grammar. Top-level của một chương trình giờ là danh sách declaration, nên phương thức entrypoint của parser sẽ thay đổi.</p>
+<div class="codehilite"><pre class="insert-before">  List&lt;Stmt&gt; parse() {
+    List&lt;Stmt&gt; statements = new ArrayList&lt;&gt;();
+    while (!isAtEnd()) {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>parse</em>()<br>
+replace 1 line</div>
+<pre class="insert">      <span class="i">statements</span>.<span class="i">add</span>(<span class="i">declaration</span>());
+</pre><pre class="insert-after">    }
+
+    return statements;<span name="parse-error-handling"> </span>
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>parse</em>(), replace 1 line</div>
+
+<p>Nó gọi tới phương thức mới này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expression</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">declaration</span>() {
+    <span class="k">try</span> {
+      <span class="k">if</span> (<span class="i">match</span>(<span class="i">VAR</span>)) <span class="k">return</span> <span class="i">varDeclaration</span>();
+
+      <span class="k">return</span> <span class="i">statement</span>();
+    } <span class="k">catch</span> (<span class="t">ParseError</span> <span class="i">error</span>) {
+      <span class="i">synchronize</span>();
+      <span class="k">return</span> <span class="k">null</span>;
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expression</em>()</div>
+
+<p>Này, bạn còn nhớ ở <a href="parsing-expressions.html">chương trước</a> khi ta đã chuẩn bị hạ tầng để xử lý khôi phục lỗi không? Giờ ta cuối cùng cũng sẵn sàng kết nối nó.</p>
+<p>Phương thức <code>declaration()</code> này là phương thức được gọi lặp lại khi parse một loạt statement trong block hoặc script, nên đây là nơi thích hợp để đồng bộ khi parser vào chế độ panic. Toàn bộ thân hàm được bọc trong một khối try để bắt exception được ném ra khi parser bắt đầu khôi phục lỗi. Điều này giúp nó quay lại thử parse phần bắt đầu của statement hoặc declaration tiếp theo.</p>
+<p>Việc parse thực sự diễn ra bên trong khối try. Đầu tiên, nó kiểm tra xem ta có đang ở một variable declaration không bằng cách tìm keyword <code>var</code> ở đầu. Nếu không, nó rơi xuống phương thức <code>statement()</code> hiện có để parse <code>print</code> và expression statement.</p>
+<p>Nhớ rằng <code>statement()</code> sẽ cố parse một expression statement nếu không khớp loại statement nào khác? Và <code>expression()</code> sẽ báo lỗi cú pháp nếu không thể parse một expression tại token hiện tại? Chuỗi lời gọi này đảm bảo ta báo lỗi nếu không parse được một declaration hoặc statement hợp lệ.</p>
+<p>Khi parser khớp token <code>var</code>, nó sẽ rẽ sang:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>printStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">varDeclaration</span>() {
+    <span class="t">Token</span> <span class="i">name</span> = <span class="i">consume</span>(<span class="i">IDENTIFIER</span>, <span class="s">&quot;Expect variable name.&quot;</span>);
+
+    <span class="t">Expr</span> <span class="i">initializer</span> = <span class="k">null</span>;
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">EQUAL</span>)) {
+      <span class="i">initializer</span> = <span class="i">expression</span>();
+    }
+
+    <span class="i">consume</span>(<span class="i">SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after variable declaration.&quot;</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Var</span>(<span class="i">name</span>, <span class="i">initializer</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>printStatement</em>()</div>
+
+<p>Như thường lệ, code recursive descent sẽ bám sát quy tắc grammar. Parser đã khớp token <code>var</code>, nên tiếp theo nó yêu cầu và tiêu thụ một token identifier cho tên biến.</p>
+<p>Sau đó, nếu thấy token <code>=</code>, nó biết có một expression khởi tạo và sẽ parse nó. Nếu không, nó để initializer là <code>null</code>. Cuối cùng, nó tiêu thụ dấu chấm phẩy bắt buộc ở cuối statement. Tất cả được gói trong một node cú pháp Stmt.Var và ta xong phần này.</p>
+<p>Parse một variable expression còn dễ hơn. Trong <code>primary()</code>, ta tìm token identifier.</p>
+<div class="codehilite"><pre class="insert-before">      return new Expr.Literal(previous().literal);
+    }
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>primary</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">IDENTIFIER</span>)) {
+      <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Variable</span>(<span class="i">previous</span>());
+    }
+</pre><pre class="insert-after">
+
+    if (match(LEFT_PAREN)) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>primary</em>()</div>
+
+<p>Vậy là ta đã có một front-end hoạt động để khai báo và sử dụng biến. Việc còn lại là đưa nó vào interpreter. Trước khi làm điều đó, ta cần nói về việc biến “sống” ở đâu trong bộ nhớ.</p>
+<h2><a href="#environment" id="environment"><small>8&#8202;.&#8202;3</small>Environment</a></h2>
+<p>Các binding gắn biến với giá trị của chúng cần được lưu trữ ở đâu đó.<br />
+Từ khi những người làm Lisp phát minh ra dấu ngoặc, cấu trúc dữ liệu này đã được gọi là <span name="env"><strong>environment</strong></span>.</p><img src="image/statements-and-state/environment.png" alt="Một environment chứa hai binding." />
+<aside name="env">
+<p>Tôi thích tưởng tượng environment theo nghĩa đen, như một khu rừng yên bình nơi các biến và giá trị vui đùa cùng nhau.</p>
+</aside>
+<p>Bạn có thể hình dung nó như một <span name="map">map</span> mà key là tên biến và value là… giá trị của biến. Thực tế, đó chính là cách ta sẽ hiện thực nó trong Java. Ta có thể nhét map này và code quản lý nó trực tiếp vào Interpreter, nhưng vì nó là một khái niệm tách biệt rõ ràng, ta sẽ tách nó thành một class riêng.</p>
+<p>Tạo một file mới và thêm:</p>
+<aside name="map">
+<p>Java gọi chúng là <strong>map</strong> hoặc <strong>hashmap</strong>. Các ngôn ngữ khác gọi là <strong>hash table</strong>, <strong>dictionary</strong> (Python và C#), <strong>hash</strong> (Ruby và Perl), <strong>table</strong> (Lua), hoặc <strong>associative array</strong> (PHP). Ngày xưa, chúng còn được gọi là <strong>scatter table</strong>.</p>
+</aside>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.HashMap</span>;
+<span class="k">import</span> <span class="i">java.util.Map</span>;
+
+<span class="k">class</span> <span class="t">Environment</span> {
+  <span class="k">private</span> <span class="k">final</span> <span class="t">Map</span>&lt;<span class="t">String</span>, <span class="t">Object</span>&gt; <span class="i">values</span> = <span class="k">new</span> <span class="t">HashMap</span>&lt;&gt;();
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, create new file</div>
+
+<p>Bên trong có một Java Map để lưu các binding. Nó dùng chuỗi thuần làm key, không dùng token. Một token đại diện cho một đơn vị code tại một vị trí cụ thể trong mã nguồn, nhưng khi tra cứu biến, tất cả token identifier có cùng tên nên tham chiếu tới cùng một biến (tạm bỏ qua scope). Dùng chuỗi thuần đảm bảo tất cả các token đó trỏ tới cùng một key trong map.</p>
+<p>Có hai thao tác ta cần hỗ trợ. Đầu tiên, khai báo biến sẽ bind một tên mới với một giá trị.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+in class <em>Environment</em></div>
+<pre>  <span class="t">void</span> <span class="i">define</span>(<span class="t">String</span> <span class="i">name</span>, <span class="t">Object</span> <span class="i">value</span>) {
+    <span class="i">values</span>.<span class="i">put</span>(<span class="i">name</span>, <span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in class <em>Environment</em></div>
+
+<p>Không có gì phức tạp, nhưng ta đã đưa ra một lựa chọn ngữ nghĩa thú vị. Khi thêm key vào map, ta không kiểm tra xem nó đã tồn tại chưa. Điều đó nghĩa là chương trình này chạy được:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;before&quot;</span>;
+<span class="k">print</span> <span class="i">a</span>; <span class="c">// &quot;before&quot;.</span>
+<span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;after&quot;</span>;
+<span class="k">print</span> <span class="i">a</span>; <span class="c">// &quot;after&quot;.</span>
+</pre></div>
+<p>Một variable statement không chỉ định nghĩa một biến <em>mới</em>, nó cũng có thể được dùng để <em>định nghĩa lại</em> một biến đã tồn tại. Ta <span name="scheme">có thể</span> chọn coi đây là lỗi. Người dùng có thể không định ghi đè biến đã có. (Nếu họ muốn, có lẽ họ sẽ dùng phép gán, không phải <code>var</code>.) Việc coi redefinition là lỗi sẽ giúp họ phát hiện bug đó.</p>
+<p>Tuy nhiên, làm vậy lại không hợp với REPL. Trong một phiên REPL, thật tiện khi không phải nhớ mình đã khai báo biến nào. Ta có thể cho phép redefinition trong REPL nhưng không cho trong script, nhưng như vậy người dùng sẽ phải học hai bộ quy tắc, và code copy-paste từ dạng này sang dạng kia có thể không chạy được.</p>
+<aside name="scheme">
+<p>Quy tắc của tôi về biến và scope là: “Khi phân vân, hãy làm như Scheme”. Những người làm Scheme có lẽ đã dành nhiều thời gian suy nghĩ về scope hơn chúng ta — một trong những mục tiêu chính của Scheme là giới thiệu lexical scoping cho thế giới — nên đi theo họ là lựa chọn an toàn.</p>
+<p>Scheme cho phép định nghĩa lại biến ở top-level.</p>
+</aside>
+<p>Vì vậy, để giữ cho hai chế độ nhất quán, ta sẽ cho phép điều đó — ít nhất là với biến toàn cục. Khi một biến đã tồn tại, ta cần cách để tra cứu nó.</p>
+<div class="codehilite"><pre class="insert-before">class Environment {
+  private final Map&lt;String, Object&gt; values = new HashMap&lt;&gt;();
+</pre><div class="source-file"><em>lox/Environment.java</em><br>
+in class <em>Environment</em></div>
+<pre class="insert">
+
+  <span class="t">Object</span> <span class="i">get</span>(<span class="t">Token</span> <span class="i">name</span>) {
+    <span class="k">if</span> (<span class="i">values</span>.<span class="i">containsKey</span>(<span class="i">name</span>.<span class="i">lexeme</span>)) {
+      <span class="k">return</span> <span class="i">values</span>.<span class="i">get</span>(<span class="i">name</span>.<span class="i">lexeme</span>);
+    }
+
+    <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">name</span>,
+        <span class="s">&quot;Undefined variable &#39;&quot;</span> + <span class="i">name</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;.&quot;</span>);
+  }
+
+</pre><pre class="insert-after">  void define(String name, Object value) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in class <em>Environment</em></div>
+
+<p>Phần này thú vị hơn một chút về mặt ngữ nghĩa. Nếu tìm thấy biến, nó đơn giản trả về giá trị đã bind. Nhưng nếu không tìm thấy thì sao? Một lần nữa, ta có vài lựa chọn:</p>
+<ul>
+<li>
+<p>Coi đó là lỗi cú pháp.</p>
+</li>
+<li>
+<p>Coi đó là lỗi runtime.</p>
+</li>
+<li>
+<p>Cho phép và trả về một giá trị mặc định như <code>nil</code>.</p>
+</li>
+</ul>
+<p>Lox khá “thoáng”, nhưng lựa chọn cuối có vẻ <em>quá</em> dễ dãi. Coi đó là lỗi cú pháp — lỗi ở compile-time — có vẻ hợp lý. Dùng một biến chưa được định nghĩa là bug, và phát hiện càng sớm càng tốt.</p>
+<p>Vấn đề là <em>dùng</em> một biến không giống với <em>tham chiếu</em> tới nó. Bạn có thể tham chiếu tới một biến trong một đoạn code mà không đánh giá nó ngay nếu đoạn code đó nằm trong một hàm. Nếu ta coi việc <em>nhắc tới</em> biến trước khi khai báo là lỗi tĩnh, thì sẽ khó hơn nhiều để định nghĩa hàm đệ quy.</p>
+<p>Ta có thể xử lý được đệ quy đơn — một hàm tự gọi chính nó — bằng cách khai báo tên hàm trước khi phân tích thân hàm. Nhưng điều đó không giúp gì cho các thủ tục đệ quy tương hỗ gọi lẫn nhau. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">isOdd</span>(<span class="i">n</span>) {
+  <span class="k">if</span> (<span class="i">n</span> == <span class="n">0</span>) <span class="k">return</span> <span class="k">false</span>;
+  <span class="k">return</span> <span class="i">isEven</span>(<span class="i">n</span> - <span class="n">1</span>);
+}
+
+<span class="k">fun</span> <span class="i">isEven</span>(<span class="i">n</span>) {
+  <span class="k">if</span> (<span class="i">n</span> == <span class="n">0</span>) <span class="k">return</span> <span class="k">true</span>;
+  <span class="k">return</span> <span class="i">isOdd</span>(<span class="i">n</span> - <span class="n">1</span>);
+}
+</pre></div>
+<aside name="contrived">
+<p>Đúng là đây có lẽ không phải cách hiệu quả nhất để kiểm tra một số là chẵn hay lẻ (chưa kể những điều tệ hại xảy ra nếu bạn truyền vào một số không nguyên hoặc số âm). Nhưng hãy tạm chấp nhận ví dụ này nhé.</p>
+</aside>
+<p>Hàm <code>isEven()</code> chưa được định nghĩa tại <span name="declare">thời điểm</span> ta đang xem phần thân của <code>isOdd()</code> nơi nó được gọi. Nếu ta đảo thứ tự hai hàm này, thì <code>isOdd()</code> lại chưa được định nghĩa khi ta đang xem phần thân của <code>isEven()</code>.</p>
+<aside name="declare">
+<p>Một số ngôn ngữ kiểu tĩnh như Java và C# giải quyết vấn đề này bằng cách quy định rằng top-level của một chương trình không phải là một chuỗi các câu lệnh imperative. Thay vào đó, chương trình là một tập hợp các khai báo, tất cả cùng “ra đời” đồng thời. Trình biên dịch sẽ khai báo <em>tất cả</em> các tên trước khi xem phần thân của <em>bất kỳ</em> hàm nào.</p>
+<p>Các ngôn ngữ cũ hơn như C và Pascal thì không hoạt động như vậy. Thay vào đó, chúng buộc bạn phải thêm <em>forward declaration</em> tường minh để khai báo tên trước khi nó được định nghĩa đầy đủ. Đây là sự nhượng bộ cho giới hạn sức mạnh tính toán thời đó. Họ muốn có thể biên dịch một file nguồn chỉ trong một lần duyệt qua văn bản, nên các compiler đó không thể gom tất cả khai báo trước khi xử lý phần thân hàm.</p>
+</aside>
+<p>Vì việc coi đây là lỗi <em>tĩnh</em> sẽ khiến khai báo đệ quy trở nên quá khó khăn, ta sẽ hoãn lỗi này sang runtime. Việc tham chiếu tới một biến trước khi nó được định nghĩa là chấp nhận được miễn là bạn không <em>đánh giá</em> tham chiếu đó. Điều này cho phép chương trình kiểm tra số chẵn/lẻ hoạt động, nhưng bạn sẽ gặp lỗi runtime trong trường hợp:</p>
+<div class="codehilite"><pre><span class="k">print</span> <span class="i">a</span>;
+<span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;too late!&quot;</span>;
+</pre></div>
+<p>Giống như với lỗi kiểu dữ liệu trong phần code đánh giá expression, ta báo lỗi runtime bằng cách ném ra một exception. Exception này chứa token của biến để ta có thể cho người dùng biết chính xác vị trí trong code mà họ gặp lỗi.</p>
+<h3><a href="#thông-dịch-biến-to&agrave;n-cục" id="thông-dịch-biến-to&agrave;n-cục"><small>8&#8202;.&#8202;3&#8202;.&#8202;1</small>Thông dịch biến to&agrave;n cục</a></h3>
+<p>Class Interpreter sẽ có một instance của class Environment mới.</p>
+<div class="codehilite"><pre class="insert-before">class Interpreter implements Expr.Visitor&lt;Object&gt;,
+                             Stmt.Visitor&lt;Void&gt; {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in class <em>Interpreter</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="t">Environment</span> <span class="i">environment</span> = <span class="k">new</span> <span class="t">Environment</span>();
+
+</pre><pre class="insert-after">  void interpret(List&lt;Stmt&gt; statements) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in class <em>Interpreter</em></div>
+
+<p>Ta lưu nó như một field trực tiếp trong Interpreter để các biến tồn tại trong bộ nhớ miễn là interpreter còn chạy.</p>
+<p>Ta có hai cây cú pháp mới, nên sẽ có hai phương thức visit mới. Đầu tiên là cho statement khai báo biến.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitPrintStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitVarStmt</span>(<span class="t">Stmt</span>.<span class="t">Var</span> <span class="i">stmt</span>) {
+    <span class="t">Object</span> <span class="i">value</span> = <span class="k">null</span>;
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">initializer</span> != <span class="k">null</span>) {
+      <span class="i">value</span> = <span class="i">evaluate</span>(<span class="i">stmt</span>.<span class="i">initializer</span>);
+    }
+
+    <span class="i">environment</span>.<span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">value</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitPrintStmt</em>()</div>
+
+<p>Nếu biến có initializer, ta sẽ đánh giá nó. Nếu không, ta lại có một lựa chọn khác. Ta có thể biến điều này thành lỗi cú pháp trong parser bằng cách <em>bắt buộc</em> phải có initializer. Tuy nhiên, hầu hết các ngôn ngữ không làm vậy, nên áp dụng điều đó cho Lox có vẻ hơi khắt khe.</p>
+<p>Ta cũng có thể biến nó thành lỗi runtime. Nghĩa là cho phép bạn định nghĩa một biến chưa khởi tạo, nhưng nếu truy cập nó trước khi gán giá trị, sẽ xảy ra lỗi runtime. Đây không phải ý tưởng tồi, nhưng hầu hết các ngôn ngữ kiểu động cũng không làm vậy. Thay vào đó, ta sẽ giữ mọi thứ đơn giản và quy định rằng Lox sẽ gán <code>nil</code> cho biến nếu nó không được khởi tạo tường minh.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span>;
+<span class="k">print</span> <span class="i">a</span>; <span class="c">// &quot;nil&quot;.</span>
+</pre></div>
+<p>Vì vậy, nếu không có initializer, ta gán giá trị <code>null</code>, tức là cách Java biểu diễn giá trị <code>nil</code> của Lox. Sau đó, ta yêu cầu environment bind biến đó với giá trị này.</p>
+<p>Tiếp theo, ta đánh giá một variable expression.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitUnaryExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitVariableExpr</span>(<span class="t">Expr</span>.<span class="t">Variable</span> <span class="i">expr</span>) {
+    <span class="k">return</span> <span class="i">environment</span>.<span class="i">get</span>(<span class="i">expr</span>.<span class="i">name</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitUnaryExpr</em>()</div>
+
+<p>Phần này chỉ đơn giản là chuyển tiếp sang environment, nơi thực hiện công việc chính để đảm bảo biến đã được định nghĩa. Với điều đó, ta đã có biến hoạt động ở mức cơ bản. Hãy thử:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+<span class="k">var</span> <span class="i">b</span> = <span class="n">2</span>;
+<span class="k">print</span> <span class="i">a</span> + <span class="i">b</span>;
+</pre></div>
+<p>Ta chưa thể tái sử dụng <em>code</em>, nhưng đã có thể bắt đầu xây dựng chương trình tái sử dụng <em>dữ liệu</em>.</p>
+<h2><a href="#gán-giá-trị-assignment" id="gán-giá-trị-assignment"><small>8&#8202;.&#8202;4</small>Gán giá trị (Assignment)</a></h2>
+<p>Hoàn toàn có thể tạo ra một ngôn ngữ có biến nhưng không cho phép gán lại — hay <strong>mutate</strong> — chúng. Haskell là một ví dụ. SML chỉ hỗ trợ tham chiếu và mảng mutable — biến không thể gán lại. Rust thì “hướng” bạn tránh mutation bằng cách yêu cầu từ khóa <code>mut</code> để bật tính năng gán.</p>
+<p>Việc mutate một biến là một side effect và, như tên gọi, một số người trong giới ngôn ngữ cho rằng side effect là thứ <span name="pure">“bẩn”</span> hoặc thiếu tinh tế. Code nên là toán học thuần khiết tạo ra các giá trị — trong suốt, bất biến — như một hành động sáng tạo thần thánh. Không phải một cỗ máy cục mịch đập nặn dữ liệu thành hình, từng cú lệnh imperative một.</p>
+<aside name="pure">
+<p>Tôi thấy thú vị ở chỗ chính nhóm người tự hào về tư duy logic lạnh lùng lại là những người không cưỡng được việc dùng các thuật ngữ đầy cảm xúc cho công việc của mình: “pure”, “side effect”, “lazy”, “persistent”, “first-class”, “higher-order”.</p>
+</aside>
+<p>Lox thì không khắc khổ như vậy. Lox là một ngôn ngữ imperative, và mutation là điều hiển nhiên. Việc thêm hỗ trợ cho assignment không đòi hỏi nhiều công sức. Biến toàn cục vốn đã hỗ trợ định nghĩa lại, nên hầu hết cơ chế đã sẵn sàng. Chủ yếu, ta chỉ còn thiếu cú pháp gán tường minh.</p>
+<h3><a href="#cú-pháp-gán-assignment-syntax" id="cú-pháp-gán-assignment-syntax"><small>8&#8202;.&#8202;4&#8202;.&#8202;1</small>Cú pháp gán (Assignment syntax)</a></h3>
+<p>Cú pháp nhỏ bé <code>=</code> này phức tạp hơn bạn tưởng. Giống như hầu hết các ngôn ngữ bắt nguồn từ C, phép gán là một <span name="assign">expression</span> chứ không phải statement. Như trong C, nó là dạng expression có độ ưu tiên thấp nhất. Điều đó có nghĩa là quy tắc của nó nằm giữa <code>expression</code> và <code>equality</code> (dạng expression có độ ưu tiên thấp kế tiếp).</p>
+<aside name="assign">
+<p>Trong một số ngôn ngữ khác, như Pascal, Python và Go, phép gán là một statement.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">expression</span>     → <span class="i">assignment</span> ;
+<span class="i">assignment</span>     → <span class="t">IDENTIFIER</span> <span class="s">&quot;=&quot;</span> <span class="i">assignment</span>
+               | <span class="i">equality</span> ;
+</pre></div>
+<p>Điều này nói rằng một <code>assignment</code> hoặc là một identifier theo sau bởi dấu <code>=</code> và một expression cho giá trị, hoặc là một <code>equality</code> (và do đó là bất kỳ expression nào khác). Sau này, <code>assignment</code> sẽ phức tạp hơn khi ta thêm setter cho thuộc tính của object, như:</p>
+<div class="codehilite"><pre><span class="i">instance</span>.<span class="i">field</span> = <span class="s">&quot;value&quot;</span>;
+</pre></div>
+<p>Phần dễ là thêm <span name="assign-ast">node cây cú pháp mới</span>.</p>
+<div class="codehilite"><pre class="insert-before">    defineAst(outputDir, &quot;Expr&quot;, Arrays.asList(
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Assign   : Token name, Expr value&quot;</span>,
+</pre><pre class="insert-after">      &quot;Binary   : Expr left, Token operator, Expr right&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="assign-ast">
+<p>Code được generated cho node mới này nằm ở <a href="appendix-ii.html#assign-expression">Phụ lục II</a>.</p>
+</aside>
+<p>Node này có một token cho biến được gán và một expression cho giá trị mới. Sau khi bạn chạy AstGenerator để có class <code>Expr.Assign</code> mới, hãy thay phần thân của phương thức <code>expression()</code> trong parser để khớp với quy tắc đã cập nhật.</p>
+<div class="codehilite"><pre class="insert-before">  private Expr expression() {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>expression</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">return</span> <span class="i">assignment</span>();
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>expression</em>(), replace 1 line</div>
+
+<p>Đây là phần bắt đầu trở nên phức tạp. Một parser recursive descent với lookahead một token không thể nhìn đủ xa để biết rằng nó đang parse một phép gán cho đến <em>sau khi</em> nó đã đi qua phần bên trái và bắt gặp dấu <code>=</code>. Bạn có thể tự hỏi tại sao nó lại cần biết điều đó. Xét cho cùng, ta cũng không biết mình đang parse một biểu thức <code>+</code> cho đến khi parse xong toán hạng bên trái.</p>
+<p>Sự khác biệt là phần bên trái của phép gán không phải là một expression trả về giá trị. Nó là một dạng “pseudo-expression” trả về một “thứ” mà bạn có thể gán vào. Xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;before&quot;</span>;
+<span class="i">a</span> = <span class="s">&quot;value&quot;</span>;
+</pre></div>
+<p>Ở dòng thứ hai, ta không <em>đánh giá</em> <code>a</code> (vì như vậy sẽ trả về chuỗi <code>"before"</code>). Ta xác định biến <code>a</code> tham chiếu tới đâu để biết nơi lưu giá trị của expression bên phải. Các <a href="https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue">thuật ngữ kinh điển</a> cho hai <span name="l-value">cấu trúc</span> này là <strong>l-value</strong> và <strong>r-value</strong>. Tất cả các expression mà ta đã thấy cho tới giờ, vốn tạo ra giá trị, đều là r-value. Một l-value “đánh giá” ra một vị trí lưu trữ mà bạn có thể gán giá trị vào đó.</p>
+<aside name="l-value">
+<p>Thực tế, các tên gọi này xuất phát từ phép gán: l-value xuất hiện ở <em>bên trái</em> dấu <code>=</code> trong phép gán, và r-value ở <em>bên phải</em>.</p>
+</aside>
+<p>Ta muốn cây cú pháp phản ánh rằng một l-value không được đánh giá như một expression bình thường. Đó là lý do node <code>Expr.Assign</code> có một <em>Token</em> cho phần bên trái, không phải một <code>Expr</code>. Vấn đề là parser không biết nó đang parse một l-value cho đến khi gặp dấu <code>=</code>. Trong một l-value phức tạp, điều đó có thể xảy ra <span name="many">nhiều</span> token sau.</p>
+<div class="codehilite"><pre><span class="i">makeList</span>().<span class="i">head</span>.<span class="i">next</span> = <span class="i">node</span>;
+</pre></div>
+<aside name="many">
+<p>Vì phần nhận của một phép gán thuộc tính có thể là bất kỳ expression nào, và expression có thể dài tùy ý, nên có thể cần một số lượng token lookahead <em>không giới hạn</em> để tìm được dấu <code>=</code>.</p>
+</aside>
+<p>Ta chỉ có một token lookahead, vậy phải làm sao? Ta dùng một mẹo nhỏ, trông như thế này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expressionStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">assignment</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">equality</span>();
+
+    <span class="k">if</span> (<span class="i">match</span>(<span class="i">EQUAL</span>)) {
+      <span class="t">Token</span> <span class="i">equals</span> = <span class="i">previous</span>();
+      <span class="t">Expr</span> <span class="i">value</span> = <span class="i">assignment</span>();
+
+      <span class="k">if</span> (<span class="i">expr</span> <span class="k">instanceof</span> <span class="t">Expr</span>.<span class="t">Variable</span>) {
+        <span class="t">Token</span> <span class="i">name</span> = ((<span class="t">Expr</span>.<span class="t">Variable</span>)<span class="i">expr</span>).<span class="i">name</span>;
+        <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Assign</span>(<span class="i">name</span>, <span class="i">value</span>);
+      }
+
+      <span class="i">error</span>(<span class="i">equals</span>, <span class="s">&quot;Invalid assignment target.&quot;</span>);<span name="no-throw"> </span>
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expressionStatement</em>()</div>
+
+<p>Hầu hết code để parse một assignment expression trông giống với các toán tử nhị phân khác như <code>+</code>. Ta parse phần bên trái, vốn có thể là bất kỳ expression nào có độ ưu tiên cao hơn. Nếu tìm thấy dấu <code>=</code>, ta parse phần bên phải rồi gói tất cả lại trong một node cây cú pháp assignment.</p>
+<aside name="no-throw">
+<p>Ta <em>báo</em> lỗi nếu phía bên trái không phải là một mục tiêu gán hợp lệ, nhưng ta không <em>ném</em> lỗi vì parser không ở trạng thái rối loạn cần phải vào chế độ panic và đồng bộ lại.</p>
+</aside>
+<p>Một điểm khác biệt nhỏ so với các toán tử nhị phân là ta không lặp để xây dựng một chuỗi các toán tử giống nhau. Vì phép gán là right-associative, ta sẽ đệ quy gọi <code>assignment()</code> để parse phía bên phải.</p>
+<p>Mẹo ở đây là ngay trước khi tạo node assignment expression, ta nhìn vào expression phía bên trái và xác định nó là loại mục tiêu gán nào. Ta chuyển đổi node expression r-value thành một biểu diễn l-value.</p>
+<p>Việc chuyển đổi này hoạt động vì mọi mục tiêu gán hợp lệ tình cờ cũng là <span name="converse">cú pháp hợp lệ</span> của một expression bình thường. Xem ví dụ một phép gán field phức tạp như:</p>
+<aside name="converse">
+<p>Bạn vẫn có thể dùng mẹo này ngay cả khi có những mục tiêu gán không phải là expression hợp lệ. Hãy định nghĩa một <strong>cover grammar</strong>, một grammar “nới lỏng” chấp nhận tất cả cú pháp của expression <em>và</em> mục tiêu gán hợp lệ. Khi gặp dấu <code>=</code>, báo lỗi nếu phía bên trái không nằm trong grammar mục tiêu gán hợp lệ. Ngược lại, nếu <em>không</em> gặp dấu <code>=</code>, báo lỗi nếu phía bên trái không phải là một <em>expression</em> hợp lệ.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">newPoint</span>(<span class="i">x</span> + <span class="n">2</span>, <span class="n">0</span>).<span class="i">y</span> = <span class="n">3</span>;
+</pre></div>
+<p>Phía bên trái của phép gán này cũng có thể là một expression hợp lệ:</p>
+<div class="codehilite"><pre><span class="i">newPoint</span>(<span class="i">x</span> + <span class="n">2</span>, <span class="n">0</span>).<span class="i">y</span>;
+</pre></div>
+<p>Ví dụ đầu tiên gán giá trị cho field, ví dụ thứ hai lấy giá trị của field.</p>
+<p>Điều này có nghĩa là ta có thể parse phía bên trái <em>như thể nó là</em> một expression và sau đó tạo cây cú pháp biến nó thành mục tiêu gán. Nếu expression phía bên trái không phải là một mục tiêu gán <span name="paren">hợp lệ</span>, ta sẽ báo lỗi cú pháp. Điều này đảm bảo ta báo lỗi cho code như:</p>
+<div class="codehilite"><pre><span class="i">a</span> + <span class="i">b</span> = <span class="i">c</span>;
+</pre></div>
+<aside name="paren">
+<p>Ở chương parse trước đây, tôi đã nói rằng ta biểu diễn expression trong ngoặc trong cây cú pháp vì sau này sẽ cần tới chúng. Đây chính là lý do. Ta cần phân biệt được các trường hợp:</p>
+<div class="codehilite"><pre><span class="i">a</span> = <span class="n">3</span>;   <span class="c">// OK.</span>
+(<span class="i">a</span>) = <span class="n">3</span>; <span class="c">// Lỗi.</span>
+</pre></div>
+</aside>
+<p>Hiện tại, mục tiêu gán hợp lệ duy nhất là một variable expression đơn giản, nhưng sau này ta sẽ thêm field. Kết quả cuối cùng của mẹo này là một node assignment expression biết nó đang gán cho cái gì và có một cây con expression cho giá trị được gán. Tất cả chỉ với một token lookahead và không cần backtracking.</p>
+<h3><a href="#ngữ-nghĩa-của-phép-gán" id="ngữ-nghĩa-của-phép-gán"><small>8&#8202;.&#8202;4&#8202;.&#8202;2</small>Ngữ nghĩa của phép gán</a></h3>
+<p>Ta có một node cây cú pháp mới, nên interpreter sẽ có một phương thức visit mới.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitVarStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitAssignExpr</span>(<span class="t">Expr</span>.<span class="t">Assign</span> <span class="i">expr</span>) {
+    <span class="t">Object</span> <span class="i">value</span> = <span class="i">evaluate</span>(<span class="i">expr</span>.<span class="i">value</span>);
+    <span class="i">environment</span>.<span class="i">assign</span>(<span class="i">expr</span>.<span class="i">name</span>, <span class="i">value</span>);
+    <span class="k">return</span> <span class="i">value</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitVarStmt</em>()</div>
+
+<p>Vì lý do hiển nhiên, nó giống với khai báo biến. Nó đánh giá phía bên phải để lấy giá trị, rồi lưu giá trị đó vào biến được đặt tên. Thay vì dùng <code>define()</code> trên Environment, nó gọi phương thức mới này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+add after <em>get</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">assign</span>(<span class="t">Token</span> <span class="i">name</span>, <span class="t">Object</span> <span class="i">value</span>) {
+    <span class="k">if</span> (<span class="i">values</span>.<span class="i">containsKey</span>(<span class="i">name</span>.<span class="i">lexeme</span>)) {
+      <span class="i">values</span>.<span class="i">put</span>(<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">value</span>);
+      <span class="k">return</span>;
+    }
+
+    <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">name</span>,
+        <span class="s">&quot;Undefined variable &#39;&quot;</span> + <span class="i">name</span>.<span class="i">lexeme</span> + <span class="s">&quot;&#39;.&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, add after <em>get</em>()</div>
+
+<p>Điểm khác biệt chính giữa gán và khai báo là gán <em>không được</em> <span name="new">phép</span> tạo một biến <em>mới</em>. Trong hiện thực của ta, điều đó có nghĩa là sẽ xảy ra lỗi runtime nếu key chưa tồn tại trong map biến của environment.</p>
+<aside name="new">
+<p>Không giống Python và Ruby, Lox không có <a href="#design-note">implicit variable declaration</a>.</p>
+</aside>
+<p>Điều cuối cùng mà phương thức <code>visit()</code> làm là trả về giá trị vừa gán. Đó là vì phép gán là một expression có thể được lồng bên trong các expression khác, như:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+<span class="k">print</span> <span class="i">a</span> = <span class="n">2</span>; <span class="c">// &quot;2&quot;.</span>
+</pre></div>
+<p>Interpreter của ta giờ có thể tạo, đọc và sửa đổi biến. Nó gần như tinh vi ngang với các <span name="basic">BASIC</span> đời đầu. Biến toàn cục thì đơn giản, nhưng viết một chương trình lớn khi bất kỳ hai đoạn code nào cũng có thể vô tình ghi đè state của nhau thì chẳng vui chút nào. Ta muốn có biến <em>cục bộ</em>, nghĩa là đã đến lúc nói về <em>scope</em>.</p>
+<aside name="basic">
+<p>Có lẽ còn tốt hơn một chút. Không giống một số BASIC cũ, Lox có thể xử lý tên biến dài hơn hai ký tự.</p>
+</aside>
+<h2><a href="#scope-phạm-vi" id="scope-phạm-vi"><small>8&#8202;.&#8202;5</small>Scope (Phạm vi)</a></h2>
+<p><strong>Scope</strong> (phạm vi) định nghĩa một vùng mà trong đó một tên được ánh xạ tới một thực thể nhất định. Nhiều scope cho phép cùng một tên có thể tham chiếu tới những thứ khác nhau trong các ngữ cảnh khác nhau. Ở nhà tôi, “Bob” thường chỉ tôi. Nhưng có thể ở thị trấn của bạn, bạn lại biết một Bob khác. Cùng tên, nhưng là những người khác nhau tùy vào nơi bạn nhắc tới.</p>
+<p><span name="lexical"><strong>Lexical scope</strong></span> (hay ít phổ biến hơn là <strong>static scope</strong>) là một kiểu scoping cụ thể, trong đó chính văn bản của chương trình cho thấy phạm vi bắt đầu và kết thúc ở đâu. Trong Lox, cũng như hầu hết các ngôn ngữ hiện đại, biến được scope theo kiểu lexical. Khi bạn thấy một expression sử dụng một biến nào đó, bạn có thể xác định nó tham chiếu tới khai báo biến nào chỉ bằng cách đọc code tĩnh, không cần chạy chương trình.</p>
+<aside name="lexical">
+<p>“Lexical” bắt nguồn từ tiếng Hy Lạp “lexikos” nghĩa là “liên quan tới từ ngữ”. Khi dùng trong ngôn ngữ lập trình, nó thường có nghĩa là một điều bạn có thể xác định từ chính mã nguồn mà không cần execute.</p>
+<p>Lexical scope xuất hiện cùng ALGOL. Các ngôn ngữ trước đó thường dùng dynamic scope. Các nhà khoa học máy tính khi đó tin rằng dynamic scope chạy nhanh hơn. Ngày nay, nhờ những hacker Scheme thời kỳ đầu, ta biết điều đó không đúng. Thậm chí, thực tế còn ngược lại.</p>
+<p>Dynamic scope cho biến vẫn tồn tại ở một vài nơi. Emacs Lisp mặc định dùng dynamic scope cho biến. Macro <a href="http://clojuredocs.org/clojure.core/binding"><code>binding</code></a> trong Clojure cung cấp nó. Câu lệnh <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/with"><code>with</code></a> vốn bị nhiều người chê trong JavaScript biến các thuộc tính của một object thành các biến có dynamic scope.</p>
+</aside>
+<p>Ví dụ:</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;first&quot;</span>;
+  <span class="k">print</span> <span class="i">a</span>; <span class="c">// &quot;first&quot;.</span>
+}
+
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;second&quot;</span>;
+  <span class="k">print</span> <span class="i">a</span>; <span class="c">// &quot;second&quot;.</span>
+}
+</pre></div>
+<p>Ở đây, ta có hai block, mỗi block khai báo một biến <code>a</code>. Bạn và tôi chỉ cần nhìn code là biết rằng <code>a</code> trong câu lệnh <code>print</code> đầu tiên tham chiếu tới biến <code>a</code> đầu tiên, và <code>a</code> trong câu lệnh thứ hai tham chiếu tới biến <code>a</code> thứ hai.</p><img src="image/statements-and-state/blocks.png" alt="Một environment cho mỗi biến 'a'." />
+<p>Điều này trái ngược với <strong>dynamic scope</strong>, nơi bạn không biết một tên tham chiếu tới cái gì cho tới khi chạy code. Lox không có biến với dynamic scope, nhưng method và field trên object thì có dynamic scope.</p>
+<div class="codehilite"><pre><span class="k">class</span> <span class="t">Saxophone</span> {
+  <span class="i">play</span>() {
+    <span class="k">print</span> <span class="s">&quot;Careless Whisper&quot;</span>;
+  }
+}
+
+<span class="k">class</span> <span class="t">GolfClub</span> {
+  <span class="i">play</span>() {
+    <span class="k">print</span> <span class="s">&quot;Fore!&quot;</span>;
+  }
+}
+
+<span class="k">fun</span> <span class="i">playIt</span>(<span class="i">thing</span>) {
+  <span class="i">thing</span>.<span class="i">play</span>();
+}
+</pre></div>
+<p>Khi <code>playIt()</code> gọi <code>thing.play()</code>, ta không biết sẽ nghe “Careless Whisper” hay “Fore!”. Điều đó phụ thuộc vào việc bạn truyền một Saxophone hay một GolfClub vào hàm, và ta chỉ biết điều đó khi runtime.</p>
+<p>Scope và environment là hai khái niệm gần gũi. Scope là khái niệm lý thuyết, còn environment là cơ chế hiện thực nó. Khi interpreter chạy qua code, các node trong cây cú pháp ảnh hưởng tới scope sẽ thay đổi environment. Trong cú pháp kiểu C như của Lox, scope được điều khiển bởi các block trong ngoặc nhọn. (Đó là lý do ta gọi nó là <strong>block scope</strong>.)</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;in block&quot;</span>;
+}
+<span class="k">print</span> <span class="i">a</span>; <span class="c">// Lỗi! Không còn &quot;a&quot;.</span>
+</pre></div>
+<p>Bắt đầu một block sẽ tạo ra một local scope mới, và scope đó kết thúc khi execute qua dấu <code>}</code> đóng. Bất kỳ biến nào khai báo bên trong block sẽ biến mất.</p>
+<h3><a href="#lồng-nhau-&-che-khuất-nesting-and-shadowing" id="lồng-nhau-&-che-khuất-nesting-and-shadowing"><small>8&#8202;.&#8202;5&#8202;.&#8202;1</small>Lồng nhau &amp; che khuất (Nesting and shadowing)</a></h3>
+<p>Cách tiếp cận đầu tiên để hiện thực block scope có thể như sau:</p>
+<ol>
+<li>Khi duyệt từng statement bên trong block, theo dõi bất kỳ biến nào được khai báo.</li>
+<li>Sau khi statement cuối cùng được execute, yêu cầu environment xóa tất cả các biến đó.</li>
+</ol>
+<p>Cách này sẽ hoạt động với ví dụ trước. Nhưng hãy nhớ, một trong những lý do để có local scope là để đóng gói (encapsulation) — một khối code ở một góc của chương trình không nên can thiệp vào một khối khác. Xem ví dụ sau:</p>
+<div class="codehilite"><pre><span class="c">// How loud?</span>
+<span class="k">var</span> <span class="i">volume</span> = <span class="n">11</span>;
+
+<span class="c">// Silence.</span>
+<span class="i">volume</span> = <span class="n">0</span>;
+
+<span class="c">// Calculate size of 3x4x5 cuboid.</span>
+{
+  <span class="k">var</span> <span class="i">volume</span> = <span class="n">3</span> * <span class="n">4</span> * <span class="n">5</span>;
+  <span class="k">print</span> <span class="i">volume</span>;
+}
+</pre></div>
+<p>Hãy xem block nơi ta tính thể tích của hình hộp chữ nhật bằng cách khai báo cục bộ biến <code>volume</code>. Sau khi thoát khỏi block, interpreter sẽ xóa biến <code>volume</code> <em>toàn cục</em>. Điều đó là không đúng. Khi thoát khỏi block, ta chỉ nên xóa các biến được khai báo bên trong block, nhưng nếu có một biến cùng tên được khai báo bên ngoài block, <em>đó là một biến khác</em>. Nó không nên bị đụng tới.</p>
+<p>Khi một biến cục bộ có cùng tên với một biến trong scope bao ngoài, nó sẽ <strong>che khuất</strong> (shadow) biến bên ngoài đó. Code bên trong block sẽ không thể thấy biến bên ngoài nữa — nó bị “che” bởi biến bên trong — nhưng biến bên ngoài vẫn tồn tại.</p>
+<p>Khi ta bước vào một block scope mới, ta cần giữ nguyên các biến được định nghĩa ở scope bên ngoài để chúng vẫn tồn tại khi ta thoát khỏi block bên trong. Ta làm điều đó bằng cách tạo một environment mới cho mỗi block, chỉ chứa các biến được định nghĩa trong scope đó. Khi thoát khỏi block, ta loại bỏ environment của nó và khôi phục environment trước đó.</p>
+<p>Ta cũng cần xử lý các biến ở scope bao ngoài <em>không</em> bị shadow.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">global</span> = <span class="s">&quot;outside&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">local</span> = <span class="s">&quot;inside&quot;</span>;
+  <span class="k">print</span> <span class="i">global</span> + <span class="i">local</span>;
+}
+</pre></div>
+<p>Ở đây, <code>global</code> nằm trong environment toàn cục bên ngoài và <code>local</code> được định nghĩa bên trong environment của block. Trong câu lệnh <code>print</code> đó, cả hai biến đều nằm trong scope. Để tìm chúng, interpreter phải tìm kiếm không chỉ trong environment trong cùng hiện tại, mà còn ở tất cả các environment bao ngoài.</p>
+<p>Ta hiện thực điều này bằng cách <span name="cactus">xâu chuỗi</span> các environment lại với nhau. Mỗi environment có một tham chiếu tới environment của scope bao ngoài trực tiếp. Khi tra cứu một biến, ta đi dọc chuỗi này từ trong ra ngoài cho tới khi tìm thấy biến. Bắt đầu từ scope trong cùng là cách ta làm cho biến cục bộ che khuất biến bên ngoài.</p><img src="image/statements-and-state/chaining.png" alt="Các environment cho mỗi scope, được liên kết với nhau." />
+<aside name="cactus">
+<p>Khi interpreter đang chạy, các environment tạo thành một danh sách tuyến tính các object, nhưng nếu xét toàn bộ tập hợp environment được tạo ra trong suốt quá trình execute, một scope bên ngoài có thể chứa nhiều block lồng bên trong, và mỗi block sẽ trỏ tới scope bên ngoài đó, tạo thành một cấu trúc dạng cây, dù tại một thời điểm chỉ tồn tại một đường đi qua cây.</p>
+<p>Tên gọi khô khan cho cấu trúc này là <a href="https://en.wikipedia.org/wiki/Parent_pointer_tree"><strong>parent-pointer tree</strong></a>, nhưng tôi thích cái tên gợi hình hơn: <strong>cactus stack</strong>.</p><img class="above" src="image/statements-and-state/cactus.png" alt="Mỗi nhánh trỏ tới cha của nó. Gốc là scope toàn cục." />
+</aside>
+<p>Trước khi thêm cú pháp block vào grammar, ta sẽ nâng cấp class Environment để hỗ trợ việc lồng nhau này. Đầu tiên, ta cho mỗi environment một tham chiếu tới environment bao ngoài của nó.</p>
+<div class="codehilite"><pre class="insert-before">class Environment {
+</pre><div class="source-file"><em>lox/Environment.java</em><br>
+in class <em>Environment</em></div>
+<pre class="insert">  <span class="k">final</span> <span class="t">Environment</span> <span class="i">enclosing</span>;
+</pre><pre class="insert-after">  private final Map&lt;String, Object&gt; values = new HashMap&lt;&gt;();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in class <em>Environment</em></div>
+
+<p>Trường này cần được khởi tạo, nên ta thêm một vài constructor.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Environment.java</em><br>
+in class <em>Environment</em></div>
+<pre>  <span class="t">Environment</span>() {
+    <span class="i">enclosing</span> = <span class="k">null</span>;
+  }
+
+  <span class="t">Environment</span>(<span class="t">Environment</span> <span class="i">enclosing</span>) {
+    <span class="k">this</span>.<span class="i">enclosing</span> = <span class="i">enclosing</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in class <em>Environment</em></div>
+
+<p>Constructor không tham số dành cho environment của scope toàn cục, nơi kết thúc chuỗi. Constructor còn lại tạo một scope cục bộ mới lồng bên trong scope ngoài được truyền vào.</p>
+<p>Ta không cần đụng tới phương thức <code>define()</code> — một biến mới luôn được khai báo trong scope trong cùng hiện tại. Nhưng việc tra cứu và gán giá trị cho biến làm việc với các biến đã tồn tại, và chúng cần đi dọc chuỗi để tìm. Đầu tiên là tra cứu:</p>
+<div class="codehilite"><pre class="insert-before">      return values.get(name.lexeme);
+    }
+</pre><div class="source-file"><em>lox/Environment.java</em><br>
+in <em>get</em>()</div>
+<pre class="insert">
+
+    <span class="k">if</span> (<span class="i">enclosing</span> != <span class="k">null</span>) <span class="k">return</span> <span class="i">enclosing</span>.<span class="i">get</span>(<span class="i">name</span>);
+</pre><pre class="insert-after">
+
+    throw new RuntimeError(name,
+        &quot;Undefined variable '&quot; + name.lexeme + &quot;'.&quot;);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in <em>get</em>()</div>
+
+<p>Nếu biến không được tìm thấy trong environment này, ta đơn giản thử ở environment bao ngoài. Environment đó lại làm điều tương tự <span name="recurse">đệ quy</span>, nên cuối cùng sẽ duyệt qua toàn bộ chuỗi. Nếu ta tới một environment không có bao ngoài và vẫn không tìm thấy biến, thì ta bỏ cuộc và báo lỗi như trước.</p>
+<p>Việc gán giá trị hoạt động tương tự.</p>
+<aside name="recurse">
+<p>Có thể việc duyệt chuỗi theo cách lặp sẽ nhanh hơn, nhưng tôi nghĩ giải pháp đệ quy trông đẹp hơn. Trong clox, ta sẽ làm một cách <em>nhanh hơn nhiều</em>.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">      values.put(name.lexeme, value);
+      return;
+    }
+
+</pre><div class="source-file"><em>lox/Environment.java</em><br>
+in <em>assign</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">enclosing</span> != <span class="k">null</span>) {
+      <span class="i">enclosing</span>.<span class="i">assign</span>(<span class="i">name</span>, <span class="i">value</span>);
+      <span class="k">return</span>;
+    }
+
+</pre><pre class="insert-after">    throw new RuntimeError(name,
+</pre></div>
+<div class="source-file-narrow"><em>lox/Environment.java</em>, in <em>assign</em>()</div>
+
+<p>Một lần nữa, nếu biến không có trong environment này, nó sẽ kiểm tra ở scope ngoài, đệ quy.</p>
+<h3><a href="#cú-pháp-&-ngữ-nghĩa-của-block" id="cú-pháp-&-ngữ-nghĩa-của-block"><small>8&#8202;.&#8202;5&#8202;.&#8202;2</small>Cú pháp &amp; ngữ nghĩa của Block</a></h3>
+<p>Giờ khi Environment đã có thể lồng nhau, ta sẵn sàng thêm block vào ngôn ngữ. Đây là grammar:</p>
+<div class="codehilite"><pre><span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">printStmt</span>
+               | <span class="i">block</span> ;
+
+<span class="i">block</span>          → <span class="s">&quot;{&quot;</span> <span class="i">declaration</span>* <span class="s">&quot;}&quot;</span> ;
+</pre></div>
+<p>Một block là một chuỗi (có thể rỗng) các statement hoặc declaration được bao quanh bởi dấu ngoặc nhọn. Bản thân block là một statement và có thể xuất hiện ở bất kỳ nơi nào statement được phép. Node <span name="block-ast">cây cú pháp</span> trông như sau:</p>
+<div class="codehilite"><pre class="insert-before">    defineAst(outputDir, &quot;Stmt&quot;, Arrays.asList(
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Block      : List&lt;Stmt&gt; statements&quot;</span>,
+</pre><pre class="insert-after">      &quot;Expression : Expr expression&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="block-ast">
+<p>Code được generated cho node mới này nằm ở <a href="appendix-ii.html#block-statement">Phụ lục II</a>.</p>
+</aside>
+<p><span name="generate">Nó</span> chứa danh sách các statement nằm bên trong block. Việc parse khá đơn giản. Giống như các statement khác, ta nhận diện phần bắt đầu của block bằng token mở đầu — trong trường hợp này là <code>{</code>. Trong phương thức <code>statement()</code>, ta thêm:</p>
+<aside name="generate">
+<p>Như mọi khi, đừng quên chạy &ldquo;GenerateAst.java&rdquo;.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">    if (match(PRINT)) return printStatement();
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">match</span>(<span class="i">LEFT_BRACE</span>)) <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Block</span>(<span class="i">block</span>());
+</pre><pre class="insert-after">
+
+    return expressionStatement();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>statement</em>()</div>
+
+<p>Toàn bộ công việc chính diễn ra ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expressionStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">block</span>() {
+    <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+
+    <span class="k">while</span> (!<span class="i">check</span>(<span class="i">RIGHT_BRACE</span>) &amp;&amp; !<span class="i">isAtEnd</span>()) {
+      <span class="i">statements</span>.<span class="i">add</span>(<span class="i">declaration</span>());
+    }
+
+    <span class="i">consume</span>(<span class="i">RIGHT_BRACE</span>, <span class="s">&quot;Expect &#39;}&#39; after block.&quot;</span>);
+    <span class="k">return</span> <span class="i">statements</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expressionStatement</em>()</div>
+
+<p>Ta <span name="list">tạo</span> một danh sách rỗng, sau đó parse các statement và thêm chúng vào danh sách cho đến khi gặp dấu <code>}</code> đóng, đánh dấu kết thúc block. Lưu ý rằng vòng lặp cũng có kiểm tra <code>isAtEnd()</code> một cách tường minh. Ta phải cẩn thận để tránh vòng lặp vô hạn, ngay cả khi đang parse code không hợp lệ. Nếu người dùng quên dấu <code>}</code> đóng, parser cần đảm bảo không bị kẹt.</p>
+<aside name="list">
+<p>Việc để <code>block()</code> trả về danh sách statement thô và để <code>statement()</code> bọc danh sách đó trong một Stmt.Block trông hơi lạ. Tôi làm vậy vì sau này ta sẽ tái sử dụng <code>block()</code> để parse thân hàm và ta không muốn thân hàm đó bị bọc trong một Stmt.Block.</p>
+</aside>
+<p>Vậy là xong phần cú pháp. Về ngữ nghĩa, ta thêm một phương thức visit mới vào Interpreter.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>execute</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitBlockStmt</span>(<span class="t">Stmt</span>.<span class="t">Block</span> <span class="i">stmt</span>) {
+    <span class="i">executeBlock</span>(<span class="i">stmt</span>.<span class="i">statements</span>, <span class="k">new</span> <span class="t">Environment</span>(<span class="i">environment</span>));
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>execute</em>()</div>
+
+<p>Để execute một block, ta tạo một environment mới cho scope của block và chuyển nó sang phương thức khác này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>execute</em>()</div>
+<pre>  <span class="t">void</span> <span class="i">executeBlock</span>(<span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">statements</span>,
+                    <span class="t">Environment</span> <span class="i">environment</span>) {
+    <span class="t">Environment</span> <span class="i">previous</span> = <span class="k">this</span>.<span class="i">environment</span>;
+    <span class="k">try</span> {
+      <span class="k">this</span>.<span class="i">environment</span> = <span class="i">environment</span>;
+
+      <span class="k">for</span> (<span class="t">Stmt</span> <span class="i">statement</span> : <span class="i">statements</span>) {
+        <span class="i">execute</span>(<span class="i">statement</span>);
+      }
+    } <span class="k">finally</span> {
+      <span class="k">this</span>.<span class="i">environment</span> = <span class="i">previous</span>;
+    }
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>execute</em>()</div>
+
+<p>Phương thức mới này execute một danh sách statement trong ngữ cảnh của một <span name="param">environment</span> được truyền vào. Cho tới giờ, trường <code>environment</code> trong Interpreter luôn trỏ tới cùng một environment — environment toàn cục. Giờ đây, trường này đại diện cho environment <em>hiện tại</em>, tức là environment tương ứng với scope trong cùng chứa code đang được execute.</p>
+<p>Để execute code trong một scope nhất định, phương thức này cập nhật trường <code>environment</code> của interpreter, duyệt qua tất cả statement, rồi khôi phục giá trị trước đó. Như một thói quen tốt trong Java, nó khôi phục environment trước đó bằng một khối finally. Nhờ vậy, environment sẽ được khôi phục ngay cả khi có exception xảy ra.</p>
+<aside name="param">
+<p>Việc thay đổi và khôi phục thủ công một trường <code>environment</code> mutable có cảm giác hơi thiếu tinh tế. Một cách tiếp cận kinh điển khác là truyền tường minh environment như một tham số cho mỗi phương thức visit. Để “thay đổi” environment, bạn truyền một environment khác khi đệ quy xuống cây. Bạn không cần khôi phục cái cũ, vì environment mới nằm trên Java stack và sẽ tự động bị loại bỏ khi interpreter thoát khỏi phương thức visit của block.</p>
+<p>Tôi đã cân nhắc cách này cho jlox, nhưng việc thêm tham số environment vào từng phương thức visit khá tẻ nhạt và dài dòng. Để cuốn sách đơn giản hơn một chút, tôi chọn cách dùng trường mutable.</p>
+</aside>
+<p>Thật bất ngờ, đó là tất cả những gì ta cần làm để hỗ trợ đầy đủ biến cục bộ, lồng nhau và shadowing. Thử xem:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;global a&quot;</span>;
+<span class="k">var</span> <span class="i">b</span> = <span class="s">&quot;global b&quot;</span>;
+<span class="k">var</span> <span class="i">c</span> = <span class="s">&quot;global c&quot;</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;outer a&quot;</span>;
+  <span class="k">var</span> <span class="i">b</span> = <span class="s">&quot;outer b&quot;</span>;
+  {
+    <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;inner a&quot;</span>;
+    <span class="k">print</span> <span class="i">a</span>;
+    <span class="k">print</span> <span class="i">b</span>;
+    <span class="k">print</span> <span class="i">c</span>;
+  }
+  <span class="k">print</span> <span class="i">a</span>;
+  <span class="k">print</span> <span class="i">b</span>;
+  <span class="k">print</span> <span class="i">c</span>;
+}
+<span class="k">print</span> <span class="i">a</span>;
+<span class="k">print</span> <span class="i">b</span>;
+<span class="k">print</span> <span class="i">c</span>;
+</pre></div>
+<p>Interpreter nhỏ bé của chúng ta giờ đã có thể “ghi nhớ” mọi thứ. Ta đang tiến gần hơn tới một thứ giống như một ngôn ngữ lập trình đầy đủ tính năng.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>8&#8202;.&#8202;6</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>REPL hiện không còn hỗ trợ nhập một expression đơn lẻ và tự động in ra giá trị kết quả của nó nữa. Điều này hơi bất tiện. Hãy thêm hỗ trợ cho REPL để cho phép người dùng nhập cả statement và expression. Nếu họ nhập một statement, hãy execute nó. Nếu họ nhập một expression, hãy đánh giá và hiển thị giá trị kết quả.</p>
+</li>
+<li>
+<p>Có thể bạn muốn Lox rõ ràng hơn một chút về việc khởi tạo biến. Thay vì ngầm định khởi tạo biến thành <code>nil</code>, hãy biến việc truy cập một biến chưa được khởi tạo hoặc gán giá trị thành lỗi runtime, như trong ví dụ:</p>
+<div class="codehilite"><pre><span class="c">// Không có initializer.</span>
+<span class="k">var</span> <span class="i">a</span>;
+<span class="k">var</span> <span class="i">b</span>;
+
+<span class="i">a</span> = <span class="s">&quot;assigned&quot;</span>;
+<span class="k">print</span> <span class="i">a</span>; <span class="c">// OK, đã được gán trước đó.</span>
+
+<span class="k">print</span> <span class="i">b</span>; <span class="c">// Lỗi!</span>
+</pre></div>
+</li>
+<li>
+<p>Chương trình sau sẽ làm gì?</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+{
+  <span class="k">var</span> <span class="i">a</span> = <span class="i">a</span> + <span class="n">2</span>;
+  <span class="k">print</span> <span class="i">a</span>;
+}
+</pre></div>
+<p>Bạn <em>mong đợi</em> nó sẽ làm gì? Nó có hoạt động như bạn nghĩ không? Code tương tự trong các ngôn ngữ khác mà bạn biết sẽ làm gì? Bạn nghĩ người dùng sẽ mong đợi nó hoạt động thế nào?</p>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-khai-báo-biến-ngầm-định-implicit-variable-declaration" id="ghi-chú-thiết-kế-khai-báo-biến-ngầm-định-implicit-variable-declaration"><small>8&#8202;.&#8202;7</small>Ghi chú thiết kế: Khai báo biến ngầm định (Implicit Variable Declaration)</a></h2>
+<p>Lox có cú pháp riêng biệt cho việc khai báo một biến mới và gán giá trị cho một biến đã tồn tại. Một số ngôn ngữ gộp hai việc này lại chỉ còn cú pháp gán. Việc gán cho một biến chưa tồn tại sẽ tự động tạo ra biến đó. Điều này được gọi là <strong>implicit variable declaration</strong> (khai báo biến ngầm định) và tồn tại trong Python, Ruby, CoffeeScript, cùng một số ngôn ngữ khác. JavaScript có cú pháp tường minh để khai báo biến, nhưng cũng có thể tạo biến mới khi gán. Visual Basic có <a href="https://msdn.microsoft.com/en-us/library/xe53dz5w(v=vs.100).aspx">tùy chọn bật hoặc tắt biến ngầm định</a>.</p>
+<p>Khi cùng một cú pháp có thể vừa gán vừa tạo biến, mỗi ngôn ngữ phải quyết định điều gì xảy ra khi không rõ người dùng muốn hành vi nào. Đặc biệt, mỗi ngôn ngữ phải chọn cách khai báo ngầm định tương tác với shadowing, và biến được khai báo ngầm định sẽ thuộc scope nào.</p>
+<ul>
+<li>
+<p>Trong Python, phép gán luôn tạo biến trong scope của hàm hiện tại, ngay cả khi có một biến cùng tên được khai báo bên ngoài hàm.</p>
+</li>
+<li>
+<p>Ruby tránh một phần sự mơ hồ bằng cách có quy tắc đặt tên khác nhau cho biến cục bộ và biến toàn cục. Tuy nhiên, block trong Ruby (giống closure hơn là “block” kiểu C) có scope riêng, nên vẫn gặp vấn đề. Phép gán trong Ruby sẽ gán cho biến đã tồn tại bên ngoài block hiện tại nếu có biến cùng tên. Nếu không, nó tạo biến mới trong scope của block hiện tại.</p>
+</li>
+<li>
+<p>CoffeeScript, vốn chịu ảnh hưởng nhiều từ Ruby, cũng tương tự. Nó tường minh không cho phép shadowing bằng cách quy định rằng phép gán luôn gán cho biến ở scope ngoài nếu có, kể cả lên tới scope toàn cục ngoài cùng. Nếu không, nó tạo biến trong scope của hàm hiện tại.</p>
+</li>
+<li>
+<p>Trong JavaScript, phép gán sẽ sửa đổi biến đã tồn tại ở bất kỳ scope bao ngoài nào nếu tìm thấy. Nếu không, nó sẽ ngầm định tạo biến mới trong scope <em>toàn cục</em>.</p>
+</li>
+</ul>
+<p>Ưu điểm chính của khai báo ngầm định là sự đơn giản. Ít cú pháp hơn và không cần học khái niệm “khai báo”. Người dùng chỉ cần bắt đầu gán và ngôn ngữ sẽ tự xử lý.</p>
+<p>Các ngôn ngữ kiểu tĩnh cũ như C hưởng lợi từ khai báo tường minh vì nó cho phép người dùng nói cho compiler biết kiểu của mỗi biến và lượng bộ nhớ cần cấp phát. Trong một ngôn ngữ kiểu động, có garbage collector, điều này không thực sự cần thiết, nên bạn có thể bỏ qua khai báo tường minh. Cảm giác sẽ “giống script” hơn, kiểu “bạn hiểu ý tôi mà”.</p>
+<p>Nhưng liệu đó có phải là ý tưởng hay? Khai báo ngầm định có một số vấn đề.</p>
+<ul>
+<li>
+<p>Người dùng có thể định gán cho một biến đã tồn tại, nhưng lại gõ sai tên. Interpreter không biết điều đó, nên cứ thế tạo ra một biến mới và biến mà người dùng muốn gán vẫn giữ giá trị cũ. Điều này đặc biệt tệ trong JavaScript, nơi một lỗi gõ sẽ tạo ra biến <em>toàn cục</em>, có thể gây ảnh hưởng tới code khác.</p>
+</li>
+<li>
+<p>JS, Ruby và CoffeeScript dùng sự tồn tại của một biến cùng tên — kể cả trong scope ngoài — để quyết định xem phép gán sẽ tạo biến mới hay gán cho biến đã tồn tại. Điều đó có nghĩa là việc thêm một biến mới ở scope bao ngoài có thể thay đổi ý nghĩa của code hiện tại. Một biến từng là cục bộ có thể âm thầm biến thành phép gán cho biến ngoài mới.</p>
+</li>
+<li>
+<p>Trong Python, bạn có thể <em>muốn</em> gán cho một biến bên ngoài hàm hiện tại thay vì tạo biến mới trong hàm, nhưng bạn không thể.</p>
+</li>
+</ul>
+<p>Theo thời gian, các ngôn ngữ mà tôi biết có khai báo biến ngầm định đã thêm nhiều tính năng và độ phức tạp để xử lý những vấn đề này.</p>
+<ul>
+<li>
+<p>Khai báo ngầm định biến toàn cục trong JavaScript ngày nay được coi là một sai lầm. “Strict mode” vô hiệu hóa nó và biến nó thành lỗi compile.</p>
+</li>
+<li>
+<p>Python thêm câu lệnh <code>global</code> để cho phép bạn tường minh gán cho biến toàn cục từ trong hàm. Sau này, khi lập trình hàm và hàm lồng nhau trở nên phổ biến hơn, họ thêm câu lệnh <code>nonlocal</code> tương tự để gán cho biến trong các hàm bao ngoài.</p>
+</li>
+<li>
+<p>Ruby mở rộng cú pháp block để cho phép khai báo một số biến là cục bộ tường minh trong block ngay cả khi cùng tên tồn tại ở scope ngoài.</p>
+</li>
+</ul>
+<p>Với những điều đó, tôi nghĩ lập luận về sự đơn giản gần như không còn. Có ý kiến cho rằng khai báo ngầm định là <em>mặc định</em> đúng, nhưng cá nhân tôi thấy điều đó không thuyết phục.</p>
+<p>Ý kiến của tôi là khai báo ngầm định hợp lý trong quá khứ khi hầu hết các ngôn ngữ script đều mang tính imperative mạnh và code khá “phẳng”. Khi lập trình viên đã quen với việc lồng sâu, lập trình hàm và closure, nhu cầu truy cập biến ở scope ngoài trở nên phổ biến hơn. Điều đó khiến khả năng người dùng gặp phải các trường hợp mơ hồ — không rõ họ muốn phép gán tạo biến mới hay dùng lại biến bao ngoài — cao hơn.</p>
+<p>Vì vậy, tôi thích khai báo biến tường minh, và đó là lý do Lox yêu cầu điều này.</p>
+</div>
+
+<footer>
+<a href="control-flow.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Control Flow&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

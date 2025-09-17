@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Closures &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Closures<small>25</small></a></h3>
+
+<ul>
+    <li><a href="#closure-objects"><small>25.1</small> Closure Objects</a></li>
+    <li><a href="#upvalue"><small>25.2</small> Upvalue</a></li>
+    <li><a href="#upvalue-objects"><small>25.3</small> Upvalue Objects</a></li>
+    <li><a href="#closed-upvalues"><small>25.4</small> Closed Upvalues</a></li>
+    <li><a href="#thử-thách"><small>25.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-đóng-trên-biến-vòng-lặp"><small>25.6</small> Ghi chú thiết kế: Đóng trên biến vòng lặp</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="calls-and-functions.html" title="Calls and Functions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="garbage-collection.html" title="Garbage Collection" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="calls-and-functions.html" title="Calls and Functions" class="prev">←</a>
+<a href="garbage-collection.html" title="Garbage Collection" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Closures<small>25</small></a></h3>
+
+<ul>
+    <li><a href="#closure-objects"><small>25.1</small> Closure Objects</a></li>
+    <li><a href="#upvalue"><small>25.2</small> Upvalue</a></li>
+    <li><a href="#upvalue-objects"><small>25.3</small> Upvalue Objects</a></li>
+    <li><a href="#closed-upvalues"><small>25.4</small> Closed Upvalues</a></li>
+    <li><a href="#thử-thách"><small>25.5</small> Thử thách</a></li>
+    <li><a href="#ghi-chú-thiết-kế-đóng-trên-biến-vòng-lặp"><small>25.6</small> Ghi chú thiết kế: Đóng trên biến vòng lặp</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="calls-and-functions.html" title="Calls and Functions" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-bytecode-virtual-machine.html" title="A Bytecode Virtual Machine">&uarr;&nbsp;Up</a>
+    <a href="garbage-collection.html" title="Garbage Collection" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">25</div>
+  <h1>Closures</h1>
+
+<blockquote>
+<p>Như ai đó từng nói, với mỗi vấn đề phức tạp đều có một giải pháp đơn giản, và nó là giải pháp sai.</p>
+<p><cite>Umberto Eco, <em>Foucault&rsquo;s Pendulum</em></cite></p>
+</blockquote>
+<p>Nhờ công sức miệt mài của chúng ta trong <a href="calls-and-functions.html">chương trước</a>, giờ ta có một virtual machine với function hoạt động được. Điều còn thiếu là closure. Ngoài global variable — một “giống loài” riêng — một function không có cách nào tham chiếu đến biến được khai báo bên ngoài thân của chính nó.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;global&quot;</span>;
+<span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;outer&quot;</span>;
+  <span class="k">fun</span> <span class="i">inner</span>() {
+    <span class="k">print</span> <span class="i">x</span>;
+  }
+  <span class="i">inner</span>();
+}
+<span class="i">outer</span>();
+</pre></div>
+<p>Chạy ví dụ này bây giờ sẽ in ra &ldquo;global&rdquo;. Lẽ ra nó phải in &ldquo;outer&rdquo;. Để sửa, chúng ta cần đưa toàn bộ lexical scope của mọi function bao quanh vào khi resolve một biến.</p>
+<p>Vấn đề này khó hơn trong clox so với jlox vì bytecode VM của chúng ta lưu local trên stack. Ta dùng stack vì tôi đã nói rằng local có ngữ nghĩa stack — biến bị loại bỏ theo thứ tự ngược lại với lúc chúng được tạo. Nhưng với closure, điều đó chỉ đúng <em>phần lớn</em> mà thôi.</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">makeClosure</span>() {
+  <span class="k">var</span> <span class="i">local</span> = <span class="s">&quot;local&quot;</span>;
+  <span class="k">fun</span> <span class="i">closure</span>() {
+    <span class="k">print</span> <span class="i">local</span>;
+  }
+  <span class="k">return</span> <span class="i">closure</span>;
+}
+
+<span class="k">var</span> <span class="i">closure</span> = <span class="i">makeClosure</span>();
+<span class="i">closure</span>();
+</pre></div>
+<p>Function bên ngoài <code>makeClosure()</code> khai báo một biến <code>local</code>. Nó cũng tạo một function bên trong, <code>closure()</code> bắt lấy biến đó. Rồi <code>makeClosure()</code> trả về một tham chiếu đến function đó. Vì closure <span name="flying">thoát</span> ra ngoài trong khi vẫn giữ local variable, <code>local</code> phải sống lâu hơn lần gọi function nơi nó được tạo ra.</p>
+<aside name="flying"><img src="image/closures/flying.png" class="above" alt="A local variable flying away from the stack."/>
+<p>Ôi không, nó đang “thoát thân”!</p>
+</aside>
+<p>Ta có thể giải quyết bằng cách cấp phát động bộ nhớ cho mọi local variable. Đó là cách jlox làm — đặt mọi thứ vào các đối tượng Environment trôi nổi trên heap của Java. Nhưng ta không muốn thế. Dùng <span name="stack">stack</span> thì <em>rất</em> nhanh. Phần lớn local variable <em>không</em> bị closure bắt và thực sự có ngữ nghĩa stack. Thật dở khi làm tất cả chúng chậm đi chỉ vì số ít local bị bắt.</p>
+<aside name="stack">
+<p>Rốt cuộc thì cũng có lý do C và Java dùng stack cho local variable của chúng.</p>
+</aside>
+<p>Điều này nghĩa là ta cần một cách tiếp cận phức tạp hơn so với interpreter Java của chúng ta. Bởi vì một số local có vòng đời rất khác nhau, ta sẽ có hai chiến lược cài đặt. Với local không dùng trong closure, ta giữ nguyên trên stack. Khi một local bị closure bắt, ta sẽ dùng giải pháp khác: “nhấc” chúng lên heap để chúng có thể sống đủ lâu theo nhu cầu.</p>
+<p>Closure đã xuất hiện từ thời Lisp sơ khai khi từng byte bộ nhớ và chu kỳ CPU còn quý hơn ngọc lục bảo. Qua nhiều thập kỷ, các hacker đã nghĩ ra đủ <span name="lambda">kiểu</span> cách compile closure xuống các biểu diễn runtime tối ưu. Một số cách hiệu quả hơn nhưng đòi hỏi quy trình compile phức tạp hơn mức ta có thể “độ” thêm cho clox một cách dễ dàng.</p>
+<aside name="lambda">
+<p>Hãy tìm “closure conversion” hoặc “lambda lifting” để bắt đầu khám phá.</p>
+</aside>
+<p>Kỹ thuật tôi trình bày ở đây lấy cảm hứng từ thiết kế của Lua VM. Nó nhanh, tiết kiệm bộ nhớ, và cài đặt với lượng code tương đối ít. Ấn tượng hơn, nó tự nhiên phù hợp với các compiler một lượt (single-pass) mà cả clox và Lua đều dùng. Tuy hơi rắc rối. Có thể bạn sẽ cần thời gian trước khi mọi mảnh ghép khớp lại trong đầu. Chúng ta sẽ xây chúng từng bước một, và tôi sẽ cố gắng giới thiệu các khái niệm theo từng lớp.</p>
+<h2><a href="#closure-objects" id="closure-objects"><small>25&#8202;.&#8202;1</small>Closure Objects</a></h2>
+<p>VM của chúng ta biểu diễn function ở runtime bằng <code>ObjFunction</code>. Các object này được tạo ra bởi front end trong quá trình compile. Ở runtime, tất cả những gì VM làm là load function object từ constant table và bind nó với một tên. Không có thao tác nào để “tạo” một function ở runtime. Giống như <span name="literal">literal</span> string và number, chúng là các hằng số được khởi tạo hoàn toàn tại thời điểm compile.</p>
+<aside name="literal">
+<p>Nói cách khác, một khai báo function trong Lox <em>là</em> một dạng literal — một mẩu cú pháp định nghĩa một giá trị hằng của một kiểu dựng sẵn.</p>
+</aside>
+<p>Điều này hợp lý vì tất cả dữ liệu cấu thành một function đều đã biết tại thời điểm compile: phần bytecode được compile từ thân hàm, và các constant được dùng trong thân hàm. Tuy nhiên, khi chúng ta đưa closure vào, cách biểu diễn đó không còn đủ nữa. Hãy xem ví dụ:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">makeClosure</span>(<span class="i">value</span>) {
+  <span class="k">fun</span> <span class="i">closure</span>() {
+    <span class="k">print</span> <span class="i">value</span>;
+  }
+  <span class="k">return</span> <span class="i">closure</span>;
+}
+
+<span class="k">var</span> <span class="i">doughnut</span> = <span class="i">makeClosure</span>(<span class="s">&quot;doughnut&quot;</span>);
+<span class="k">var</span> <span class="i">bagel</span> = <span class="i">makeClosure</span>(<span class="s">&quot;bagel&quot;</span>);
+<span class="i">doughnut</span>();
+<span class="i">bagel</span>();
+</pre></div>
+<p>Hàm <code>makeClosure()</code> định nghĩa và trả về một function. Ta gọi nó hai lần và nhận về hai closure. Chúng được tạo ra từ cùng một khai báo function lồng nhau, <code>closure</code>, nhưng mỗi cái đóng (close over) trên một giá trị khác nhau. Khi gọi hai closure này, mỗi cái in ra một chuỗi khác nhau. Điều đó có nghĩa là ta cần một biểu diễn runtime cho closure, thứ sẽ giữ các biến local bao quanh function như chúng tồn tại tại thời điểm khai báo function được <em>execute</em>, chứ không chỉ khi nó được compile.</p>
+<p>Chúng ta sẽ dần tiến tới việc bắt biến, nhưng bước đầu tiên hợp lý là định nghĩa cách biểu diễn object đó. Kiểu <code>ObjFunction</code> hiện tại biểu diễn trạng thái <span name="raw">“thô”</span> ở thời điểm compile của một khai báo function, vì tất cả closure được tạo từ cùng một khai báo sẽ chia sẻ cùng code và constant. Ở runtime, khi execute một khai báo function, ta sẽ bọc <code>ObjFunction</code> trong một cấu trúc <code>ObjClosure</code> mới. Cấu trúc này tham chiếu tới function gốc cùng với trạng thái runtime cho các biến mà function đóng lên.</p>
+<aside name="raw">
+<p>Trong Lua, object function “thô” chứa bytecode được gọi là “prototype” — một từ rất hay để mô tả điều này, trừ việc từ đó cũng bị dùng để chỉ <a href="https://en.wikipedia.org/wiki/Prototype-based_programming">prototypal inheritance</a>.</p>
+</aside><img src="image/closures/obj-closure.png" alt="Một ObjClosure tham chiếu tới một ObjFunction."/>
+<p>Chúng ta sẽ bọc mọi function trong một <code>ObjClosure</code>, ngay cả khi function đó thực tế không đóng và bắt bất kỳ biến local nào xung quanh. Điều này hơi lãng phí, nhưng nó giúp đơn giản hóa VM vì ta luôn có thể giả định function được gọi là một <code>ObjClosure</code>. Struct mới này bắt đầu như sau:</p>
+<div class="codehilite"><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjString</em></div>
+<pre><span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">Obj</span> <span class="i">obj</span>;
+  <span class="t">ObjFunction</span>* <span class="i">function</span>;
+} <span class="t">ObjClosure</span>;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjString</em></div>
+
+<p>Hiện tại, nó chỉ trỏ tới một <code>ObjFunction</code> và thêm phần header object cần thiết. Theo đúng “nghi thức” khi thêm một kiểu object mới vào clox, ta khai báo một hàm C để tạo closure mới.</p>
+<div class="codehilite"><pre class="insert-before">} ObjClosure;
+
+</pre><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjClosure</em></div>
+<pre class="insert"><span class="t">ObjClosure</span>* <span class="i">newClosure</span>(<span class="t">ObjFunction</span>* <span class="i">function</span>);
+</pre><pre class="insert-after">ObjFunction* newFunction();
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjClosure</em></div>
+
+<p>Rồi cài đặt nó ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+add after <em>allocateObject</em>()</div>
+<pre><span class="t">ObjClosure</span>* <span class="i">newClosure</span>(<span class="t">ObjFunction</span>* <span class="i">function</span>) {
+  <span class="t">ObjClosure</span>* <span class="i">closure</span> = <span class="a">ALLOCATE_OBJ</span>(<span class="t">ObjClosure</span>, <span class="a">OBJ_CLOSURE</span>);
+  <span class="i">closure</span>-&gt;<span class="i">function</span> = <span class="i">function</span>;
+  <span class="k">return</span> <span class="i">closure</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, add after <em>allocateObject</em>()</div>
+
+<p>Hàm này nhận một con trỏ tới <code>ObjFunction</code> mà nó bọc. Nó cũng khởi tạo trường type sang một kiểu mới.</p>
+<div class="codehilite"><pre class="insert-before">typedef enum {
+</pre><div class="source-file"><em>object.h</em><br>
+in enum <em>ObjType</em></div>
+<pre class="insert">  <span class="a">OBJ_CLOSURE</span>,
+</pre><pre class="insert-after">  OBJ_FUNCTION,
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in enum <em>ObjType</em></div>
+
+<p>Và khi xong với một closure, ta giải phóng bộ nhớ của nó.</p>
+<div class="codehilite"><pre class="insert-before">  switch (object-&gt;type) {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_CLOSURE</span>: {
+      <span class="a">FREE</span>(<span class="t">ObjClosure</span>, <span class="i">object</span>);
+      <span class="k">break</span>;
+    }
+</pre><pre class="insert-after">    case OBJ_FUNCTION: {
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p>Ta chỉ giải phóng chính <code>ObjClosure</code>, không giải phóng <code>ObjFunction</code>. Lý do là closure không <em>sở hữu</em> function. Có thể có nhiều closure cùng tham chiếu tới một function, và không closure nào có quyền đặc biệt với nó. Ta không thể giải phóng <code>ObjFunction</code> cho đến khi <em>tất cả</em> object tham chiếu tới nó biến mất — kể cả function bao quanh có constant table chứa nó. Việc theo dõi điều đó nghe đã thấy phức tạp, và đúng là vậy! Đó là lý do chúng ta sẽ viết một garbage collector để quản lý việc này.</p>
+<p>Chúng ta cũng có các <span name="macro">macro</span> quen thuộc để kiểm tra kiểu của một value.</p>
+<aside name="macro">
+<p>Có lẽ tôi nên định nghĩa một macro để dễ tạo ra các macro này hơn. Nhưng như vậy thì hơi… meta quá.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">#define OBJ_TYPE(value)        (AS_OBJ(value)-&gt;type)
+
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert"><span class="a">#define IS_CLOSURE(value)      isObjType(value, OBJ_CLOSURE)</span>
+</pre><pre class="insert-after">#define IS_FUNCTION(value)     isObjType(value, OBJ_FUNCTION)
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Và để cast một value:</p>
+<div class="codehilite"><pre class="insert-before">#define IS_STRING(value)       isObjType(value, OBJ_STRING)
+
+</pre><div class="source-file"><em>object.h</em></div>
+<pre class="insert"><span class="a">#define AS_CLOSURE(value)      ((ObjClosure*)AS_OBJ(value))</span>
+</pre><pre class="insert-after">#define AS_FUNCTION(value)     ((ObjFunction*)AS_OBJ(value))
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em></div>
+
+<p>Closure là object hạng nhất, nên bạn có thể in chúng.</p>
+<div class="codehilite"><pre class="insert-before">  switch (OBJ_TYPE(value)) {
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>printObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_CLOSURE</span>:
+      <span class="i">printFunction</span>(<span class="a">AS_CLOSURE</span>(<span class="i">value</span>)-&gt;<span class="i">function</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">    case OBJ_FUNCTION:
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>printObject</em>()</div>
+
+<p>Chúng hiển thị giống hệt <code>ObjFunction</code>. Từ góc nhìn của người dùng, sự khác biệt giữa <code>ObjFunction</code> và <code>ObjClosure</code> hoàn toàn là chi tiết ẩn trong phần cài đặt. Vậy là ta đã có một biểu diễn cho closure — hoạt động được nhưng hiện tại vẫn trống rỗng.</p>
+<h3><a href="#biên-dịch-sang-closure-object" id="biên-dịch-sang-closure-object"><small>25&#8202;.&#8202;1&#8202;.&#8202;1</small>Biên dịch sang closure object</a></h3>
+<p>Chúng ta đã có closure object, nhưng VM của chúng ta chưa bao giờ tạo ra chúng. Bước tiếp theo là khiến compiler sinh ra instruction để báo cho runtime biết khi nào cần tạo một <code>ObjClosure</code> mới để bọc quanh một <code>ObjFunction</code> cho trước. Điều này xảy ra ngay ở cuối một khai báo function.</p>
+<div class="codehilite"><pre class="insert-before">  ObjFunction* function = endCompiler();
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>function</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="i">emitBytes</span>(<span class="a">OP_CLOSURE</span>, <span class="i">makeConstant</span>(<span class="a">OBJ_VAL</span>(<span class="i">function</span>)));
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>function</em>(), replace 1 line</div>
+
+<p>Trước đây, bytecode cuối cùng cho một khai báo function chỉ là một instruction <code>OP_CONSTANT</code> để load function đã compile từ constant table của function bao quanh và push nó lên stack. Giờ chúng ta có một instruction mới.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CALL,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_CLOSURE</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Giống như <code>OP_CONSTANT</code>, nó nhận một operand duy nhất đại diện cho chỉ số trong constant table của function. Nhưng khi sang phần cài đặt runtime, chúng ta sẽ làm một việc thú vị hơn.</p>
+<p>Trước hết, hãy là những hacker VM cẩn thận và thêm hỗ trợ disassembler cho instruction này.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_CALL:
+      return byteInstruction(&quot;OP_CALL&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_CLOSURE</span>: {
+      <span class="i">offset</span>++;
+      <span class="t">uint8_t</span> <span class="i">constant</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span>++];
+      <span class="i">printf</span>(<span class="s">&quot;%-16s %4d &quot;</span>, <span class="s">&quot;OP_CLOSURE&quot;</span>, <span class="i">constant</span>);
+      <span class="i">printValue</span>(<span class="i">chunk</span>-&gt;<span class="i">constants</span>.<span class="i">values</span>[<span class="i">constant</span>]);
+      <span class="i">printf</span>(<span class="s">&quot;</span><span class="e">\n</span><span class="s">&quot;</span>);
+      <span class="k">return</span> <span class="i">offset</span>;
+    }
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Ở đây có nhiều thứ hơn so với những gì ta thường thấy trong disassembler. Đến cuối chương, bạn sẽ thấy <code>OP_CLOSURE</code> là một instruction khá đặc biệt. Hiện tại nó đơn giản — chỉ một operand một byte — nhưng chúng ta sẽ bổ sung thêm cho nó. Đoạn code này đã chuẩn bị sẵn cho tương lai đó.</p>
+<h3><a href="#execute-khai-báo-function" id="execute-khai-báo-function"><small>25&#8202;.&#8202;1&#8202;.&#8202;2</small>Execute khai báo function</a></h3>
+<p>Phần lớn công việc cần làm nằm ở runtime. Tất nhiên, ta phải xử lý instruction mới này. Nhưng ta cũng cần chỉnh mọi đoạn code trong VM làm việc với <code>ObjFunction</code> để chuyển sang dùng <code>ObjClosure</code> — lời gọi hàm, call frame, v.v. Tuy nhiên, ta sẽ bắt đầu với instruction trước.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_CLOSURE</span>: {
+        <span class="t">ObjFunction</span>* <span class="i">function</span> = <span class="a">AS_FUNCTION</span>(<span class="a">READ_CONSTANT</span>());
+        <span class="t">ObjClosure</span>* <span class="i">closure</span> = <span class="i">newClosure</span>(<span class="i">function</span>);
+        <span class="i">push</span>(<span class="a">OBJ_VAL</span>(<span class="i">closure</span>));
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Giống như instruction <code>OP_CONSTANT</code> trước đây, đầu tiên ta load function đã compile từ constant table. Điểm khác biệt là giờ ta bọc function đó trong một <code>ObjClosure</code> mới và push kết quả lên stack.</p>
+<p>Khi đã có closure, sớm muộn gì bạn cũng sẽ muốn gọi nó.</p>
+<div class="codehilite"><pre class="insert-before">    switch (OBJ_TYPE(callee)) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>callValue</em>()<br>
+replace 2 lines</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OBJ_CLOSURE</span>:
+        <span class="k">return</span> <span class="i">call</span>(<span class="a">AS_CLOSURE</span>(<span class="i">callee</span>), <span class="i">argCount</span>);
+</pre><pre class="insert-after">      case OBJ_NATIVE: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>callValue</em>(), replace 2 lines</div>
+
+<p>Chúng ta bỏ đoạn code gọi object có type là <code>OBJ_FUNCTION</code>. Vì ta bọc tất cả function trong <code>ObjClosure</code>, runtime sẽ không bao giờ cố gọi một <code>ObjFunction</code> trần nữa. Những object đó chỉ tồn tại trong constant table và ngay lập tức được <span name="naked">bọc</span> trong closure trước khi bất kỳ thứ gì khác thấy chúng.</p>
+<aside name="naked">
+<p>Chúng ta không muốn những function “trần truồng” lang thang trong VM! Hàng xóm sẽ nói gì chứ?</p>
+</aside>
+<p>Ta thay đoạn code cũ bằng code rất giống để gọi closure. Khác biệt duy nhất là kiểu object ta truyền vào <code>call()</code>. Những thay đổi thực sự nằm trong hàm đó. Đầu tiên, ta cập nhật signature hàm.</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+function <em>call</em>()<br>
+replace 1 line</div>
+<pre class="insert"><span class="k">static</span> <span class="t">bool</span> <span class="i">call</span>(<span class="t">ObjClosure</span>* <span class="i">closure</span>, <span class="t">int</span> <span class="i">argCount</span>) {
+</pre><pre class="insert-after">  if (argCount != function-&gt;arity) {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, function <em>call</em>(), replace 1 line</div>
+
+<p>Sau đó, trong thân hàm, ta cần sửa mọi chỗ tham chiếu tới function để xử lý việc ta đã thêm một lớp gián tiếp. Bắt đầu với phần kiểm tra arity:</p>
+<div class="codehilite"><pre class="insert-before">static bool call(ObjClosure* closure, int argCount) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>call</em>()<br>
+replace 3 lines</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">argCount</span> != <span class="i">closure</span>-&gt;<span class="i">function</span>-&gt;<span class="i">arity</span>) {
+    <span class="i">runtimeError</span>(<span class="s">&quot;Expected %d arguments but got %d.&quot;</span>,
+        <span class="i">closure</span>-&gt;<span class="i">function</span>-&gt;<span class="i">arity</span>, <span class="i">argCount</span>);
+</pre><pre class="insert-after">    return false;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>call</em>(), replace 3 lines</div>
+
+<p>Thay đổi duy nhất là ta “mở” closure để lấy function gốc. Tiếp theo, <code>call()</code> tạo một <code>CallFrame</code> mới. Ta sửa đoạn code đó để lưu closure trong <code>CallFrame</code> và lấy con trỏ bytecode từ function của closure.</p>
+<div class="codehilite"><pre class="insert-before">  CallFrame* frame = &amp;vm.frames[vm.frameCount++];
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>call</em>()<br>
+replace 2 lines</div>
+<pre class="insert">  <span class="i">frame</span>-&gt;<span class="i">closure</span> = <span class="i">closure</span>;
+  <span class="i">frame</span>-&gt;<span class="i">ip</span> = <span class="i">closure</span>-&gt;<span class="i">function</span>-&gt;<span class="i">chunk</span>.<span class="i">code</span>;
+</pre><pre class="insert-after">  frame-&gt;slots = vm.stackTop - argCount - 1;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>call</em>(), replace 2 lines</div>
+
+<p>Điều này buộc phải thay đổi cả khai báo của <code>CallFrame</code>.</p>
+<div class="codehilite"><pre class="insert-before">typedef struct {
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>CallFrame</em><br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">ObjClosure</span>* <span class="i">closure</span>;
+</pre><pre class="insert-after">  uint8_t* ip;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>CallFrame</em>, replace 1 line</div>
+
+<p>Thay đổi này kéo theo một vài thay đổi dây chuyền khác. Mọi chỗ trong VM truy cập function của <code>CallFrame</code> giờ phải dùng closure. Đầu tiên là macro đọc constant từ constant table của function hiện tại:</p>
+<div class="codehilite"><pre class="insert-before">    (uint16_t)((frame-&gt;ip[-2] &lt;&lt; 8) | frame-&gt;ip[-1]))
+
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 2 lines</div>
+<pre class="insert"><span class="a">#define READ_CONSTANT() \</span>
+<span class="a">    (frame-&gt;closure-&gt;function-&gt;chunk.constants.values[READ_BYTE()])</span>
+</pre><pre class="insert-after">
+
+#define READ_STRING() AS_STRING(READ_CONSTANT())
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 2 lines</div>
+
+<p>Khi <code>DEBUG_TRACE_EXECUTION</code> được bật, nó cần lấy chunk từ closure.</p>
+<div class="codehilite"><pre class="insert-before">    printf(&quot;\n&quot;);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()<br>
+replace 2 lines</div>
+<pre class="insert">    <span class="i">disassembleInstruction</span>(&amp;<span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">function</span>-&gt;<span class="i">chunk</span>,
+        (<span class="t">int</span>)(<span class="i">frame</span>-&gt;<span class="i">ip</span> - <span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">function</span>-&gt;<span class="i">chunk</span>.<span class="i">code</span>));
+</pre><pre class="insert-after">#endif
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>(), replace 2 lines</div>
+
+<p>Tương tự khi báo lỗi runtime:</p>
+<div class="codehilite"><pre class="insert-before">    CallFrame* frame = &amp;vm.frames[i];
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>runtimeError</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">ObjFunction</span>* <span class="i">function</span> = <span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">function</span>;
+</pre><pre class="insert-after">    size_t instruction = frame-&gt;ip - function-&gt;chunk.code - 1;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>runtimeError</em>(), replace 1 line</div>
+
+<p>Gần xong rồi. Mảnh ghép cuối cùng là đoạn code thiết lập <code>CallFrame</code> đầu tiên để bắt đầu execute code top-level của một script Lox.</p>
+<div class="codehilite"><pre class="insert-before">  push(OBJ_VAL(function));
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>interpret</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">ObjClosure</span>* <span class="i">closure</span> = <span class="i">newClosure</span>(<span class="i">function</span>);
+  <span class="i">pop</span>();
+  <span class="i">push</span>(<span class="a">OBJ_VAL</span>(<span class="i">closure</span>));
+  <span class="i">call</span>(<span class="i">closure</span>, <span class="n">0</span>);
+</pre><pre class="insert-after">
+
+  return run();
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>interpret</em>(), replace 1 line</div>
+
+<p><span name="pop">Compiler</span> vẫn trả về một <code>ObjFunction</code> thô khi compile một script. Điều đó không sao, nhưng nghĩa là ta cần bọc nó trong một <code>ObjClosure</code> ở đây, trước khi VM có thể execute.</p>
+<aside name="pop">
+<p>Đoạn code trông hơi buồn cười vì ta vẫn push <code>ObjFunction</code> gốc lên stack. Sau đó ta pop nó ra sau khi tạo closure, rồi lại push closure vào. Tại sao lại đưa <code>ObjFunction</code> lên đó ngay từ đầu? Như thường lệ, khi bạn thấy những trò kỳ quặc với stack, đó là để giữ cho <a href="garbage-collection.html">garbage collector sắp tới</a> biết về một số object được cấp phát trên heap.</p>
+</aside>
+<p>Vậy là chúng ta đã có lại một interpreter hoạt động. <em>Người dùng</em> sẽ không nhận ra sự khác biệt, nhưng compiler giờ sinh code báo cho VM tạo closure cho mỗi khai báo function. Mỗi lần VM execute một khai báo function, nó bọc <code>ObjFunction</code> trong một <code>ObjClosure</code> mới. Phần còn lại của VM giờ xử lý những <code>ObjClosure</code> này. Phần “nhàm chán” đã xong. Giờ chúng ta sẵn sàng để khiến những closure này thực sự <em>làm</em> gì đó.</p>
+<h2><a href="#upvalue" id="upvalue"><small>25&#8202;.&#8202;2</small>Upvalue</a></h2>
+<p>Các instruction hiện tại của chúng ta để đọc và ghi local variable chỉ giới hạn trong <em>cửa sổ stack</em> của một function duy nhất. Local từ một function bao quanh nằm ngoài cửa sổ của function bên trong. Chúng ta sẽ cần một số instruction mới.</p>
+<p>Cách đơn giản nhất có thể là một instruction nhận một offset tương đối của stack slot có thể vươn tới <em>trước</em> cửa sổ của function hiện tại. Cách này sẽ hoạt động nếu các biến bị <em>đóng</em> (closed-over) luôn nằm trên stack. Nhưng như ta đã thấy trước đó, đôi khi các biến này sống lâu hơn function nơi chúng được khai báo. Điều đó có nghĩa là chúng sẽ không phải lúc nào cũng nằm trên stack.</p>
+<p>Cách đơn giản tiếp theo là: bất kỳ local variable nào bị đóng thì luôn được lưu trên heap. Khi câu lệnh khai báo local variable trong function bao quanh được execute, VM sẽ cấp phát bộ nhớ cho nó một cách động. Như vậy, nó có thể tồn tại lâu tùy ý.</p>
+<p>Cách này sẽ ổn nếu clox không phải là một compiler một lượt (single-pass). Nhưng ràng buộc mà ta đã chọn trong phần cài đặt khiến mọi thứ khó hơn. Xem ví dụ này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="n">1</span>;    <span class="c">// (1)</span>
+  <span class="i">x</span> = <span class="n">2</span>;        <span class="c">// (2)</span>
+  <span class="k">fun</span> <span class="i">inner</span>() { <span class="c">// (3)</span>
+    <span class="k">print</span> <span class="i">x</span>;
+  }
+  <span class="i">inner</span>();
+}
+</pre></div>
+<p>Ở đây, compiler compile khai báo <code>x</code> tại <code>(1)</code> và sinh code cho phép gán tại <code>(2)</code>. Nó làm điều đó trước khi gặp khai báo <code>inner()</code> tại <code>(3)</code> và phát hiện rằng <code>x</code> thực ra bị đóng. Chúng ta không có cách dễ dàng để quay lại và sửa đoạn code đã sinh để xử lý <code>x</code> đặc biệt. Thay vào đó, ta muốn một giải pháp cho phép một biến bị đóng vẫn sống trên stack giống như một local variable bình thường <em>cho đến thời điểm nó bị đóng</em>.</p>
+<p>May mắn thay, nhờ nhóm phát triển Lua, chúng ta có một giải pháp. Ta dùng một lớp gián tiếp mà họ gọi là <strong>upvalue</strong>. Một upvalue tham chiếu tới một local variable trong một function bao quanh. Mỗi closure duy trì một mảng upvalue, mỗi phần tử tương ứng với một local variable bao quanh mà closure đó sử dụng.</p>
+<p>Upvalue trỏ ngược vào stack tới vị trí biến mà nó bắt giữ đang sống. Khi closure cần truy cập một biến bị đóng, nó đi qua upvalue tương ứng để tới được biến đó. Khi một khai báo function được execute lần đầu và ta tạo closure cho nó, VM sẽ tạo mảng upvalue và “nối dây” chúng để “bắt” các local variable bao quanh mà closure cần.</p>
+<p>Ví dụ, nếu ta chạy chương trình này trong clox:</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span> = <span class="n">3</span>;
+  <span class="k">fun</span> <span class="i">f</span>() {
+    <span class="k">print</span> <span class="i">a</span>;
+  }
+}
+</pre></div>
+<p>compiler và runtime sẽ phối hợp để tạo ra một tập hợp object trong bộ nhớ như sau:</p><img src="image/closures/open-upvalue.png" alt="Biểu đồ object của stack, ObjClosure, ObjFunction, và mảng upvalue."/>
+<p>Trông có vẻ hơi ngợp, nhưng đừng lo. Chúng ta sẽ đi qua từng bước. Phần quan trọng là upvalue đóng vai trò như một lớp gián tiếp cần thiết để tiếp tục tìm thấy một local variable đã bị bắt ngay cả khi nó đã rời khỏi stack. Nhưng trước khi đến phần đó, hãy tập trung vào việc compile các biến bị bắt.</p>
+<h3><a href="#compile-upvalue" id="compile-upvalue"><small>25&#8202;.&#8202;2&#8202;.&#8202;1</small>Compile upvalue</a></h3>
+<p>Như thường lệ, ta muốn làm càng nhiều việc càng tốt trong lúc compile để giữ cho quá trình execute đơn giản và nhanh. Vì local variable trong Lox có phạm vi từ vựng (lexical scope), ta có đủ thông tin tại thời điểm compile để resolve xem một function truy cập local variable bao quanh nào và các biến đó được khai báo ở đâu. Điều đó đồng nghĩa ta biết <em>bao nhiêu</em> upvalue một closure cần, <em>biến nào</em> chúng bắt, và <em>stack slot nào</em> chứa các biến đó trong cửa sổ stack của function khai báo.</p>
+<p>Hiện tại, khi compiler resolve một identifier, nó duyệt qua các block scope của function hiện tại từ trong ra ngoài. Nếu không tìm thấy biến trong function đó, ta giả định biến đó là global. Ta không xét tới các local scope của function bao quanh — chúng bị bỏ qua. Thay đổi đầu tiên là chèn một bước resolve cho các local scope bên ngoài đó.</p>
+<div class="codehilite"><pre class="insert-before">  if (arg != -1) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>namedVariable</em>()</div>
+<pre class="insert">  } <span class="k">else</span> <span class="k">if</span> ((<span class="i">arg</span> = <span class="i">resolveUpvalue</span>(<span class="i">current</span>, &amp;<span class="i">name</span>)) != -<span class="n">1</span>) {
+    <span class="i">getOp</span> = <span class="a">OP_GET_UPVALUE</span>;
+    <span class="i">setOp</span> = <span class="a">OP_SET_UPVALUE</span>;
+</pre><pre class="insert-after">  } else {
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>namedVariable</em>()</div>
+
+<p>Hàm <code>resolveUpvalue()</code> mới này tìm một local variable được khai báo trong bất kỳ function bao quanh nào. Nếu tìm thấy, nó trả về một “chỉ số upvalue” cho biến đó. (Chúng ta sẽ nói rõ hơn ý nghĩa của nó sau.) Nếu không tìm thấy, nó trả về -1 để báo biến không tồn tại. Nếu tìm thấy, ta dùng hai instruction mới này để đọc hoặc ghi biến thông qua upvalue:</p>
+<div class="codehilite"><pre class="insert-before">  OP_SET_GLOBAL,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_GET_UPVALUE</span>,
+  <span class="a">OP_SET_UPVALUE</span>,
+</pre><pre class="insert-after">  OP_EQUAL,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Chúng ta đang triển khai theo kiểu top-down, nên tôi sẽ cho bạn thấy cách chúng hoạt động ở runtime sau. Phần cần tập trung bây giờ là cách compiler thực sự resolve identifier.</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>resolveLocal</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">resolveUpvalue</span>(<span class="t">Compiler</span>* <span class="i">compiler</span>, <span class="t">Token</span>* <span class="i">name</span>) {
+  <span class="k">if</span> (<span class="i">compiler</span>-&gt;<span class="i">enclosing</span> == <span class="a">NULL</span>) <span class="k">return</span> -<span class="n">1</span>;
+
+  <span class="t">int</span> <span class="i">local</span> = <span class="i">resolveLocal</span>(<span class="i">compiler</span>-&gt;<span class="i">enclosing</span>, <span class="i">name</span>);
+  <span class="k">if</span> (<span class="i">local</span> != -<span class="n">1</span>) {
+    <span class="k">return</span> <span class="i">addUpvalue</span>(<span class="i">compiler</span>, (<span class="t">uint8_t</span>)<span class="i">local</span>, <span class="k">true</span>);
+  }
+
+  <span class="k">return</span> -<span class="n">1</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>resolveLocal</em>()</div>
+
+<p>Ta gọi hàm này sau khi không resolve được local variable trong scope của function hiện tại, nên ta biết biến đó không nằm trong compiler hiện tại. Nhớ rằng <code>Compiler</code> lưu một con trỏ tới <code>Compiler</code> của function bao quanh, và các con trỏ này tạo thành a linked chain that goes all the way to the root Compiler for the top-level code. Thus, if the enclosing Compiler is <code>NULL</code>, we know we&rsquo;ve reached the outermost function without finding a local variable. The variable must be <span name="undefined">global</span>, so we return -1. </p>
+<aside name="undefined">
+<p>It might end up being an entirely undefined variable and not even global. But in Lox, we don&rsquo;t detect that error until runtime, so from the compiler&rsquo;s perspective, it&rsquo;s &ldquo;hopefully global&rdquo;.</p>
+</aside> 
+<p>Otherwise, we try to resolve the identifier as a <em>local</em> variable in the <em>enclosing</em> compiler. In other words, we look for it right outside the current function. For example:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="n">1</span>;
+  <span class="k">fun</span> <span class="i">inner</span>() {
+    <span class="k">print</span> <span class="i">x</span>; <span class="c">// (1)</span>
+  }
+  <span class="i">inner</span>();
+}
+</pre></div>
+<p>Khi compile biểu thức identifier tại <code>(1)</code>, <code>resolveUpvalue()</code> sẽ tìm một local variable <code>x</code> được khai báo trong <code>outer()</code>. Nếu tìm thấy — như trong ví dụ này — thì ta đã resolve thành công biến đó. Ta tạo một upvalue để function bên trong có thể truy cập biến thông qua nó. Upvalue được tạo ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after <em>resolveLocal</em>()</div>
+<pre><span class="k">static</span> <span class="t">int</span> <span class="i">addUpvalue</span>(<span class="t">Compiler</span>* <span class="i">compiler</span>, <span class="t">uint8_t</span> <span class="i">index</span>,
+                      <span class="t">bool</span> <span class="i">isLocal</span>) {
+  <span class="t">int</span> <span class="i">upvalueCount</span> = <span class="i">compiler</span>-&gt;<span class="i">function</span>-&gt;<span class="i">upvalueCount</span>;
+  <span class="i">compiler</span>-&gt;<span class="i">upvalues</span>[<span class="i">upvalueCount</span>].<span class="i">isLocal</span> = <span class="i">isLocal</span>;
+  <span class="i">compiler</span>-&gt;<span class="i">upvalues</span>[<span class="i">upvalueCount</span>].<span class="i">index</span> = <span class="i">index</span>;
+  <span class="k">return</span> <span class="i">compiler</span>-&gt;<span class="i">function</span>-&gt;<span class="i">upvalueCount</span>++;
+}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after <em>resolveLocal</em>()</div>
+
+<p>Compiler giữ một mảng các cấu trúc upvalue để theo dõi những identifier bị đóng mà nó đã resolve trong thân mỗi function. Hãy nhớ cách mảng <code>Local</code> của compiler phản chiếu các chỉ số stack slot nơi local tồn tại ở runtime? Mảng upvalue mới này hoạt động tương tự. Các chỉ số trong mảng của compiler khớp với các chỉ số nơi upvalue sẽ tồn tại trong <code>ObjClosure</code> ở runtime.</p>
+<p>Hàm này thêm một upvalue mới vào mảng đó. Nó cũng theo dõi số lượng upvalue mà function sử dụng. Con số này được lưu trực tiếp trong <code>ObjFunction</code> vì chúng ta cũng sẽ <span name="bridge">cần</span> nó để dùng ở runtime.</p>
+<aside name="bridge">
+<p>Giống như constant và arity của function, số lượng upvalue là một trong những mẩu dữ liệu nhỏ tạo nên “cây cầu” nối giữa compiler và runtime.</p>
+</aside>
+<p>Trường <code>index</code> theo dõi slot index của local variable bị đóng. Nhờ đó, compiler biết <em>biến nào</em> trong function bao quanh cần được bắt. Chúng ta sẽ quay lại giải thích trường <code>isLocal</code> sau. Cuối cùng, <code>addUpvalue()</code> trả về chỉ số của upvalue vừa tạo trong danh sách upvalue của function. Chỉ số này trở thành operand cho các instruction <code>OP_GET_UPVALUE</code> và <code>OP_SET_UPVALUE</code>.</p>
+<p>Đó là ý tưởng cơ bản để resolve upvalue, nhưng hàm này vẫn chưa hoàn thiện. Một closure có thể tham chiếu cùng một biến trong function bao quanh nhiều lần. Trong trường hợp đó, ta không muốn lãng phí thời gian và bộ nhớ để tạo một upvalue riêng cho mỗi biểu thức identifier. Để khắc phục, trước khi thêm một upvalue mới, ta kiểm tra xem function đã có upvalue nào đóng trên biến đó chưa.</p>
+<div class="codehilite"><pre class="insert-before">  int upvalueCount = compiler-&gt;function-&gt;upvalueCount;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>addUpvalue</em>()</div>
+<pre class="insert">
+
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">upvalueCount</span>; <span class="i">i</span>++) {
+    <span class="t">Upvalue</span>* <span class="i">upvalue</span> = &amp;<span class="i">compiler</span>-&gt;<span class="i">upvalues</span>[<span class="i">i</span>];
+    <span class="k">if</span> (<span class="i">upvalue</span>-&gt;<span class="i">index</span> == <span class="i">index</span> &amp;&amp; <span class="i">upvalue</span>-&gt;<span class="i">isLocal</span> == <span class="i">isLocal</span>) {
+      <span class="k">return</span> <span class="i">i</span>;
+    }
+  }
+
+</pre><pre class="insert-after">  compiler-&gt;upvalues[upvalueCount].isLocal = isLocal;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>addUpvalue</em>()</div>
+
+<p>Nếu tìm thấy một upvalue trong mảng có slot index trùng với cái ta đang thêm, ta chỉ việc trả về chỉ số <em>upvalue</em> đó và tái sử dụng. Nếu không, ta tiếp tục thêm upvalue mới.</p>
+<p>Hai hàm này truy cập và chỉnh sửa khá nhiều trạng thái mới, nên hãy định nghĩa chúng. Đầu tiên, ta thêm số lượng upvalue vào <code>ObjFunction</code>.</p>
+<div class="codehilite"><pre class="insert-before">  int arity;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>ObjFunction</em></div>
+<pre class="insert">  <span class="t">int</span> <span class="i">upvalueCount</span>;
+</pre><pre class="insert-after">  Chunk chunk;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>ObjFunction</em></div>
+
+<p>Là những lập trình viên C cẩn thận, ta sẽ khởi tạo giá trị này về 0 khi một <code>ObjFunction</code> được cấp phát lần đầu.</p>
+<div class="codehilite"><pre class="insert-before">  function-&gt;arity = 0;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newFunction</em>()</div>
+<pre class="insert">  <span class="i">function</span>-&gt;<span class="i">upvalueCount</span> = <span class="n">0</span>;
+</pre><pre class="insert-after">  function-&gt;name = NULL;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newFunction</em>()</div>
+
+<p>Trong compiler, ta thêm một trường cho mảng upvalue.</p>
+<div class="codehilite"><pre class="insert-before">  int localCount;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in struct <em>Compiler</em></div>
+<pre class="insert">  <span class="t">Upvalue</span> <span class="i">upvalues</span>[<span class="a">UINT8_COUNT</span>];
+</pre><pre class="insert-after">  int scopeDepth;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in struct <em>Compiler</em></div>
+
+<p>Để đơn giản, tôi đặt kích thước cố định cho nó. Các instruction <code>OP_GET_UPVALUE</code> và <code>OP_SET_UPVALUE</code> mã hóa chỉ số upvalue bằng một operand một byte, nên có giới hạn về số lượng upvalue mà một function có thể có — tức là số biến duy nhất mà nó có thể đóng. Với giới hạn đó, ta có thể dùng một mảng tĩnh lớn như vậy. Ta cũng cần đảm bảo compiler không vượt quá giới hạn này.</p>
+<div class="codehilite"><pre class="insert-before">    if (upvalue-&gt;index == index &amp;&amp; upvalue-&gt;isLocal == isLocal) {
+      return i;
+    }
+  }
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>addUpvalue</em>()</div>
+<pre class="insert">  <span class="k">if</span> (<span class="i">upvalueCount</span> == <span class="a">UINT8_COUNT</span>) {
+    <span class="i">error</span>(<span class="s">&quot;Too many closure variables in function.&quot;</span>);
+    <span class="k">return</span> <span class="n">0</span>;
+  }
+
+</pre><pre class="insert-after">  compiler-&gt;upvalues[upvalueCount].isLocal = isLocal;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>addUpvalue</em>()</div>
+
+<p>Cuối cùng là kiểu struct <code>Upvalue</code>:</p>
+<div class="codehilite"><div class="source-file"><em>compiler.c</em><br>
+add after struct <em>Local</em></div>
+<pre><span class="k">typedef</span> <span class="k">struct</span> {
+  <span class="t">uint8_t</span> <span class="i">index</span>;
+  <span class="t">bool</span> <span class="i">isLocal</span>;
+} <span class="t">Upvalue</span>;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, add after struct <em>Local</em></div>
+
+<p>Trường <code>index</code> lưu slot local mà upvalue đang bắt. Trường <code>isLocal</code> xứng đáng có một phần riêng để giải thích, và chúng ta sẽ đến đó ngay.</p>
+<h3><a href="#l&agrave;m-phẳng-upvalue" id="l&agrave;m-phẳng-upvalue"><small>25&#8202;.&#8202;2&#8202;.&#8202;2</small>L&agrave;m phẳng upvalue</a></h3>
+<p>Trong ví dụ tôi đưa ra trước đó, closure đang truy cập một biến được khai báo trong function bao quanh trực tiếp. Lox cũng hỗ trợ truy cập local variable được khai báo trong <em>bất kỳ</em> scope bao quanh nào, như:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="n">1</span>;
+  <span class="k">fun</span> <span class="i">middle</span>() {
+    <span class="k">fun</span> <span class="i">inner</span>() {
+      <span class="k">print</span> <span class="i">x</span>;
+    }
+  }
+}
+</pre></div>
+<p>Ở đây, ta đang truy cập <code>x</code> trong <code>inner()</code>. Biến này không được định nghĩa trong <code>middle()</code>, mà ở tận ngoài <code>outer()</code>. Ta cũng cần xử lý các trường hợp như thế này. Bạn <em>có thể</em> nghĩ rằng điều này không khó hơn nhiều vì biến đó đơn giản sẽ nằm đâu đó xa hơn trên stack. Nhưng hãy xem xét ví dụ <span name="devious">“quái chiêu”</span> này:</p>
+<aside name="devious">
+<p>Nếu bạn làm việc với ngôn ngữ lập trình đủ lâu, bạn sẽ phát triển kỹ năng tinh vi trong việc tạo ra những chương trình kỳ quặc như thế này — về mặt kỹ thuật thì hợp lệ nhưng rất dễ làm khó một bản cài đặt được viết bởi ai đó có trí tưởng tượng ít “xoắn” hơn bạn.</p>
+</aside>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;value&quot;</span>;
+  <span class="k">fun</span> <span class="i">middle</span>() {
+    <span class="k">fun</span> <span class="i">inner</span>() {
+      <span class="k">print</span> <span class="i">x</span>;
+    }
+
+    <span class="k">print</span> <span class="s">&quot;create inner closure&quot;</span>;
+    <span class="k">return</span> <span class="i">inner</span>;
+  }
+
+  <span class="k">print</span> <span class="s">&quot;return from outer&quot;</span>;
+  <span class="k">return</span> <span class="i">middle</span>;
+}
+
+<span class="k">var</span> <span class="i">mid</span> = <span class="i">outer</span>();
+<span class="k">var</span> <span class="i">in</span> = <span class="i">mid</span>();
+<span class="i">in</span>();
+</pre></div>
+<p>Khi bạn chạy đoạn code này, nó sẽ in ra:</p>
+<div class="codehilite"><pre>return from outer
+create inner closure
+value
+</pre></div>
+<p>Tôi biết, ví dụ này hơi rối. Điểm quan trọng là <code>outer()</code> — nơi <code>x</code> được khai báo — trả về và pop toàn bộ biến của nó khỏi stack <strong>trước khi</strong> <em>khai báo</em> của <code>inner()</code> được execute. Vì vậy, tại thời điểm chúng ta tạo closure cho <code>inner()</code>, <code>x</code> đã rời khỏi stack.</p>
+<p>Dưới đây là sơ đồ tôi đã vẽ lại luồng execute cho bạn:</p><img src="image/closures/execution-flow.png" alt="Tracing through the previous example program."/>
+<p>Bạn thấy <code>x</code> bị pop &#9312; trước khi nó được capture &#9313; và sau đó mới được truy cập &#9314; chứ? Thực tế, chúng ta có hai vấn đề:</p>
+<ol>
+<li>
+<p>Cần resolve các local variable được khai báo trong những function bao quanh, vượt ra ngoài function bao quanh trực tiếp.</p>
+</li>
+<li>
+<p>Cần có khả năng capture các biến đã rời khỏi stack.</p>
+</li>
+</ol>
+<p>May mắn thay, chúng ta đang trong quá trình thêm upvalue vào VM, và upvalue được thiết kế đặc biệt để theo dõi các biến đã thoát khỏi stack. Vì vậy, bằng một chút “đệ quy tự tham chiếu” thú vị, chúng ta có thể dùng upvalue để cho phép upvalue capture các biến được khai báo bên ngoài function bao quanh trực tiếp.</p>
+<p>Giải pháp là cho phép một closure capture hoặc là một local variable, hoặc <em>một upvalue hiện có</em> trong function bao quanh trực tiếp. Nếu một function lồng sâu tham chiếu tới một local variable được khai báo cách đó vài cấp, chúng ta sẽ “luồn” nó qua tất cả các function trung gian bằng cách để mỗi function capture một upvalue cho function tiếp theo sử dụng.</p><img src="image/closures/linked-upvalues.png" alt="An upvalue in inner() points to an upvalue in middle(), which points to a local variable in outer()."/>
+<p>Trong ví dụ trên, <code>middle()</code> capture local variable <code>x</code> trong function bao quanh trực tiếp <code>outer()</code> và lưu nó trong upvalue của chính nó. Nó làm vậy ngay cả khi bản thân <code>middle()</code> không hề tham chiếu tới <code>x</code>. Sau đó, khi khai báo <code>inner()</code> được execute, closure của nó lấy <em>upvalue</em> từ <code>ObjClosure</code> của <code>middle()</code> — upvalue này đã capture <code>x</code>. Một function chỉ capture — local hoặc upvalue — <em>từ function bao quanh trực tiếp</em>, và điều này được đảm bảo là vẫn tồn tại tại thời điểm khai báo function bên trong được execute.</p>
+<p>Để triển khai điều này, <code>resolveUpvalue()</code> trở thành hàm đệ quy.</p>
+<div class="codehilite"><pre class="insert-before">  if (local != -1) {
+    return addUpvalue(compiler, (uint8_t)local, true);
+  }
+
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>resolveUpvalue</em>()</div>
+<pre class="insert">  <span class="t">int</span> <span class="i">upvalue</span> = <span class="i">resolveUpvalue</span>(<span class="i">compiler</span>-&gt;<span class="i">enclosing</span>, <span class="i">name</span>);
+  <span class="k">if</span> (<span class="i">upvalue</span> != -<span class="n">1</span>) {
+    <span class="k">return</span> <span class="i">addUpvalue</span>(<span class="i">compiler</span>, (<span class="t">uint8_t</span>)<span class="i">upvalue</span>, <span class="k">false</span>);
+  }
+
+</pre><pre class="insert-after">  return -1;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>resolveUpvalue</em>()</div>
+
+<p>Chỉ thêm ba dòng code nữa thôi, nhưng tôi thấy hàm này khá khó để viết đúng ngay lần đầu. Mặc dù thực ra tôi không phát minh gì mới, chỉ là chuyển ý tưởng từ Lua sang. Hầu hết các hàm đệ quy hoặc làm toàn bộ công việc <strong>trước</strong> lời gọi đệ quy (duyệt <strong>tiền thứ tự</strong>, hay “trên đường đi xuống”), hoặc làm toàn bộ công việc <strong>sau</strong> lời gọi đệ quy (duyệt <strong>hậu thứ tự</strong>, hay “trên đường quay lên”). Hàm này thì làm cả hai. Lời gọi đệ quy nằm ngay giữa.</p>
+<p>Hãy đi qua nó thật chậm. Đầu tiên, ta tìm một local variable trùng khớp trong function bao quanh. Nếu tìm thấy, ta capture local đó và trả về. Đây là trường hợp <span name="base">cơ sở</span>.</p>
+<aside name="base">
+<p>Trường hợp cơ sở còn lại, tất nhiên, là khi không có function bao quanh. Khi đó, biến không thể được resolve theo phạm vi từ vựng và được coi là global.</p>
+</aside>
+<p>Nếu không, ta tìm một local variable nằm ngoài function bao quanh trực tiếp. Ta làm điều này bằng cách gọi đệ quy <code>resolveUpvalue()</code> trên <em>compiler bao quanh</em>, chứ không phải compiler hiện tại. Chuỗi lời gọi <code>resolveUpvalue()</code> này sẽ lần theo chuỗi compiler lồng nhau cho đến khi gặp một trong các trường hợp cơ sở — hoặc tìm thấy một local variable thực sự để capture, hoặc hết compiler để duyệt.</p>
+<p>Khi tìm thấy một local variable, lời gọi <span name="outer">lồng sâu nhất</span> tới <code>resolveUpvalue()</code> sẽ capture nó và trả về chỉ số upvalue. Chỉ số này được trả về cho lời gọi tiếp theo (function bên trong hơn). Lời gọi đó sẽ capture <em>upvalue</em> từ function bao quanh, và cứ thế tiếp tục. Khi mỗi lời gọi <code>resolveUpvalue()</code> lồng nhau trả về, chúng ta “đi ngược” trở lại function bên trong cùng nơi identifier đang được resolve. Ở mỗi bước, ta thêm một upvalue vào function trung gian và truyền chỉ số upvalue kết quả xuống lời gọi tiếp theo.</p>
+<aside name="outer">
+<p>Mỗi lời gọi đệ quy tới <code>resolveUpvalue()</code> sẽ “bước ra” một cấp lồng nhau của function. Vì vậy, một <em>lời gọi đệ quy bên trong</em> sẽ tham chiếu tới một khai báo lồng <em>bên ngoài</em>. Lời gọi đệ quy trong cùng tới <code>resolveUpvalue()</code> tìm thấy local variable sẽ thuộc về function <em>ngoài cùng</em>, ngay bên trong function bao quanh nơi biến đó thực sự được khai báo.</p>
+</aside>
+<p>Sẽ dễ hiểu hơn nếu ta lần theo ví dụ ban đầu khi resolve <code>x</code>:</p><img src="image/closures/recursion.png" alt="Tracing through a recursive call to resolveUpvalue()."/>
+<p>Lưu ý rằng lời gọi mới tới <code>addUpvalue()</code> truyền <code>false</code> cho tham số <code>isLocal</code>. Giờ bạn thấy flag này điều khiển việc closure capture một local variable hay một upvalue từ function bao quanh.</p>
+<p>Khi compiler đến cuối một khai báo function, mọi tham chiếu biến đã được resolve thành local, upvalue hoặc global. Mỗi upvalue có thể capture một local variable từ function bao quanh, hoặc một upvalue trong trường hợp closure bắc cầu. Giờ chúng ta đã có đủ dữ liệu để sinh bytecode tạo closure ở runtime, closure này sẽ capture tất cả biến cần thiết.</p>
+<div class="codehilite"><pre class="insert-before">  emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>function</em>()</div>
+<pre class="insert">
+
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">function</span>-&gt;<span class="i">upvalueCount</span>; <span class="i">i</span>++) {
+    <span class="i">emitByte</span>(<span class="i">compiler</span>.<span class="i">upvalues</span>[<span class="i">i</span>].<span class="i">isLocal</span> ? <span class="n">1</span> : <span class="n">0</span>);
+    <span class="i">emitByte</span>(<span class="i">compiler</span>.<span class="i">upvalues</span>[<span class="i">i</span>].<span class="i">index</span>);
+  }
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>function</em>()</div>
+
+<p>Instruction <code>OP_CLOSURE</code> là duy nhất ở chỗ nó có định dạng mã hóa kích thước thay đổi. Với mỗi upvalue mà closure capture, sẽ có hai operand một byte. Mỗi cặp operand chỉ định upvalue đó capture cái gì. Nếu byte đầu tiên là 1, nó capture một local variable trong function bao quanh. Nếu là 0, nó capture một trong các upvalue của function. Byte tiếp theo là chỉ số slot local hoặc chỉ số upvalue cần capture.</p>
+<p>Cách mã hóa đặc biệt này nghĩa là ta cần hỗ trợ riêng trong code disassembly cho <code>OP_CLOSURE</code>.</p>
+<div class="codehilite"><pre class="insert-before">      printf(&quot;\n&quot;);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">
+
+      <span class="t">ObjFunction</span>* <span class="i">function</span> = <span class="a">AS_FUNCTION</span>(
+          <span class="i">chunk</span>-&gt;<span class="i">constants</span>.<span class="i">values</span>[<span class="i">constant</span>]);
+      <span class="k">for</span> (<span class="t">int</span> <span class="i">j</span> = <span class="n">0</span>; <span class="i">j</span> &lt; <span class="i">function</span>-&gt;<span class="i">upvalueCount</span>; <span class="i">j</span>++) {
+        <span class="t">int</span> <span class="i">isLocal</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span>++];
+        <span class="t">int</span> <span class="i">index</span> = <span class="i">chunk</span>-&gt;<span class="i">code</span>[<span class="i">offset</span>++];
+        <span class="i">printf</span>(<span class="s">&quot;%04d      |                     %s %d</span><span class="e">\n</span><span class="s">&quot;</span>,
+               <span class="i">offset</span> - <span class="n">2</span>, <span class="i">isLocal</span> ? <span class="s">&quot;local&quot;</span> : <span class="s">&quot;upvalue&quot;</span>, <span class="i">index</span>);
+      }
+
+</pre><pre class="insert-after">      return offset;
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Ví dụ, hãy xem script này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+  <span class="k">var</span> <span class="i">b</span> = <span class="n">2</span>;
+  <span class="k">fun</span> <span class="i">middle</span>() {
+    <span class="k">var</span> <span class="i">c</span> = <span class="n">3</span>;
+    <span class="k">var</span> <span class="i">d</span> = <span class="n">4</span>;
+    <span class="k">fun</span> <span class="i">inner</span>() {
+      <span class="k">print</span> <span class="i">a</span> + <span class="i">c</span> + <span class="i">b</span> + <span class="i">d</span>;
+    }
+  }
+}
+</pre></div>
+<p>Nếu chúng ta disassemble instruction tạo closure cho <code>inner()</code>, nó sẽ in ra:</p>
+<div class="codehilite"><pre>0004    9 OP_CLOSURE          2 &lt;fn inner&gt;
+0006      |                     upvalue 0
+0008      |                     local 1
+0010      |                     upvalue 1
+0012      |                     local 2
+</pre></div>
+<p>Chúng ta còn hai instruction khác, đơn giản hơn, cần thêm hỗ trợ trong disassembler.</p>
+<div class="codehilite"><pre class="insert-before">    case OP_SET_GLOBAL:
+      return constantInstruction(&quot;OP_SET_GLOBAL&quot;, chunk, offset);
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_GET_UPVALUE</span>:
+      <span class="k">return</span> <span class="i">byteInstruction</span>(<span class="s">&quot;OP_GET_UPVALUE&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+    <span class="k">case</span> <span class="a">OP_SET_UPVALUE</span>:
+      <span class="k">return</span> <span class="i">byteInstruction</span>(<span class="s">&quot;OP_SET_UPVALUE&quot;</span>, <span class="i">chunk</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_EQUAL:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Cả hai đều chỉ có một operand một byte, nên không có gì đặc biệt. Chúng ta chỉ cần thêm một include để module debug có thể dùng <code>AS_FUNCTION()</code>.</p>
+<div class="codehilite"><pre class="insert-before">#include &quot;debug.h&quot;
+</pre><div class="source-file"><em>debug.c</em></div>
+<pre class="insert"><span class="a">#include &quot;object.h&quot;</span>
+</pre><pre class="insert-after">#include &quot;value.h&quot;
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em></div>
+
+<p>Vậy là compiler đã ở trạng thái mong muốn. Với mỗi khai báo function, nó xuất ra một instruction <code>OP_CLOSURE</code> theo sau là một loạt cặp operand byte cho mỗi upvalue cần capture ở runtime. Giờ là lúc chuyển sang phía VM và cho mọi thứ chạy.</p>
+<h2><a href="#upvalue-objects" id="upvalue-objects"><small>25&#8202;.&#8202;3</small>Upvalue Objects</a></h2>
+<p>Mỗi instruction <code>OP_CLOSURE</code> giờ được theo sau bởi một loạt byte chỉ định các upvalue mà <code>ObjClosure</code> sẽ sở hữu. Trước khi xử lý các operand đó, chúng ta cần một biểu diễn runtime cho upvalue.</p>
+<div class="codehilite"><div class="source-file"><em>object.h</em><br>
+add after struct <em>ObjString</em></div>
+<pre><span class="k">typedef</span> <span class="k">struct</span> <span class="t">ObjUpvalue</span> {
+  <span class="t">Obj</span> <span class="i">obj</span>;
+  <span class="t">Value</span>* <span class="i">location</span>;
+} <span class="t">ObjUpvalue</span>;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after struct <em>ObjString</em></div>
+
+<p>Chúng ta biết upvalue phải quản lý các biến bị đóng mà không còn sống trên stack, điều này đồng nghĩa với việc cần cấp phát động. Cách dễ nhất để làm điều đó trong VM là xây dựng dựa trên hệ thống object sẵn có. Như vậy, khi chúng ta triển khai garbage collector trong <a href="garbage-collection.html">chương tiếp theo</a>, GC cũng có thể quản lý bộ nhớ cho upvalue.</p>
+<p>Vì vậy, cấu trúc upvalue ở runtime là một <code>ObjUpvalue</code> với phần header <code>Obj</code> thông thường. Tiếp theo là trường <code>location</code> trỏ tới biến bị đóng. Lưu ý đây là một <em>con trỏ</em> tới <code>Value</code>, không phải chính <code>Value</code>. Nó là tham chiếu tới một <em>biến</em>, không phải <em>giá trị</em>. Điều này quan trọng vì nó có nghĩa là khi chúng ta gán cho biến mà upvalue capture, ta đang gán cho biến thực sự, không phải một bản sao. Ví dụ:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;before&quot;</span>;
+  <span class="k">fun</span> <span class="i">inner</span>() {
+    <span class="i">x</span> = <span class="s">&quot;assigned&quot;</span>;
+  }
+  <span class="i">inner</span>();
+  <span class="k">print</span> <span class="i">x</span>;
+}
+<span class="i">outer</span>();
+</pre></div>
+<p>Chương trình này sẽ in ra <code>"assigned"</code> ngay cả khi closure gán cho <code>x</code> và function bao quanh truy cập nó.</p>
+<p>Vì upvalue là object, chúng ta có đầy đủ cơ chế object quen thuộc, bắt đầu với một hàm giống constructor:</p>
+<div class="codehilite"><pre class="insert-before">ObjString* copyString(const char* chars, int length);
+</pre><div class="source-file"><em>object.h</em><br>
+add after <em>copyString</em>()</div>
+<pre class="insert"><span class="t">ObjUpvalue</span>* <span class="i">newUpvalue</span>(<span class="t">Value</span>* <span class="i">slot</span>);
+</pre><pre class="insert-after">void printObject(Value value);
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, add after <em>copyString</em>()</div>
+
+<p>Hàm này nhận địa chỉ của slot nơi biến bị đóng đang sống. Đây là phần cài đặt:</p>
+<div class="codehilite"><div class="source-file"><em>object.c</em><br>
+add after <em>copyString</em>()</div>
+<pre><span class="t">ObjUpvalue</span>* <span class="i">newUpvalue</span>(<span class="t">Value</span>* <span class="i">slot</span>) {
+  <span class="t">ObjUpvalue</span>* <span class="i">upvalue</span> = <span class="a">ALLOCATE_OBJ</span>(<span class="t">ObjUpvalue</span>, <span class="a">OBJ_UPVALUE</span>);
+  <span class="i">upvalue</span>-&gt;<span class="i">location</span> = <span class="i">slot</span>;
+  <span class="k">return</span> <span class="i">upvalue</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, add after <em>copyString</em>()</div>
+
+<p>Chúng ta chỉ cần khởi tạo object và lưu con trỏ. Điều này yêu cầu một kiểu object mới.</p>
+<div class="codehilite"><pre class="insert-before">  OBJ_STRING,
+</pre><div class="source-file"><em>object.h</em><br>
+in enum <em>ObjType</em></div>
+<pre class="insert">  <span class="a">OBJ_UPVALUE</span>
+</pre><pre class="insert-after">} ObjType;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in enum <em>ObjType</em></div>
+
+<p>Và ở phía giải phóng, một hàm giống destructor:</p>
+<div class="codehilite"><pre class="insert-before">      FREE(ObjString, object);
+      break;
+    }
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_UPVALUE</span>:
+      <span class="a">FREE</span>(<span class="t">ObjUpvalue</span>, <span class="i">object</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p>Nhiều closure có thể cùng đóng trên một biến, nên <code>ObjUpvalue</code> không sở hữu biến mà nó tham chiếu. Do đó, thứ duy nhất cần giải phóng là chính <code>ObjUpvalue</code>.</p>
+<p>Và cuối cùng, hàm in:</p>
+<div class="codehilite"><pre class="insert-before">    case OBJ_STRING:
+      printf(&quot;%s&quot;, AS_CSTRING(value));
+      break;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>printObject</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OBJ_UPVALUE</span>:
+      <span class="i">printf</span>(<span class="s">&quot;upvalue&quot;</span>);
+      <span class="k">break</span>;
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>printObject</em>()</div>
+
+<p>Việc in này không hữu ích cho người dùng cuối. Upvalue là object chỉ để chúng ta tận dụng quản lý bộ nhớ của VM. Chúng không phải là giá trị hạng nhất mà người dùng Lox có thể truy cập trực tiếp trong chương trình. Vì vậy, đoạn code này sẽ không bao giờ thực sự chạy… nhưng nó giúp compiler không cảnh báo về một nhánh <code>switch</code> chưa xử lý, nên ta vẫn để nó ở đây.</p>
+<h3><a href="#upvalue-trong-closure" id="upvalue-trong-closure"><small>25&#8202;.&#8202;3&#8202;.&#8202;1</small>Upvalue trong closure</a></h3>
+<p>Khi tôi giới thiệu upvalue lần đầu, tôi đã nói mỗi closure có một mảng upvalue. Giờ chúng ta mới quay lại để triển khai điều đó.</p>
+<div class="codehilite"><pre class="insert-before">  ObjFunction* function;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>ObjClosure</em></div>
+<pre class="insert">  <span class="t">ObjUpvalue</span>** <span class="i">upvalues</span>;
+  <span class="t">int</span> <span class="i">upvalueCount</span>;
+</pre><pre class="insert-after">} ObjClosure;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>ObjClosure</em></div>
+
+<p><span name="count">Các</span> closure khác nhau có thể có số lượng upvalue khác nhau, nên ta cần một mảng động. Bản thân các upvalue cũng được cấp phát động, nên ta có một con trỏ kép — một con trỏ tới một mảng động các con trỏ tới upvalue. Ta cũng lưu số phần tử trong mảng.</p>
+<aside name="count">
+<p>Việc lưu số lượng upvalue trong closure là dư thừa vì <code>ObjFunction</code> mà <code>ObjClosure</code> tham chiếu cũng giữ số này. Như thường lệ, đoạn code “lạ” này là để làm hài lòng GC. Bộ gom rác có thể cần biết kích thước mảng upvalue của một <code>ObjClosure</code> sau khi <code>ObjFunction</code> tương ứng của closure đó đã bị giải phóng.</p>
+</aside>
+<p>Khi tạo một <code>ObjClosure</code>, ta cấp phát một mảng upvalue với kích thước phù hợp, được xác định tại thời điểm compile và lưu trong <code>ObjFunction</code>.</p>
+<div class="codehilite"><pre class="insert-before">ObjClosure* newClosure(ObjFunction* function) {
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newClosure</em>()</div>
+<pre class="insert">  <span class="t">ObjUpvalue</span>** <span class="i">upvalues</span> = <span class="a">ALLOCATE</span>(<span class="t">ObjUpvalue</span>*,
+                                   <span class="i">function</span>-&gt;<span class="i">upvalueCount</span>);
+  <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">function</span>-&gt;<span class="i">upvalueCount</span>; <span class="i">i</span>++) {
+    <span class="i">upvalues</span>[<span class="i">i</span>] = <span class="a">NULL</span>;
+  }
+
+</pre><pre class="insert-after">  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newClosure</em>()</div>
+
+<p>Trước khi tạo closure object, ta cấp phát mảng upvalue và khởi tạo tất cả phần tử về <code>NULL</code>. Nghi thức “kỳ lạ” này với bộ nhớ là một điệu nhảy cẩn trọng để làm hài lòng các vị thần (garbage collection) sắp tới. Nó đảm bảo bộ quản lý bộ nhớ không bao giờ thấy vùng nhớ chưa được khởi tạo.</p>
+<p>Sau đó, ta lưu mảng vào closure mới, đồng thời sao chép số lượng từ <code>ObjFunction</code>.</p>
+<div class="codehilite"><pre class="insert-before">  closure-&gt;function = function;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newClosure</em>()</div>
+<pre class="insert">  <span class="i">closure</span>-&gt;<span class="i">upvalues</span> = <span class="i">upvalues</span>;
+  <span class="i">closure</span>-&gt;<span class="i">upvalueCount</span> = <span class="i">function</span>-&gt;<span class="i">upvalueCount</span>;
+</pre><pre class="insert-after">  return closure;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newClosure</em>()</div>
+
+<p>Khi giải phóng một <code>ObjClosure</code>, ta cũng giải phóng mảng upvalue.</p>
+<div class="codehilite"><pre class="insert-before">    case OBJ_CLOSURE: {
+</pre><div class="source-file"><em>memory.c</em><br>
+in <em>freeObject</em>()</div>
+<pre class="insert">      <span class="t">ObjClosure</span>* <span class="i">closure</span> = (<span class="t">ObjClosure</span>*)<span class="i">object</span>;
+      <span class="a">FREE_ARRAY</span>(<span class="t">ObjUpvalue</span>*, <span class="i">closure</span>-&gt;<span class="i">upvalues</span>,
+                 <span class="i">closure</span>-&gt;<span class="i">upvalueCount</span>);
+</pre><pre class="insert-after">      FREE(ObjClosure, object);
+</pre></div>
+<div class="source-file-narrow"><em>memory.c</em>, in <em>freeObject</em>()</div>
+
+<p><code>ObjClosure</code> không sở hữu các <code>ObjUpvalue</code> bản thân, nhưng nó sở hữu <em>mảng</em> chứa các con trỏ tới những upvalue đó.</p>
+<p>Chúng ta sẽ điền mảng upvalue này trong interpreter khi nó tạo closure. Đây là lúc ta duyệt qua tất cả operand sau <code>OP_CLOSURE</code> để xem mỗi slot upvalue capture loại gì.</p>
+<div class="codehilite"><pre class="insert-before">        push(OBJ_VAL(closure));
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">        <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">closure</span>-&gt;<span class="i">upvalueCount</span>; <span class="i">i</span>++) {
+          <span class="t">uint8_t</span> <span class="i">isLocal</span> = <span class="a">READ_BYTE</span>();
+          <span class="t">uint8_t</span> <span class="i">index</span> = <span class="a">READ_BYTE</span>();
+          <span class="k">if</span> (<span class="i">isLocal</span>) {
+            <span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">i</span>] =
+                <span class="i">captureUpvalue</span>(<span class="i">frame</span>-&gt;<span class="i">slots</span> + <span class="i">index</span>);
+          } <span class="k">else</span> {
+            <span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">i</span>] = <span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">index</span>];
+          }
+        }
+</pre><pre class="insert-after">        break;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Đoạn code này chính là khoảnh khắc “ma thuật” khi một closure được hình thành. Chúng ta lặp qua từng upvalue mà closure mong đợi. Với mỗi upvalue, ta đọc một cặp byte operand. Nếu upvalue đóng trên một local variable trong function bao quanh, ta để <code>captureUpvalue()</code> lo phần việc này.</p>
+<p>Ngược lại, ta sẽ capture một upvalue từ function bao quanh. Một instruction <code>OP_CLOSURE</code> được generated ở cuối một khai báo function. Tại thời điểm execute khai báo đó, function <em>hiện tại</em> chính là function bao quanh. Điều này có nghĩa closure của function hiện tại được lưu trong <code>CallFrame</code> ở đỉnh callstack. Vì vậy, để lấy một upvalue từ function bao quanh, ta có thể đọc trực tiếp từ biến local <code>frame</code>, biến này giữ tham chiếu tới <code>CallFrame</code> đó.</p>
+<p>Việc đóng trên một local variable thú vị hơn. Phần lớn công việc diễn ra trong một hàm riêng, nhưng trước tiên ta cần tính toán đối số để truyền vào nó. Ta cần lấy một con trỏ tới slot của local bị capture trong cửa sổ stack của function bao quanh. Cửa sổ đó bắt đầu tại <code>frame-&gt;slots</code>, trỏ tới slot số 0. Cộng thêm <code>index</code> sẽ dịch tới slot local mà ta muốn capture. Ta truyền con trỏ đó vào đây:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>callValue</em>()</div>
+<pre><span class="k">static</span> <span class="t">ObjUpvalue</span>* <span class="i">captureUpvalue</span>(<span class="t">Value</span>* <span class="i">local</span>) {
+  <span class="t">ObjUpvalue</span>* <span class="i">createdUpvalue</span> = <span class="i">newUpvalue</span>(<span class="i">local</span>);
+  <span class="k">return</span> <span class="i">createdUpvalue</span>;
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>callValue</em>()</div>
+
+<p>Nghe có vẻ hơi buồn cười. Tất cả những gì nó làm là tạo một <code>ObjUpvalue</code> mới để capture stack slot được truyền vào và trả về nó. Liệu ta có cần một hàm riêng cho việc này không? Thực ra là chưa <em>cần</em>… nhưng bạn biết đấy, kiểu gì rồi ta cũng sẽ nhét thêm code vào đây.</p>
+<p>Trước hết, hãy hoàn tất phần đang làm. Quay lại code trong interpreter xử lý <code>OP_CLOSURE</code>, cuối cùng ta sẽ kết thúc vòng lặp qua mảng upvalue và khởi tạo từng phần tử. Khi hoàn tất, ta có một closure mới với mảng upvalue trỏ tới các biến.</p>
+<p>Với điều đó, ta có thể triển khai các instruction làm việc với những upvalue này.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_GET_UPVALUE</span>: {
+        <span class="t">uint8_t</span> <span class="i">slot</span> = <span class="a">READ_BYTE</span>();
+        <span class="i">push</span>(*<span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">slot</span>]-&gt;<span class="i">location</span>);
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Operand là chỉ số trong mảng upvalue của function hiện tại. Vì vậy, ta chỉ cần tìm upvalue tương ứng và dereference con trỏ <code>location</code> của nó để đọc giá trị trong slot đó. Việc gán giá trị cũng tương tự.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_SET_UPVALUE</span>: {
+        <span class="t">uint8_t</span> <span class="i">slot</span> = <span class="a">READ_BYTE</span>();
+        *<span class="i">frame</span>-&gt;<span class="i">closure</span>-&gt;<span class="i">upvalues</span>[<span class="i">slot</span>]-&gt;<span class="i">location</span> = <span class="i">peek</span>(<span class="n">0</span>);
+        <span class="k">break</span>;
+      }
+</pre><pre class="insert-after">      case OP_EQUAL: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Chúng ta <span name="assign">lấy</span> giá trị trên đỉnh stack và lưu nó vào slot được trỏ bởi upvalue đã chọn. Giống như các instruction cho local variable, điều quan trọng là các instruction này phải nhanh. Chương trình của người dùng liên tục đọc và ghi biến, nên nếu việc này chậm, mọi thứ sẽ chậm theo. Và như thường lệ, cách để làm chúng nhanh là giữ cho chúng đơn giản. Hai instruction mới này khá ổn: không có control flow, không tính toán phức tạp, chỉ vài lần truy cập gián tiếp qua con trỏ và một lệnh <code>push()</code>.</p>
+<aside name="assign">
+<p>Instruction gán không <em>pop</em> giá trị khỏi stack vì, nhớ rằng, trong Lox, gán là một biểu thức. Do đó, kết quả của phép gán — chính là giá trị được gán — cần được giữ lại trên stack cho biểu thức bao quanh.</p>
+</aside>
+<p>Đây là một cột mốc. Miễn là tất cả biến vẫn còn trên stack, chúng ta đã có closure hoạt động. Hãy thử:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;outside&quot;</span>;
+  <span class="k">fun</span> <span class="i">inner</span>() {
+    <span class="k">print</span> <span class="i">x</span>;
+  }
+  <span class="i">inner</span>();
+}
+<span class="i">outer</span>();
+</pre></div>
+<p>Chạy đoạn này, và nó sẽ in ra chính xác <code>"outside"</code>.</p>
+<h2><a href="#closed-upvalues" id="closed-upvalues"><small>25&#8202;.&#8202;4</small>Closed Upvalues</a></h2>
+<p>Tất nhiên, một tính năng then chốt của closure là chúng giữ biến lại lâu bao nhiêu tùy cần, ngay cả sau khi function khai báo biến đó đã trả về. Đây là một ví dụ khác <em>nên</em> hoạt động:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">outer</span>() {
+  <span class="k">var</span> <span class="i">x</span> = <span class="s">&quot;outside&quot;</span>;
+  <span class="k">fun</span> <span class="i">inner</span>() {
+    <span class="k">print</span> <span class="i">x</span>;
+  }
+
+  <span class="k">return</span> <span class="i">inner</span>;
+}
+
+<span class="k">var</span> <span class="i">closure</span> = <span class="i">outer</span>();
+<span class="i">closure</span>();
+</pre></div>
+<p>Nhưng nếu bạn chạy nó ngay bây giờ… ai biết chuyện gì sẽ xảy ra? Ở runtime, nó sẽ đọc từ một stack slot mà không còn chứa biến bị đóng nữa. Như tôi đã nhắc vài lần, mấu chốt của vấn đề là biến trong closure không có ngữ nghĩa stack. Điều đó có nghĩa là ta phải “nhấc” chúng ra khỏi stack khi function nơi chúng được khai báo trả về. Phần cuối cùng của chương này sẽ làm điều đó.</p>
+<h3><a href="#giá-trị-&-biến" id="giá-trị-&-biến"><small>25&#8202;.&#8202;4&#8202;.&#8202;1</small>Giá trị &amp; biến</a></h3>
+<p>Trước khi viết code, tôi muốn đào sâu vào một điểm ngữ nghĩa quan trọng. Closure đóng trên một <em>giá trị</em> hay một <em>biến</em>? Đây không chỉ là một câu hỏi <span name="academic">học thuật</span> suông. Tôi không chỉ đang “bới lông tìm vết”. Hãy xem xét:</p>
+<aside name="academic">
+<p>Nếu Lox không cho phép gán, đây <em>sẽ</em> chỉ là một câu hỏi học thuật.</p>
+</aside>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">globalSet</span>;
+<span class="k">var</span> <span class="i">globalGet</span>;
+
+<span class="k">fun</span> <span class="i">main</span>() {
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;initial&quot;</span>;
+
+  <span class="k">fun</span> <span class="i">set</span>() { <span class="i">a</span> = <span class="s">&quot;updated&quot;</span>; }
+  <span class="k">fun</span> <span class="i">get</span>() { <span class="k">print</span> <span class="i">a</span>; }
+
+  <span class="i">globalSet</span> = <span class="i">set</span>;
+  <span class="i">globalGet</span> = <span class="i">get</span>;
+}
+
+<span class="i">main</span>();
+<span class="i">globalSet</span>();
+<span class="i">globalGet</span>();
+</pre></div>
+<p>Hàm <code>main()</code> bên ngoài tạo ra hai closure và lưu chúng vào các biến <span name="global">global</span> để chúng tồn tại lâu hơn cả thời gian execute của chính <code>main()</code>. Cả hai closure này đều capture cùng một biến. Closure đầu tiên gán một giá trị mới cho biến đó, và closure thứ hai đọc giá trị của biến.</p>
+<aside name="global">
+<p>Việc tôi dùng vài biến global ở đây không có gì đặc biệt. Tôi chỉ cần một cách để trả về hai giá trị từ một hàm, và vì Lox không có kiểu tập hợp nào, lựa chọn của tôi khá hạn chế.</p>
+</aside>
+<p>Lệnh gọi <code>globalGet()</code> sẽ in ra gì? Nếu closure capture <em>giá trị</em> thì mỗi closure sẽ có bản sao riêng của <code>a</code> với giá trị mà <code>a</code> có tại thời điểm khai báo hàm của closure đó được execute. Lệnh gọi <code>globalSet()</code> sẽ thay đổi bản sao của <code>a</code> trong <code>set()</code>, nhưng bản sao của <code>get()</code> sẽ không bị ảnh hưởng. Do đó, <code>globalGet()</code> sẽ in ra <code>"initial"</code>.</p>
+<p>Nếu closure capture <em>biến</em>, thì <code>get()</code> và <code>set()</code> sẽ cùng capture — tức là tham chiếu tới — <em>cùng một biến có thể thay đổi</em>. Khi <code>set()</code> thay đổi <code>a</code>, nó thay đổi chính <code>a</code> mà <code>get()</code> đang đọc. Chỉ có một <code>a</code> duy nhất. Điều này đồng nghĩa lệnh gọi <code>globalGet()</code> sẽ in ra <code>"updated"</code>.</p>
+<p>Vậy là trường hợp nào? Câu trả lời cho Lox và hầu hết các ngôn ngữ tôi biết có closure là trường hợp thứ hai. Closure capture biến. Bạn có thể hình dung chúng như việc capture <em>nơi giá trị sống</em>. Điều này rất quan trọng khi xử lý các biến bị đóng mà không còn nằm trên stack. Khi một biến được chuyển lên heap, ta cần đảm bảo tất cả closure capture biến đó vẫn giữ tham chiếu tới <em>một</em> vị trí mới duy nhất của nó. Như vậy, khi biến bị thay đổi, tất cả closure đều thấy sự thay đổi đó.</p>
+<h3><a href="#đóng-upvalue" id="đóng-upvalue"><small>25&#8202;.&#8202;4&#8202;.&#8202;2</small>Đóng upvalue</a></h3>
+<p>Chúng ta biết rằng local variable luôn bắt đầu trên stack. Điều này nhanh hơn và cho phép compiler một lượt (single-pass) sinh code trước khi phát hiện biến đã bị capture. Ta cũng biết rằng các biến bị đóng cần được chuyển lên heap nếu closure sống lâu hơn function nơi biến đó được khai báo.</p>
+<p>Theo cách của Lua, ta sẽ dùng thuật ngữ <strong>open upvalue</strong> để chỉ một upvalue trỏ tới local variable vẫn còn trên stack. Khi biến được chuyển lên heap, ta sẽ <em>đóng</em> upvalue và kết quả, tất nhiên, là một <strong>closed upvalue</strong>. Có hai câu hỏi cần trả lời:</p>
+<ol>
+<li>
+<p>Trên heap, biến bị đóng sẽ được đặt ở đâu?</p>
+</li>
+<li>
+<p>Khi nào thì ta đóng upvalue?</p>
+</li>
+</ol>
+<p>Câu trả lời cho câu hỏi đầu tiên khá dễ. Ta đã có sẵn một object tiện lợi trên heap đại diện cho tham chiếu tới một biến — chính là <code>ObjUpvalue</code>. Biến bị đóng sẽ được chuyển vào một trường mới ngay bên trong struct <code>ObjUpvalue</code>. Như vậy, ta không cần cấp phát heap bổ sung để đóng một upvalue.</p>
+<p>Câu trả lời cho câu hỏi thứ hai cũng khá rõ ràng. Miễn là biến còn trên stack, có thể vẫn có code tham chiếu tới nó ở đó, và code đó phải hoạt động đúng. Vì vậy, thời điểm hợp lý để “nhấc” biến lên heap là muộn nhất có thể. Nếu ta chuyển local variable ngay khi nó ra khỏi scope, ta chắc chắn rằng sẽ không có code nào sau đó cố truy cập nó từ stack. <span name="after">Sau</span> khi biến ra khỏi scope, compiler sẽ báo lỗi nếu có code nào cố dùng nó.</p>
+<aside name="after">
+<p>Ở đây, “sau” được hiểu theo nghĩa phạm vi từ vựng hoặc văn bản — tức là code nằm sau dấu <code>}</code> của block chứa khai báo biến bị đóng.</p>
+</aside>
+<p>Compiler vốn đã sinh ra instruction <code>OP_POP</code> khi một local variable ra khỏi scope. Nếu biến bị closure capture, ta sẽ thay vào đó sinh ra một instruction khác để nhấc biến đó ra khỏi stack và đưa vào upvalue tương ứng. Để làm vậy, compiler cần biết những <span name="param">local</span> nào bị đóng.</p>
+<aside name="param">
+<p>Compiler không pop tham số và các local được khai báo ngay bên trong thân hàm. Chúng ta cũng sẽ xử lý chúng ở runtime.</p>
+</aside>
+<p>Compiler vốn đã duy trì một mảng <code>Upvalue</code> struct cho mỗi local variable trong hàm để theo dõi trạng thái này. Mảng đó rất tốt để trả lời câu hỏi “Closure này dùng những biến nào?”, nhưng lại không phù hợp để trả lời “Có <em>hàm nào</em> capture local variable này không?”. Đặc biệt, khi <code>Compiler</code> của một closure đã kết thúc, <code>Compiler</code> của hàm bao quanh — nơi biến bị capture — không còn truy cập được trạng thái upvalue nữa.</p>
+<p>Nói cách khác, compiler duy trì các con trỏ từ upvalue tới local mà chúng capture, nhưng không có chiều ngược lại. Vì vậy, trước tiên ta cần thêm một cơ chế theo dõi bổ sung vào struct <code>Local</code> hiện có để biết một local có bị closure capture hay không.</p>
+<div class="codehilite"><pre class="insert-before">  int depth;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in struct <em>Local</em></div>
+<pre class="insert">  <span class="t">bool</span> <span class="i">isCaptured</span>;
+</pre><pre class="insert-after">} Local;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in struct <em>Local</em></div>
+
+<p>Trường này là <code>true</code> nếu local bị bất kỳ khai báo hàm lồng nào sau đó capture. Ban đầu, tất cả local đều không bị capture.</p>
+<div class="codehilite"><pre class="insert-before">  local-&gt;depth = -1;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>addLocal</em>()</div>
+<pre class="insert">  <span class="i">local</span>-&gt;<span class="i">isCaptured</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>addLocal</em>()</div>
+
+<p><span name="zero">Tương tự</span>, “slot zero local” đặc biệt mà compiler ngầm khai báo cũng không bị capture.</p>
+<aside name="zero">
+<p>Về sau trong sách, người dùng <em>sẽ</em> có thể capture biến này. Chỉ là tôi đang “nhá hàng” trước thôi.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  local-&gt;depth = 0;
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>initCompiler</em>()</div>
+<pre class="insert">  <span class="i">local</span>-&gt;<span class="i">isCaptured</span> = <span class="k">false</span>;
+</pre><pre class="insert-after">  local-&gt;name.start = &quot;&quot;;
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>initCompiler</em>()</div>
+
+<p>Khi resolve một identifier, nếu ta tạo ra một upvalue cho local variable, ta đánh dấu nó là bị capture.</p>
+<div class="codehilite"><pre class="insert-before">  if (local != -1) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>resolveUpvalue</em>()</div>
+<pre class="insert">    <span class="i">compiler</span>-&gt;<span class="i">enclosing</span>-&gt;<span class="i">locals</span>[<span class="i">local</span>].<span class="i">isCaptured</span> = <span class="k">true</span>;
+</pre><pre class="insert-after">    return addUpvalue(compiler, (uint8_t)local, true);
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>resolveUpvalue</em>()</div>
+
+<p>Giờ, ở cuối một block scope khi compiler sinh code để giải phóng các stack slot của local, ta có thể biết cái nào cần được nhấc lên heap. Ta sẽ dùng một instruction mới cho việc này.</p>
+<div class="codehilite"><pre class="insert-before">  while (current-&gt;localCount &gt; 0 &amp;&amp;
+         current-&gt;locals[current-&gt;localCount - 1].depth &gt;
+            current-&gt;scopeDepth) {
+</pre><div class="source-file"><em>compiler.c</em><br>
+in <em>endScope</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">current</span>-&gt;<span class="i">locals</span>[<span class="i">current</span>-&gt;<span class="i">localCount</span> - <span class="n">1</span>].<span class="i">isCaptured</span>) {
+      <span class="i">emitByte</span>(<span class="a">OP_CLOSE_UPVALUE</span>);
+    } <span class="k">else</span> {
+      <span class="i">emitByte</span>(<span class="a">OP_POP</span>);
+    }
+</pre><pre class="insert-after">    current-&gt;localCount--;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>compiler.c</em>, in <em>endScope</em>(), replace 1 line</div>
+
+<p>Instruction này không cần operand. Ta biết biến sẽ luôn nằm ngay trên đỉnh stack tại thời điểm instruction này execute. Ta khai báo instruction.</p>
+<div class="codehilite"><pre class="insert-before">  OP_CLOSURE,
+</pre><div class="source-file"><em>chunk.h</em><br>
+in enum <em>OpCode</em></div>
+<pre class="insert">  <span class="a">OP_CLOSE_UPVALUE</span>,
+</pre><pre class="insert-after">  OP_RETURN,
+</pre></div>
+<div class="source-file-narrow"><em>chunk.h</em>, in enum <em>OpCode</em></div>
+
+<p>Và thêm hỗ trợ disassembler đơn giản cho nó:</p>
+<div class="codehilite"><pre class="insert-before">    }
+</pre><div class="source-file"><em>debug.c</em><br>
+in <em>disassembleInstruction</em>()</div>
+<pre class="insert">    <span class="k">case</span> <span class="a">OP_CLOSE_UPVALUE</span>:
+      <span class="k">return</span> <span class="i">simpleInstruction</span>(<span class="s">&quot;OP_CLOSE_UPVALUE&quot;</span>, <span class="i">offset</span>);
+</pre><pre class="insert-after">    case OP_RETURN:
+</pre></div>
+<div class="source-file-narrow"><em>debug.c</em>, in <em>disassembleInstruction</em>()</div>
+
+<p>Tuyệt vời. Giờ bytecode sinh ra sẽ báo cho runtime chính xác thời điểm mỗi local variable bị capture phải chuyển lên heap. Hay hơn nữa, nó chỉ làm vậy cho những local <em>thực sự</em> được closure dùng và cần xử lý đặc biệt này. Điều này phù hợp với mục tiêu hiệu năng tổng thể của chúng ta: người dùng chỉ phải trả giá cho tính năng mà họ sử dụng. Các biến không được closure dùng sẽ sống và chết hoàn toàn trên stack như trước đây.</p>
+<h3><a href="#theo-dõi-open-upvalue" id="theo-dõi-open-upvalue"><small>25&#8202;.&#8202;4&#8202;.&#8202;3</small>Theo dõi open upvalue</a></h3>
+<p>Giờ hãy chuyển sang phía runtime. Trước khi chúng ta có thể execute các instruction <code>OP_CLOSE_UPVALUE</code>, còn một vấn đề cần giải quyết. Trước đó, khi tôi nói về việc closure capture biến hay giá trị, tôi đã nhấn mạnh rằng nếu nhiều closure cùng truy cập một biến thì chúng phải cùng tham chiếu tới <strong>chính xác</strong> một vị trí lưu trữ trong bộ nhớ. Như vậy, nếu một closure ghi vào biến, closure kia sẽ thấy được sự thay đổi.</p>
+<p>Hiện tại, nếu hai closure capture cùng một <span name="indirect">local</span> variable, VM sẽ tạo một Upvalue riêng cho mỗi closure. Việc chia sẻ cần thiết đang bị thiếu. Khi ta di chuyển biến ra khỏi stack, nếu chỉ di chuyển nó vào một trong các upvalue, upvalue còn lại sẽ bị “mồ côi” giá trị.</p>
+<aside name="indirect">
+<p>VM <em>có</em> chia sẻ upvalue nếu một closure capture một <em>upvalue</em> từ function bao quanh. Trường hợp lồng nhau này hoạt động đúng. Nhưng nếu hai closure <em>cùng cấp</em> capture cùng một local variable, mỗi closure sẽ tạo một <code>ObjUpvalue</code> riêng.</p>
+</aside>
+<p>Để khắc phục, bất cứ khi nào VM cần một upvalue capture một slot local variable cụ thể, ta sẽ tìm trước xem có upvalue nào đang trỏ tới slot đó không. Nếu có, ta tái sử dụng nó. Thách thức ở đây là tất cả các upvalue đã tạo trước đó đều nằm rải rác trong mảng upvalue của nhiều closure khác nhau. Những closure này có thể ở bất kỳ đâu trong bộ nhớ của VM.</p>
+<p>Bước đầu tiên là cung cấp cho VM một danh sách riêng chứa tất cả các open upvalue đang trỏ tới các biến vẫn còn trên stack. Nghe có vẻ việc tìm kiếm danh sách này mỗi khi VM cần một upvalue sẽ chậm, nhưng thực tế thì không tệ. Số biến trên stack thực sự bị đóng thường khá ít. Và các khai báo function <span name="create">tạo</span> closure hiếm khi nằm trên đường execute quan trọng về hiệu năng trong chương trình của người dùng.</p>
+<aside name="create">
+<p>Closure thường được <em>gọi</em> bên trong các vòng lặp nóng. Hãy nghĩ về các closure được truyền vào những hàm bậc cao phổ biến trên collection như <a href="https://en.wikipedia.org/wiki/Map_(higher-order_function)"><code>map()</code></a> và <a href="https://en.wikipedia.org/wiki/Filter_(higher-order_function)"><code>filter()</code></a>. Việc gọi này cần nhanh. Nhưng khai báo function <em>tạo</em> closure chỉ diễn ra một lần và thường nằm ngoài vòng lặp.</p>
+</aside>
+<p>Hay hơn nữa, ta có thể sắp xếp danh sách open upvalue theo chỉ số stack slot mà chúng trỏ tới. Trường hợp phổ biến là một slot <em>chưa</em> bị capture — việc chia sẻ biến giữa các closure là không thường xuyên — và closure thường capture các local gần đỉnh stack. Nếu ta lưu mảng open upvalue theo thứ tự stack slot, ngay khi đi qua slot nơi local cần capture đang sống, ta biết chắc sẽ không tìm thấy nữa. Khi local đó ở gần đỉnh stack, ta có thể thoát vòng lặp khá sớm.</p>
+<p>Duy trì một danh sách đã sắp xếp đòi hỏi khả năng chèn phần tử vào giữa một cách hiệu quả. Điều này gợi ý nên dùng linked list thay vì mảng động. Vì chúng ta tự định nghĩa struct <code>ObjUpvalue</code>, cách dễ nhất là dùng một danh sách “intrusive” — đặt con trỏ <code>next</code> ngay bên trong struct <code>ObjUpvalue</code>.</p>
+<div class="codehilite"><pre class="insert-before">  Value* location;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>ObjUpvalue</em></div>
+<pre class="insert">  <span class="k">struct</span> <span class="t">ObjUpvalue</span>* <span class="i">next</span>;
+</pre><pre class="insert-after">} ObjUpvalue;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>ObjUpvalue</em></div>
+
+<p>Khi cấp phát một upvalue, nó chưa được gắn vào danh sách nào nên liên kết <code>NULL</code>.</p>
+<div class="codehilite"><pre class="insert-before">  upvalue-&gt;location = slot;
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newUpvalue</em>()</div>
+<pre class="insert">  <span class="i">upvalue</span>-&gt;<span class="i">next</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">  return upvalue;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newUpvalue</em>()</div>
+
+<p>VM sở hữu danh sách này, nên con trỏ head nằm ngay trong struct chính của VM.</p>
+<div class="codehilite"><pre class="insert-before">  Table strings;
+</pre><div class="source-file"><em>vm.h</em><br>
+in struct <em>VM</em></div>
+<pre class="insert">  <span class="t">ObjUpvalue</span>* <span class="i">openUpvalues</span>;
+</pre><pre class="insert-after">  Obj* objects;
+</pre></div>
+<div class="source-file-narrow"><em>vm.h</em>, in struct <em>VM</em></div>
+
+<p>Danh sách bắt đầu rỗng.</p>
+<div class="codehilite"><pre class="insert-before">  vm.frameCount = 0;
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>resetStack</em>()</div>
+<pre class="insert">  <span class="i">vm</span>.<span class="i">openUpvalues</span> = <span class="a">NULL</span>;
+</pre><pre class="insert-after">}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>resetStack</em>()</div>
+
+<p>Bắt đầu từ upvalue đầu tiên mà VM trỏ tới, mỗi open upvalue sẽ trỏ tới open upvalue tiếp theo tham chiếu tới một local variable nằm sâu hơn trong stack. Ví dụ, đoạn script này:</p>
+<div class="codehilite"><pre>{
+  <span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>;
+  <span class="k">fun</span> <span class="i">f</span>() {
+    <span class="k">print</span> <span class="i">a</span>;
+  }
+  <span class="k">var</span> <span class="i">b</span> = <span class="n">2</span>;
+  <span class="k">fun</span> <span class="i">g</span>() {
+    <span class="k">print</span> <span class="i">b</span>;
+  }
+  <span class="k">var</span> <span class="i">c</span> = <span class="n">3</span>;
+  <span class="k">fun</span> <span class="i">h</span>() {
+    <span class="k">print</span> <span class="i">c</span>;
+  }
+}
+</pre></div>
+<p>Chương trình này sẽ tạo ra một chuỗi các upvalue liên kết như sau:</p><img src="image/closures/linked-list.png" alt="Three upvalues in a linked list."/>
+<p>Bất cứ khi nào chúng ta đóng trên một local variable, trước khi tạo một upvalue mới, ta sẽ tìm xem trong danh sách có upvalue nào đã tồn tại cho biến đó hay chưa.</p>
+<div class="codehilite"><pre class="insert-before">static ObjUpvalue* captureUpvalue(Value* local) {
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>captureUpvalue</em>()</div>
+<pre class="insert">  <span class="t">ObjUpvalue</span>* <span class="i">prevUpvalue</span> = <span class="a">NULL</span>;
+  <span class="t">ObjUpvalue</span>* <span class="i">upvalue</span> = <span class="i">vm</span>.<span class="i">openUpvalues</span>;
+  <span class="k">while</span> (<span class="i">upvalue</span> != <span class="a">NULL</span> &amp;&amp; <span class="i">upvalue</span>-&gt;<span class="i">location</span> &gt; <span class="i">local</span>) {
+    <span class="i">prevUpvalue</span> = <span class="i">upvalue</span>;
+    <span class="i">upvalue</span> = <span class="i">upvalue</span>-&gt;<span class="i">next</span>;
+  }
+
+  <span class="k">if</span> (<span class="i">upvalue</span> != <span class="a">NULL</span> &amp;&amp; <span class="i">upvalue</span>-&gt;<span class="i">location</span> == <span class="i">local</span>) {
+    <span class="k">return</span> <span class="i">upvalue</span>;
+  }
+
+</pre><pre class="insert-after">  ObjUpvalue* createdUpvalue = newUpvalue(local);
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>captureUpvalue</em>()</div>
+
+<p>Ta bắt đầu từ <span name="head">head</span> của danh sách, tức là upvalue gần đỉnh stack nhất. Ta duyệt qua danh sách, dùng một chút so sánh con trỏ để bỏ qua mọi upvalue đang trỏ tới các slot nằm trên slot mà ta đang tìm. Trong khi làm vậy, ta cũng lưu lại upvalue đứng trước trong danh sách. Chúng ta sẽ cần cập nhật con trỏ <code>next</code> của node đó nếu chèn một node mới ngay sau nó.</p>
+<aside name="head">
+<p>Đây là một singly linked list. Không còn lựa chọn nào khác ngoài việc bắt đầu từ head và đi tới.</p>
+</aside>
+<p>Có ba lý do khiến ta thoát khỏi vòng lặp:</p>
+<ol>
+<li>
+<p><strong>Slot local mà ta dừng lại <em>chính là</em> slot đang tìm.</strong> Ta đã tìm thấy một upvalue hiện có đang capture biến đó, nên ta tái sử dụng upvalue này.</p>
+</li>
+<li>
+<p><strong>Hết upvalue để tìm.</strong> Khi <code>upvalue</code> là <code>NULL</code>, nghĩa là mọi open upvalue trong danh sách đều trỏ tới các local nằm trên slot ta đang tìm, hoặc (nhiều khả năng hơn) danh sách upvalue đang rỗng. Dù thế nào, ta cũng không tìm thấy upvalue cho slot này.</p>
+</li>
+<li>
+<p><strong>Tìm thấy một upvalue có slot local <em>nằm dưới</em> slot ta đang tìm.</strong> Vì danh sách được sắp xếp, điều này có nghĩa là ta đã đi quá slot cần đóng, và do đó chắc chắn không có upvalue nào tồn tại cho nó.</p>
+</li>
+</ol>
+<p>Trong trường hợp đầu tiên, ta xong việc và trả về. Ngược lại, ta tạo một upvalue mới cho slot local của mình và chèn nó vào danh sách ở đúng vị trí.</p>
+<div class="codehilite"><pre class="insert-before">  ObjUpvalue* createdUpvalue = newUpvalue(local);
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>captureUpvalue</em>()</div>
+<pre class="insert">  <span class="i">createdUpvalue</span>-&gt;<span class="i">next</span> = <span class="i">upvalue</span>;
+
+  <span class="k">if</span> (<span class="i">prevUpvalue</span> == <span class="a">NULL</span>) {
+    <span class="i">vm</span>.<span class="i">openUpvalues</span> = <span class="i">createdUpvalue</span>;
+  } <span class="k">else</span> {
+    <span class="i">prevUpvalue</span>-&gt;<span class="i">next</span> = <span class="i">createdUpvalue</span>;
+  }
+
+</pre><pre class="insert-after">  return createdUpvalue;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>captureUpvalue</em>()</div>
+
+<p>Phiên bản hiện tại của hàm này vốn đã tạo upvalue, nên ta chỉ cần thêm code để chèn upvalue vào danh sách. Ta thoát khỏi vòng duyệt danh sách hoặc là khi đi hết danh sách, hoặc khi dừng ở upvalue đầu tiên có slot stack nằm dưới slot ta đang tìm. Trong cả hai trường hợp, điều đó có nghĩa là ta cần chèn upvalue mới <em>trước</em> object mà <code>upvalue</code> đang trỏ tới (có thể là <code>NULL</code> nếu ta đã tới cuối danh sách).</p>
+<p>Như bạn đã học trong môn Cấu trúc dữ liệu 101, để chèn một node vào linked list, bạn đặt con trỏ <code>next</code> của node trước đó trỏ tới node mới. Ta đã tiện tay lưu lại node đứng trước khi duyệt danh sách. Ta cũng cần xử lý trường hợp <span name="double">đặc biệt</span> khi chèn một upvalue mới vào đầu danh sách, khi đó con trỏ “next” chính là con trỏ head của VM.</p>
+<aside name="double">
+<p>Có một cách cài đặt ngắn gọn hơn để xử lý việc cập nhật cả con trỏ head hoặc con trỏ <code>next</code> của upvalue trước đó một cách thống nhất bằng cách dùng con trỏ tới con trỏ, nhưng kiểu code đó sẽ gây rối cho hầu hết mọi người nếu chưa đạt tới “cảnh giới” cao về con trỏ. Tôi chọn cách dùng câu lệnh <code>if</code> cơ bản.</p>
+</aside>
+<p>Với phiên bản hàm đã cập nhật này, VM giờ đảm bảo rằng sẽ chỉ có duy nhất một <code>ObjUpvalue</code> cho mỗi slot local. Nếu hai closure capture cùng một biến, chúng sẽ nhận cùng một upvalue. Giờ ta đã sẵn sàng để di chuyển các upvalue này ra khỏi stack.</p>
+<h3><a href="#đóng-upvalue-ở-runtime" id="đóng-upvalue-ở-runtime"><small>25&#8202;.&#8202;4&#8202;.&#8202;4</small>Đóng upvalue ở runtime</a></h3>
+<p>Compiler sẽ sinh ra instruction <code>OP_CLOSE_UPVALUE</code> để báo cho VM biết chính xác khi nào một local variable cần được nhấc lên heap. Execute instruction đó là nhiệm vụ của interpreter.</p>
+<div class="codehilite"><pre class="insert-before">      }
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">      <span class="k">case</span> <span class="a">OP_CLOSE_UPVALUE</span>:
+        <span class="i">closeUpvalues</span>(<span class="i">vm</span>.<span class="i">stackTop</span> - <span class="n">1</span>);
+        <span class="i">pop</span>();
+        <span class="k">break</span>;
+</pre><pre class="insert-after">      case OP_RETURN: {
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Khi gặp instruction này, biến cần nhấc lên heap đang nằm ngay trên đỉnh stack. Ta gọi một hàm tiện ích, truyền vào địa chỉ của stack slot đó. Hàm này chịu trách nhiệm đóng upvalue và di chuyển local từ stack lên heap. Sau đó, VM có thể bỏ slot đó trên stack, việc này được thực hiện bằng cách gọi <code>pop()</code>.</p>
+<p>Phần thú vị diễn ra ở đây:</p>
+<div class="codehilite"><div class="source-file"><em>vm.c</em><br>
+add after <em>captureUpvalue</em>()</div>
+<pre><span class="k">static</span> <span class="t">void</span> <span class="i">closeUpvalues</span>(<span class="t">Value</span>* <span class="i">last</span>) {
+  <span class="k">while</span> (<span class="i">vm</span>.<span class="i">openUpvalues</span> != <span class="a">NULL</span> &amp;&amp;
+         <span class="i">vm</span>.<span class="i">openUpvalues</span>-&gt;<span class="i">location</span> &gt;= <span class="i">last</span>) {
+    <span class="t">ObjUpvalue</span>* <span class="i">upvalue</span> = <span class="i">vm</span>.<span class="i">openUpvalues</span>;
+    <span class="i">upvalue</span>-&gt;<span class="i">closed</span> = *<span class="i">upvalue</span>-&gt;<span class="i">location</span>;
+    <span class="i">upvalue</span>-&gt;<span class="i">location</span> = &amp;<span class="i">upvalue</span>-&gt;<span class="i">closed</span>;
+    <span class="i">vm</span>.<span class="i">openUpvalues</span> = <span class="i">upvalue</span>-&gt;<span class="i">next</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, add after <em>captureUpvalue</em>()</div>
+
+<p>Hàm này nhận một con trỏ tới một stack slot. Nó sẽ đóng mọi open upvalue mà nó tìm thấy đang trỏ tới slot đó hoặc bất kỳ slot nào nằm trên nó trong stack. Hiện tại, ta chỉ truyền con trỏ tới slot trên cùng của stack, nên phần “hoặc trên nó” chưa phát huy tác dụng, nhưng sẽ sớm thôi.</p>
+<p>Để làm điều này, ta duyệt danh sách open upvalue của VM, từ trên xuống dưới. Nếu <code>location</code> của một upvalue trỏ vào phạm vi các slot đang đóng, ta đóng upvalue đó. Ngược lại, khi gặp một upvalue nằm ngoài phạm vi, ta biết các upvalue còn lại cũng vậy, nên dừng duyệt.</p>
+<p>Cách đóng một upvalue khá <span name="cool">hay</span>. Đầu tiên, ta sao chép giá trị của biến vào trường <code>closed</code> trong <code>ObjUpvalue</code>. Đây là nơi các biến bị đóng sẽ sống trên heap. Các instruction <code>OP_GET_UPVALUE</code> và <code>OP_SET_UPVALUE</code> cần tìm biến ở đây sau khi nó được di chuyển. Ta có thể thêm một số logic điều kiện trong code interpreter cho các instruction đó để kiểm tra flag xem upvalue đang mở hay đã đóng.</p>
+<p>Nhưng thực tế, ta đã có sẵn một lớp gián tiếp — các instruction đó dereference con trỏ <code>location</code> để lấy giá trị của biến. Khi biến di chuyển từ stack sang trường <code>closed</code>, ta chỉ cần cập nhật <code>location</code> trỏ tới chính trường <code>closed</code> của <code>ObjUpvalue</code>.</p>
+<aside name="cool">
+<p>Tôi không tự khen mình đâu. Đây là sáng kiến của nhóm phát triển Lua.</p>
+</aside><img src="image/closures/closing.png" alt="Moving a value from the stack to the upvalue's 'closed' field and then pointing the 'value' field to it."/>
+<p>Chúng ta không cần thay đổi cách <code>OP_GET_UPVALUE</code> và <code>OP_SET_UPVALUE</code> được execute. Điều này giúp chúng đơn giản, và vì thế nhanh hơn. Tuy nhiên, ta cần thêm trường mới vào <code>ObjUpvalue</code>.</p>
+<div class="codehilite"><pre class="insert-before">  Value* location;
+</pre><div class="source-file"><em>object.h</em><br>
+in struct <em>ObjUpvalue</em></div>
+<pre class="insert">  <span class="t">Value</span> <span class="i">closed</span>;
+</pre><pre class="insert-after">  struct ObjUpvalue* next;
+</pre></div>
+<div class="source-file-narrow"><em>object.h</em>, in struct <em>ObjUpvalue</em></div>
+
+<p>Và ta nên gán giá trị 0 cho nó khi tạo <code>ObjUpvalue</code> để tránh việc tồn tại vùng nhớ chưa khởi tạo.</p>
+<div class="codehilite"><pre class="insert-before">  ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+</pre><div class="source-file"><em>object.c</em><br>
+in <em>newUpvalue</em>()</div>
+<pre class="insert">  <span class="i">upvalue</span>-&gt;<span class="i">closed</span> = <span class="a">NIL_VAL</span>;
+</pre><pre class="insert-after">  upvalue-&gt;location = slot;
+</pre></div>
+<div class="source-file-narrow"><em>object.c</em>, in <em>newUpvalue</em>()</div>
+
+<p>Bất cứ khi nào compiler tới cuối một block, nó sẽ loại bỏ tất cả local variable trong block đó và sinh ra một <code>OP_CLOSE_UPVALUE</code> cho mỗi local variable bị đóng. Compiler <span name="close">không</span> sinh ra bất kỳ instruction nào ở cuối scope ngoài cùng định nghĩa thân hàm. Scope đó chứa các tham số của hàm và mọi local được khai báo ngay bên trong hàm. Những biến này cũng cần được đóng.</p>
+<aside name="close">
+<p>Không có gì <em>ngăn cản</em> chúng ta đóng scope ngoài cùng của hàm trong compiler và sinh ra các instruction <code>OP_POP</code> và <code>OP_CLOSE_UPVALUE</code>. Chỉ là điều đó không cần thiết vì runtime sẽ tự động loại bỏ tất cả stack slot mà hàm sử dụng khi pop call frame.</p>
+</aside>
+<p>Đây là lý do <code>closeUpvalues()</code> nhận một con trỏ tới một stack slot. Khi một hàm trả về, chúng ta gọi lại hàm tiện ích đó và truyền vào stack slot đầu tiên thuộc sở hữu của hàm.</p>
+<div class="codehilite"><pre class="insert-before">        Value result = pop();
+</pre><div class="source-file"><em>vm.c</em><br>
+in <em>run</em>()</div>
+<pre class="insert">        <span class="i">closeUpvalues</span>(<span class="i">frame</span>-&gt;<span class="i">slots</span>);
+</pre><pre class="insert-after">        vm.frameCount--;
+</pre></div>
+<div class="source-file-narrow"><em>vm.c</em>, in <em>run</em>()</div>
+
+<p>Bằng cách truyền vào slot đầu tiên trong cửa sổ stack của hàm, ta đóng tất cả các open upvalue còn lại thuộc về hàm đang trả về. Và với điều đó, giờ ta đã có một triển khai closure hoạt động hoàn chỉnh. Các biến bị đóng sẽ tồn tại miễn là chúng còn được các hàm capture cần đến.</p>
+<p>Đây quả là một khối lượng công việc lớn! Trong jlox, closure xuất hiện một cách tự nhiên từ cách biểu diễn environment. Trong clox, chúng ta phải thêm rất nhiều code — instruction bytecode mới, nhiều cấu trúc dữ liệu hơn trong compiler, và các object runtime mới. VM thực sự coi các biến trong closure khác biệt so với các biến khác.</p>
+<p>Điều này có lý do của nó. Xét về độ phức tạp triển khai, jlox cho chúng ta closure “miễn phí”. Nhưng xét về <em>hiệu năng</em>, closure của jlox lại không hề “miễn phí” chút nào. Bằng cách cấp phát <em>tất cả</em> environment trên heap, jlox phải trả một cái giá hiệu năng đáng kể cho <em>tất cả</em> local variable, ngay cả phần lớn trong số đó không bao giờ bị closure capture.</p>
+<p>Với clox, chúng ta có một hệ thống phức tạp hơn, nhưng điều đó cho phép ta điều chỉnh cách triển khai để phù hợp với hai kiểu sử dụng mà ta quan sát được đối với local variable. Với hầu hết các biến có ngữ nghĩa stack, ta cấp phát chúng hoàn toàn trên stack — vừa đơn giản vừa nhanh. Sau đó, với số ít local variable mà cách này không áp dụng được, ta có một con đường thứ hai chậm hơn để lựa chọn khi cần.</p>
+<p>May mắn thay, người dùng không nhận thấy sự phức tạp này. Từ góc nhìn của họ, local variable trong Lox đơn giản và thống nhất. <em>Bản thân ngôn ngữ</em> cũng đơn giản như cách triển khai của jlox. Nhưng bên dưới, clox đang quan sát những gì người dùng làm và tối ưu hóa cho các trường hợp sử dụng cụ thể của họ. Khi việc triển khai ngôn ngữ của bạn trở nên tinh vi hơn, bạn sẽ thấy mình làm điều này thường xuyên hơn. Một phần lớn của “tối ưu hóa” là thêm các đoạn code đặc biệt để phát hiện một số cách sử dụng nhất định và cung cấp một con đường nhanh hơn, được thiết kế riêng cho code phù hợp với mẫu đó.</p>
+<p>Giờ đây, chúng ta đã có lexical scoping hoạt động hoàn chỉnh trong clox — một cột mốc quan trọng. Và, khi đã có hàm và biến với vòng đời phức tạp, chúng ta cũng có <em>rất nhiều</em> object trôi nổi trong heap của clox, được kết nối với nhau bằng một mạng lưới con trỏ. <a href="garbage-collection.html">Bước tiếp theo</a> là tìm cách quản lý bộ nhớ đó để có thể giải phóng một số object khi chúng không còn cần thiết nữa.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>25&#8202;.&#8202;5</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Việc bọc mỗi <code>ObjFunction</code> trong một <code>ObjClosure</code> tạo ra một lớp gián tiếp, gây ra chi phí hiệu năng. Chi phí này không cần thiết cho các hàm không đóng trên bất kỳ biến nào, nhưng nó cho phép runtime xử lý tất cả lời gọi một cách thống nhất.</p>
+<p>Hãy thay đổi clox để chỉ bọc các hàm trong <code>ObjClosure</code> khi chúng cần upvalue. So sánh độ phức tạp code và hiệu năng với cách luôn bọc hàm. Hãy cẩn thận benchmark các chương trình có và không dùng closure. Bạn sẽ cân nhắc tầm quan trọng của từng benchmark như thế nào? Nếu một benchmark chậm hơn và một benchmark nhanh hơn, bạn sẽ quyết định đánh đổi ra sao để chọn chiến lược triển khai?</p>
+</li>
+<li>
+<p>Đọc ghi chú thiết kế bên dưới. Tôi sẽ đợi. Giờ, bạn nghĩ Lox <em>nên</em> hoạt động thế nào? Hãy thay đổi phần triển khai để tạo một biến mới cho mỗi vòng lặp.</p>
+</li>
+<li>
+<p>Một <a href="http://wiki.c2.com/?ClosuresAndObjectsAreEquivalent">câu thiền nổi tiếng</a> dạy rằng “object là closure của người nghèo” (và ngược lại). VM của chúng ta chưa hỗ trợ object, nhưng giờ khi đã có closure, ta có thể mô phỏng chúng. Sử dụng closure, hãy viết một chương trình Lox mô phỏng “object” vector hai chiều. Chương trình cần:</p>
+<ul>
+<li>
+<p>Định nghĩa một hàm “constructor” để tạo một vector mới với tọa độ <em>x</em> và <em>y</em> cho trước.</p>
+</li>
+<li>
+<p>Cung cấp các “method” để truy cập tọa độ <em>x</em> và <em>y</em> của các giá trị được trả về từ constructor đó.</p>
+</li>
+<li>
+<p>Định nghĩa một “method” cộng để cộng hai vector và tạo ra vector thứ ba.</p>
+</li>
+</ul>
+</li>
+</ol>
+</div>
+<div class="design-note">
+<h2><a href="#ghi-chú-thiết-kế-đóng-trên-biến-vòng-lặp" id="ghi-chú-thiết-kế-đóng-trên-biến-vòng-lặp"><small>25&#8202;.&#8202;6</small>Ghi chú thiết kế: Đóng trên biến vòng lặp</a></h2>
+<p>Closure capture biến. Khi hai closure capture cùng một biến, chúng chia sẻ tham chiếu tới cùng một vị trí lưu trữ bên dưới. Điều này thể hiện rõ khi gán giá trị mới cho biến đó. Tất nhiên, nếu hai closure capture <em>khác</em> biến, sẽ không có sự chia sẻ nào.</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">globalOne</span>;
+<span class="k">var</span> <span class="i">globalTwo</span>;
+
+<span class="k">fun</span> <span class="i">main</span>() {
+  {
+    <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;one&quot;</span>;
+    <span class="k">fun</span> <span class="i">one</span>() {
+      <span class="k">print</span> <span class="i">a</span>;
+    }
+    <span class="i">globalOne</span> = <span class="i">one</span>;
+  }
+
+  {
+    <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;two&quot;</span>;
+    <span class="k">fun</span> <span class="i">two</span>() {
+      <span class="k">print</span> <span class="i">a</span>;
+    }
+    <span class="i">globalTwo</span> = <span class="i">two</span>;
+  }
+}
+
+<span class="i">main</span>();
+<span class="i">globalOne</span>();
+<span class="i">globalTwo</span>();
+</pre></div>
+<p>Đoạn này in ra <code>"one"</code> rồi <code>"two"</code>. Trong ví dụ này, rõ ràng hai biến <code>a</code> là khác nhau. Nhưng không phải lúc nào cũng dễ thấy như vậy. Xem thử:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">globalOne</span>;
+<span class="k">var</span> <span class="i">globalTwo</span>;
+
+<span class="k">fun</span> <span class="i">main</span>() {
+  <span class="k">for</span> (<span class="k">var</span> <span class="i">a</span> = <span class="n">1</span>; <span class="i">a</span> &lt;= <span class="n">2</span>; <span class="i">a</span> = <span class="i">a</span> + <span class="n">1</span>) {
+    <span class="k">fun</span> <span class="i">closure</span>() {
+      <span class="k">print</span> <span class="i">a</span>;
+    }
+    <span class="k">if</span> (<span class="i">globalOne</span> == <span class="k">nil</span>) {
+      <span class="i">globalOne</span> = <span class="i">closure</span>;
+    } <span class="k">else</span> {
+      <span class="i">globalTwo</span> = <span class="i">closure</span>;
+    }
+  }
+}
+
+<span class="i">main</span>();
+<span class="i">globalOne</span>();
+<span class="i">globalTwo</span>();
+</pre></div>
+<p>Code này hơi vòng vèo vì Lox không có kiểu tập hợp. Phần quan trọng là hàm <code>main()</code> chạy hai vòng lặp <code>for</code>. Mỗi lần lặp, nó tạo một closure capture biến vòng lặp. Nó lưu closure đầu tiên vào <code>globalOne</code> và closure thứ hai vào <code>globalTwo</code>.</p>
+<p>Chắc chắn đây là hai closure khác nhau. Nhưng chúng có đóng trên hai biến khác nhau không? Có phải chỉ có một <code>a</code> tồn tại suốt vòng đời vòng lặp, hay mỗi vòng lặp có một biến <code>a</code> riêng biệt?</p>
+<p>Script này hơi kỳ cục và gượng ép, nhưng tình huống này xuất hiện trong code thực tế ở các ngôn ngữ không tối giản như clox. Ví dụ JavaScript:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">closures</span> = [];
+<span class="k">for</span> (<span class="k">var</span> <span class="i">i</span> = <span class="n">1</span>; <span class="i">i</span> &lt;= <span class="n">2</span>; <span class="i">i</span>++) {
+  <span class="i">closures</span>.<span class="i">push</span>(<span class="k">function</span> () { <span class="i">console</span>.<span class="i">log</span>(<span class="i">i</span>); });
+}
+
+<span class="i">closures</span>[<span class="n">0</span>]();
+<span class="i">closures</span>[<span class="n">1</span>]();
+</pre></div>
+<p>Nó in <code>"1"</code> rồi <code>"2"</code>, hay in <code>"3"</code> <span name="three">hai lần</span>? Có thể bạn sẽ bất ngờ khi biết nó in <code>"3"</code> hai lần. Trong chương trình JavaScript này, chỉ có một biến <code>i</code> duy nhất, sống xuyên suốt tất cả các vòng lặp, kể cả khi thoát vòng.</p>
+<aside name="three">
+<p>Bạn thắc mắc sao lại ra <em>ba</em>? Sau vòng lặp thứ hai, <code>i++</code> được execute, tăng <code>i</code> lên ba. Đó là lý do <code>i &lt;= 2</code> trả về false và kết thúc vòng lặp. Nếu <code>i</code> không bao giờ đạt ba, vòng lặp sẽ chạy mãi.</p>
+</aside>
+<p>Nếu bạn quen với JavaScript, hẳn bạn biết biến khai báo bằng <code>var</code> được <em>hoist</em> ngầm lên function bao quanh hoặc scope toàn cục. Giống như bạn viết:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">closures</span> = [];
+<span class="k">var</span> <span class="i">i</span>;
+<span class="k">for</span> (<span class="i">i</span> = <span class="n">1</span>; <span class="i">i</span> &lt;= <span class="n">2</span>; <span class="i">i</span>++) {
+  <span class="i">closures</span>.<span class="i">push</span>(<span class="k">function</span> () { <span class="i">console</span>.<span class="i">log</span>(<span class="i">i</span>); });
+}
+
+<span class="i">closures</span>[<span class="n">0</span>]();
+<span class="i">closures</span>[<span class="n">1</span>]();
+</pre></div>
+<p>Lúc này, dễ thấy chỉ có một <code>i</code>. Giờ thử đổi sang từ khóa <code>let</code> mới hơn:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">closures</span> = [];
+<span class="k">for</span> (<span class="k">let</span> <span class="i">i</span> = <span class="n">1</span>; <span class="i">i</span> &lt;= <span class="n">2</span>; <span class="i">i</span>++) {
+  <span class="i">closures</span>.<span class="i">push</span>(<span class="k">function</span> () { <span class="i">console</span>.<span class="i">log</span>(<span class="i">i</span>); });
+}
+
+<span class="i">closures</span>[<span class="n">0</span>]();
+<span class="i">closures</span>[<span class="n">1</span>]();
+</pre></div>
+<p>Chương trình mới này có giống trước không? Không. Lần này, nó in <code>"1"</code> rồi <code>"2"</code>. Mỗi closure có một <code>i</code> riêng. Điều này hơi lạ nếu nghĩ kỹ. Biểu thức tăng là <code>i++</code>. Trông rất giống đang gán và thay đổi một biến hiện có, chứ không phải tạo biến mới.</p>
+<p>Thử vài ngôn ngữ khác. Python:</p>
+<div class="codehilite"><pre><span class="i">closures</span> = []
+<span class="k">for</span> <span class="i">i</span> <span class="k">in</span> <span class="k">range</span>(<span class="n">1</span>, <span class="n">3</span>):
+  <span class="i">closures</span>.<span class="i">append</span>(<span class="k">lambda</span>: <span class="k">print</span>(<span class="i">i</span>))
+
+<span class="i">closures</span>[<span class="n">0</span>]()
+<span class="i">closures</span>[<span class="n">1</span>]()
+</pre></div>
+<p>Python thực ra không có block scope. Biến được khai báo ngầm và tự động thuộc scope của function bao quanh. Giống hoisting trong JS. Vì vậy, cả hai closure capture cùng một biến. Khác với C, ta không thoát vòng lặp bằng cách tăng <code>i</code> <em>vượt</em> giá trị cuối, nên đoạn này in <code>"2"</code> hai lần.</p>
+<p>Còn Ruby? Ruby có hai cách lặp số phổ biến. Cách mệnh lệnh cổ điển:</p>
+<div class="codehilite"><pre><span class="i">closures</span> = []
+<span class="k">for</span> <span class="i">i</span> <span class="k">in</span> <span class="n">1</span>..<span class="n">2</span> <span class="k">do</span>
+  <span class="i">closures</span> &lt;&lt; <span class="k">lambda</span> { <span class="i">puts</span> <span class="i">i</span> }
+<span class="k">end</span>
+
+<span class="i">closures</span>[<span class="n">0</span>].<span class="i">call</span>
+<span class="i">closures</span>[<span class="n">1</span>].<span class="i">call</span>
+</pre></div>
+<p>Giống Python, in <code>"2"</code> hai lần. Nhưng cách Ruby “chuẩn” hơn là dùng phương thức bậc cao <code>each()</code> trên đối tượng range:</p>
+<div class="codehilite"><pre><span class="i">closures</span> = []
+(<span class="n">1</span>..<span class="n">2</span>).<span class="i">each</span> <span class="k">do</span> |<span class="i">i</span>|
+  <span class="i">closures</span> &lt;&lt; <span class="k">lambda</span> { <span class="i">puts</span> <span class="i">i</span> }
+<span class="k">end</span>
+
+<span class="i">closures</span>[<span class="n">0</span>].<span class="i">call</span>
+<span class="i">closures</span>[<span class="n">1</span>].<span class="i">call</span>
+</pre></div>
+<p>Nếu bạn chưa quen Ruby, phần <code>do |i| ... end</code> về cơ bản là một closure được tạo và truyền vào <code>each()</code>. <code>|i|</code> là danh sách tham số cho closure. <code>each()</code> gọi closure đó hai lần, truyền 1 cho <code>i</code> lần đầu và 2 lần sau.</p>
+<p>Trong trường hợp này, “biến vòng lặp” thực ra là tham số hàm. Và vì mỗi vòng lặp là một lần gọi hàm riêng, nên chắc chắn đó là các biến khác nhau cho mỗi lần gọi. Nên in <code>"1"</code> rồi <code>"2"</code>.</p>
+<p>Nếu một ngôn ngữ có cấu trúc lặp dựa trên iterator cấp cao như <code>foreach</code> trong C#, “enhanced for” của Java, <code>for-of</code> trong JavaScript, <code>for-in</code> trong Dart, v.v., thì tôi nghĩ người đọc sẽ thấy tự nhiên khi mỗi vòng lặp tạo một biến mới. Code <em>trông</em> như một biến mới vì phần đầu vòng lặp giống khai báo biến. Và không có biểu thức tăng trông như đang thay đổi biến đó để sang bước tiếp theo.</p>
+<p>Nếu bạn tìm trên StackOverflow và các nơi khác, sẽ thấy bằng chứng rằng đây là điều người dùng mong đợi, vì họ rất ngạc nhiên khi <em>không</em> được như vậy. Đặc biệt, C# ban đầu <em>không</em> tạo biến vòng lặp mới cho mỗi vòng <code>foreach</code>. Điều này gây nhầm lẫn thường xuyên đến mức họ đã thực hiện một thay đổi phá vỡ tương thích ngược hiếm hoi. Trong C# 5, mỗi vòng lặp tạo một biến mới.</p>
+<p>Vòng lặp <code>for</code> kiểu C cũ khó hơn. Biểu thức tăng thực sự trông như đang thay đổi biến. Điều đó ngụ ý chỉ có một biến được cập nhật mỗi bước. Nhưng gần như không bao giờ <em>có ích</em> khi mỗi vòng chia sẻ biến vòng lặp. Cách duy nhất bạn nhận ra điều này là khi closure capture nó. Và hiếm khi hữu ích khi closure tham chiếu một biến có giá trị là giá trị khiến bạn thoát vòng lặp.</p>
+<p>Câu trả lời thực dụng có lẽ là làm như JavaScript với <code>let</code> trong vòng <code>for</code>. Làm nó trông như thay đổi biến nhưng thực ra tạo biến mới mỗi lần, vì đó là điều người dùng muốn. Dù nghĩ kỹ thì cũng hơi kỳ.</p>
+
+<footer>
+<a href="garbage-collection.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Garbage Collection&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>

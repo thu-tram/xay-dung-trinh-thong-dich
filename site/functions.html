@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
+<title>Functions &middot; Crafting Interpreters</title>
+
+<!-- Tell mobile browsers we're optimized for them and they don't need to crop
+     the viewport. -->
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="style.css" />
+
+<!-- Oh, God, Source Code Pro is so beautiful it makes me want to cry. -->
+<link href='https://fonts.googleapis.com/css?family=Source+Code+Pro:400|Source+Sans+Pro:300,400,600' rel='stylesheet' type='text/css'>
+
+<link rel="icon" type="image/png" href="image/favicon.png" />
+<script src="jquery-3.4.1.min.js"></script>
+<script src="script.js"></script>
+
+<!-- Google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42804721-2', 'auto');
+  ga('send', 'pageview');
+</script>
+
+</head>
+<body id="top">
+
+<!-- <div class="scrim"></div> -->
+<nav class="wide">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="contents">
+<h3><a href="#top">Functions<small>10</small></a></h3>
+
+<ul>
+    <li><a href="#function-calls"><small>10.1</small> Function Calls</a></li>
+    <li><a href="#native-functions"><small>10.2</small> Native Functions</a></li>
+    <li><a href="#function-declarations"><small>10.3</small> Function Declarations</a></li>
+    <li><a href="#function-objects"><small>10.4</small> Function Objects</a></li>
+    <li><a href="#return-statements"><small>10.5</small> Return Statements</a></li>
+    <li><a href="#local-functions-&amp;-closures"><small>10.6</small> Local Functions &amp; Closures</a></li>
+    <li><a href="#thử-thách"><small>10.7</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="control-flow.html" title="Control Flow" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="resolving-and-binding.html" title="Resolving and Binding" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+</nav>
+
+<nav class="narrow">
+<a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+<a href="control-flow.html" title="Control Flow" class="prev">←</a>
+<a href="resolving-and-binding.html" title="Resolving and Binding" class="next">→</a>
+</nav>
+
+<div class="page">
+<div class="nav-wrapper">
+<nav class="floating">
+  <a href="/"><img src="image/logotype.png" title="Crafting Interpreters"></a>
+  <div class="expandable">
+<h3><a href="#top">Functions<small>10</small></a></h3>
+
+<ul>
+    <li><a href="#function-calls"><small>10.1</small> Function Calls</a></li>
+    <li><a href="#native-functions"><small>10.2</small> Native Functions</a></li>
+    <li><a href="#function-declarations"><small>10.3</small> Function Declarations</a></li>
+    <li><a href="#function-objects"><small>10.4</small> Function Objects</a></li>
+    <li><a href="#return-statements"><small>10.5</small> Return Statements</a></li>
+    <li><a href="#local-functions-&amp;-closures"><small>10.6</small> Local Functions &amp; Closures</a></li>
+    <li><a href="#thử-thách"><small>10.7</small> Thử thách</a></li>
+</ul>
+
+
+<div class="prev-next">
+    <a href="control-flow.html" title="Control Flow" class="left">&larr;&nbsp;Chương trước</a>
+    <a href="a-tree-walk-interpreter.html" title="A Tree-Walk Interpreter">&uarr;&nbsp;Up</a>
+    <a href="resolving-and-binding.html" title="Resolving and Binding" class="right">Chương sau&nbsp;&rarr;</a>
+</div>  </div>
+  <a id="expand-nav">≡</a>
+</nav>
+</div>
+
+<article class="chapter">
+
+  <div class="number">10</div>
+  <h1>Functions</h1>
+
+<blockquote>
+<p>Và đó cũng là cách mà tâm trí con người vận hành — bằng cách kết hợp những ý tưởng cũ thành những cấu trúc mới, rồi những cấu trúc đó lại trở thành những ý tưởng mới có thể tiếp tục được dùng để kết hợp, cứ thế xoay vòng bất tận, ngày càng xa rời những hình ảnh gốc rễ gắn với mặt đất — thứ “đất” nuôi dưỡng mỗi ngôn ngữ.</p>
+<p><cite>Douglas R. Hofstadter, <em>I Am a Strange Loop</em></cite></p>
+</blockquote>
+<p>Chương này đánh dấu sự hội tụ của rất nhiều công sức. Các chương trước đều tự thân bổ sung những tính năng hữu ích, nhưng mỗi chương cũng đóng góp một mảnh của <span name="lambda">bức tranh ghép</span>. Giờ chúng ta sẽ lấy những mảnh đó — expression, statement, variable, control flow, và lexical scope — thêm vài mảnh mới, rồi ghép tất cả lại để hỗ trợ đầy đủ function do người dùng định nghĩa và lời gọi function.</p>
+<aside name="lambda"><img src="image/functions/lambda.png" alt="Một câu đố hình lambda." />
+</aside>
+<h2><a href="#function-calls" id="function-calls"><small>10&#8202;.&#8202;1</small>Function Calls</a></h2>
+<p>Chắc hẳn bạn đã quen với cú pháp gọi hàm kiểu C, nhưng grammar của nó tinh tế hơn bạn tưởng. Lời gọi thường là tới các hàm có tên, như:</p>
+<div class="codehilite"><pre><span class="i">average</span>(<span class="n">1</span>, <span class="n">2</span>);
+</pre></div>
+<p>Nhưng <span name="pascal">tên</span> của hàm được gọi thực ra không phải là một phần của cú pháp lời gọi. Thứ được gọi — <strong>callee</strong> — có thể là bất kỳ expression nào evaluate ra một function. (Tất nhiên, nó phải là một expression có <em>độ ưu tiên cao</em>, nhưng dấu ngoặc đơn sẽ lo phần đó.) Ví dụ:</p>
+<aside name="pascal">
+<p>Trong Pascal, tên <em>là</em> một phần của cú pháp gọi hàm. Bạn chỉ có thể gọi các hàm có tên hoặc hàm được lưu trực tiếp trong biến.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">getCallback</span>()();
+</pre></div>
+<p>Ở đây có hai call expression. Cặp ngoặc đơn đầu tiên có <code>getCallback</code> làm callee. Nhưng lời gọi thứ hai lại có toàn bộ expression <code>getCallback()</code> làm callee. Chính dấu ngoặc đơn theo sau một expression mới biểu thị một lời gọi hàm. Bạn có thể coi lời gọi như một dạng toán tử hậu tố bắt đầu bằng <code>(</code>.</p>
+<p>“Toán tử” này có độ ưu tiên cao hơn bất kỳ toán tử nào khác, kể cả unary. Vì vậy, ta đưa nó vào grammar bằng cách để rule <code>unary</code> chuyển lên một rule mới là <code>call</code>.</p>
+<p><span name="curry"></span></p>
+<div class="codehilite"><pre><span class="i">unary</span>          → ( <span class="s">&quot;!&quot;</span> | <span class="s">&quot;-&quot;</span> ) <span class="i">unary</span> | <span class="i">call</span> ;
+<span class="i">call</span>           → <span class="i">primary</span> ( <span class="s">&quot;(&quot;</span> <span class="i">arguments</span>? <span class="s">&quot;)&quot;</span> )* ;
+</pre></div>
+<p>Rule này khớp một primary expression theo sau bởi không hoặc nhiều lời gọi hàm. Nếu không có ngoặc đơn, nó parse ra một primary expression thuần túy. Ngược lại, mỗi lời gọi được nhận diện bởi một cặp ngoặc đơn với danh sách argument tùy chọn bên trong. Grammar cho danh sách argument là:</p>
+<aside name="curry">
+<p>Rule này dùng <code>*</code> để cho phép khớp một chuỗi lời gọi như <code>fn(1)(2)(3)</code>. Code kiểu này không phổ biến trong các ngôn ngữ họ C, nhưng lại thường gặp trong nhóm ngôn ngữ xuất phát từ ML. Ở đó, cách thông thường để định nghĩa một hàm nhận nhiều tham số là một chuỗi hàm lồng nhau. Mỗi hàm nhận một tham số và trả về một hàm mới. Hàm đó nhận tham số tiếp theo, trả về một hàm khác nữa, và cứ thế. Cuối cùng, khi tất cả tham số đã được nhận, hàm cuối cùng sẽ hoàn tất công việc.</p>
+<p>Phong cách này, gọi là <strong>currying</strong>, được đặt theo tên Haskell Curry (cũng là người mà tên ông xuất hiện ở ngôn ngữ lập trình hàm nổi tiếng kia), được tích hợp trực tiếp vào cú pháp ngôn ngữ nên trông không “lạ” như ở đây.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">arguments</span>      → <span class="i">expression</span> ( <span class="s">&quot;,&quot;</span> <span class="i">expression</span> )* ;
+</pre></div>
+<p>Rule này yêu cầu ít nhất một argument expression, theo sau là không hoặc nhiều expression khác, mỗi cái đứng trước bởi dấu phẩy. Để xử lý lời gọi không có argument, rule <code>call</code> sẽ coi toàn bộ production <code>arguments</code> là tùy chọn.</p>
+<p>Tôi thừa nhận, điều này trông có vẻ cồng kềnh hơn bạn mong đợi đối với mẫu “không hoặc nhiều phần tử cách nhau bởi dấu phẩy” vốn rất phổ biến. Có những metasyntax tinh vi xử lý tốt hơn, nhưng trong BNF của chúng ta và nhiều đặc tả ngôn ngữ mà tôi từng thấy, nó vẫn khá rườm rà.</p>
+<p>Bên phía trình sinh syntax tree, ta thêm một <span name="call-ast">node mới</span>.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Binary   : Expr left, Token operator, Expr right&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Call     : Expr callee, Token paren, List&lt;Expr&gt; arguments&quot;</span>,
+</pre><pre class="insert-after">      &quot;Grouping : Expr expression&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="call-ast">
+<p>Code được generated cho node mới này nằm trong <a href="appendix-ii.html#call-expression">Appendix II</a>.</p>
+</aside>
+<p>Node này lưu trữ callee expression và một danh sách expression cho các argument. Nó cũng lưu token của dấu ngoặc đơn đóng. Chúng ta sẽ dùng vị trí của token đó khi báo runtime error do một lời gọi hàm gây ra.</p>
+<p>Mở parser ra. Ở chỗ <code>unary()</code> trước đây nhảy thẳng sang <code>primary()</code>, giờ đổi thành gọi <code>call()</code>.</p>
+<div class="codehilite"><pre class="insert-before">      return new Expr.Unary(operator, right);
+    }
+
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>unary</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">return</span> <span class="i">call</span>();
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>unary</em>(), replace 1 line</div>
+
+<p>Định nghĩa của nó là:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>unary</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">call</span>() {
+    <span class="t">Expr</span> <span class="i">expr</span> = <span class="i">primary</span>();
+
+    <span class="k">while</span> (<span class="k">true</span>) {<span name="while-true"> </span>
+      <span class="k">if</span> (<span class="i">match</span>(<span class="i">LEFT_PAREN</span>)) {
+        <span class="i">expr</span> = <span class="i">finishCall</span>(<span class="i">expr</span>);
+      } <span class="k">else</span> {
+        <span class="k">break</span>;
+      }
+    }
+
+    <span class="k">return</span> <span class="i">expr</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>unary</em>()</div>
+
+<p>Code ở đây không hoàn toàn khớp với grammar rule. Tôi đã sắp xếp lại một chút để code gọn hơn — một trong những đặc quyền khi ta viết parser thủ công. Nhưng về cơ bản, nó khá giống cách ta parse toán tử infix. Đầu tiên, ta parse một primary expression, tức “toán hạng trái” của lời gọi. Sau đó, mỗi khi gặp <code>(</code>, ta gọi <code>finishCall()</code> để parse call expression, dùng expression đã parse trước đó làm callee. Expression trả về sẽ trở thành <code>expr</code> mới và ta lặp lại để xem kết quả đó có tiếp tục được gọi hay không.</p>
+<aside name="while-true">
+<p>Code này sẽ đơn giản hơn nếu viết <code>while (match(LEFT_PAREN))</code> thay vì <code>while (true)</code> rồi <code>break</code>. Đừng lo, điều này sẽ hợp lý khi sau này ta mở rộng parser để xử lý property trên object.</p>
+</aside>
+<p>Code để parse danh sách argument nằm trong helper này:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>unary</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Expr</span> <span class="i">finishCall</span>(<span class="t">Expr</span> <span class="i">callee</span>) {
+    <span class="t">List</span>&lt;<span class="t">Expr</span>&gt; <span class="i">arguments</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+    <span class="k">if</span> (!<span class="i">check</span>(<span class="i">RIGHT_PAREN</span>)) {
+      <span class="k">do</span> {
+        <span class="i">arguments</span>.<span class="i">add</span>(<span class="i">expression</span>());
+      } <span class="k">while</span> (<span class="i">match</span>(<span class="i">COMMA</span>));
+    }
+
+    <span class="t">Token</span> <span class="i">paren</span> = <span class="i">consume</span>(<span class="i">RIGHT_PAREN</span>,
+                          <span class="s">&quot;Expect &#39;)&#39; after arguments.&quot;</span>);
+
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Expr</span>.<span class="t">Call</span>(<span class="i">callee</span>, <span class="i">paren</span>, <span class="i">arguments</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>unary</em>()</div>
+
+<p>Nó gần như là rule <code>arguments</code> được dịch sang code, chỉ khác là ta xử lý thêm trường hợp không có argument. Ta kiểm tra trường hợp đó trước bằng cách xem token tiếp theo có phải là <code>)</code> không. Nếu đúng, ta không parse argument nào cả.</p>
+<p>Ngược lại, ta parse một expression, rồi tìm dấu phẩy để xem có argument tiếp theo không. Ta tiếp tục làm vậy miễn là còn tìm thấy dấu phẩy sau mỗi expression. Khi không còn dấu phẩy, danh sách argument coi như xong và ta consume dấu ngoặc đơn đóng như mong đợi. Cuối cùng, ta gói callee và các argument đó vào một call AST node.</p>
+<h3><a href="#giới-hạn-số-lượng-argument-tối-đa" id="giới-hạn-số-lượng-argument-tối-đa"><small>10&#8202;.&#8202;1&#8202;.&#8202;1</small>Giới hạn số lượng argument tối đa</a></h3>
+<p>Hiện tại, vòng lặp parse argument của chúng ta không có giới hạn. Nếu bạn muốn gọi một hàm và truyền vào cả triệu argument, parser cũng chẳng phàn nàn gì. Vậy có nên giới hạn không?</p>
+<p>Các ngôn ngữ khác có nhiều cách tiếp cận khác nhau. Tiêu chuẩn C quy định một implementation tuân thủ phải hỗ trợ <em>ít nhất</em> 127 argument cho một hàm, nhưng không nói gì về giới hạn trên. Đặc tả Java thì quy định một method có thể nhận <em>không quá</em> <span name="254">255</span> argument.</p>
+<aside name="254">
+<p>Giới hạn là 25<em>4</em> argument nếu method là instance method. Lý do là <code>this</code> — đối tượng nhận method — hoạt động như một argument được truyền ngầm vào method, nên nó chiếm mất một slot.</p>
+</aside>
+<p>Interpreter Java của Lox thực ra không cần giới hạn này, nhưng việc đặt giới hạn số argument tối đa sẽ giúp đơn giản hóa bytecode interpreter trong <a href="a-bytecode-virtual-machine.html">Phần III</a>. Chúng ta muốn hai interpreter tương thích với nhau, kể cả trong những trường hợp “góc khuất” như thế này, nên sẽ thêm cùng một giới hạn vào jlox.</p>
+<div class="codehilite"><pre class="insert-before">      do {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>finishCall</em>()</div>
+<pre class="insert">        <span class="k">if</span> (<span class="i">arguments</span>.<span class="i">size</span>() &gt;= <span class="n">255</span>) {
+          <span class="i">error</span>(<span class="i">peek</span>(), <span class="s">&quot;Can&#39;t have more than 255 arguments.&quot;</span>);
+        }
+</pre><pre class="insert-after">        arguments.add(expression());
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>finishCall</em>()</div>
+
+<p>Lưu ý rằng đoạn code này <em>báo</em> lỗi nếu gặp quá nhiều argument, nhưng không <em>ném</em> lỗi. Ném lỗi là cách chúng ta kích hoạt chế độ panic, điều mà ta muốn khi parser đang ở trạng thái rối và không biết mình đang ở đâu trong grammar nữa. Nhưng ở đây, parser vẫn ở trạng thái hoàn toàn hợp lệ — nó chỉ phát hiện quá nhiều argument. Vậy nên ta chỉ báo lỗi và tiếp tục.</p>
+<h3><a href="#execute-lời-gọi-h&agrave;m" id="execute-lời-gọi-h&agrave;m"><small>10&#8202;.&#8202;1&#8202;.&#8202;2</small>Execute lời gọi h&agrave;m</a></h3>
+<p>Chúng ta chưa có hàm nào để gọi, nên bắt đầu implement lời gọi trước nghe có vẻ kỳ lạ, nhưng ta sẽ tính sau. Trước hết, interpreter cần một import mới.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em></div>
+<pre class="insert"><span class="k">import</span> <span class="i">java.util.ArrayList</span>;
+</pre><pre class="insert-after">import java.util.List;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em></div>
+
+<p>Như thường lệ, việc interpret bắt đầu với một visit method mới cho node call expression mới của chúng ta.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitBinaryExpr</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">visitCallExpr</span>(<span class="t">Expr</span>.<span class="t">Call</span> <span class="i">expr</span>) {
+    <span class="t">Object</span> <span class="i">callee</span> = <span class="i">evaluate</span>(<span class="i">expr</span>.<span class="i">callee</span>);
+
+    <span class="t">List</span>&lt;<span class="t">Object</span>&gt; <span class="i">arguments</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+    <span class="k">for</span> (<span class="t">Expr</span> <span class="i">argument</span> : <span class="i">expr</span>.<span class="i">arguments</span>) {<span name="in-order"> </span>
+      <span class="i">arguments</span>.<span class="i">add</span>(<span class="i">evaluate</span>(<span class="i">argument</span>));
+    }
+
+    <span class="t">LoxCallable</span> <span class="i">function</span> = (<span class="t">LoxCallable</span>)<span class="i">callee</span>;
+    <span class="k">return</span> <span class="i">function</span>.<span class="i">call</span>(<span class="k">this</span>, <span class="i">arguments</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitBinaryExpr</em>()</div>
+
+<p>Đầu tiên, ta evaluate expression của callee. Thông thường, expression này chỉ là một identifier để tra hàm theo tên, nhưng nó có thể là bất cứ thứ gì. Sau đó, ta evaluate từng argument expression theo thứ tự và lưu các giá trị kết quả vào một list.</p>
+<aside name="in-order">
+<p>Đây lại là một lựa chọn semantics tinh tế khác. Vì argument expression có thể có side effect, thứ tự evaluate chúng có thể hiển thị rõ với người dùng. Dù vậy, một số ngôn ngữ như Scheme và C không quy định thứ tự này. Điều đó cho phép compiler tự do sắp xếp lại để tối ưu hiệu năng, nhưng cũng có thể khiến người dùng khó chịu nếu argument không được evaluate theo thứ tự họ mong đợi.</p>
+</aside>
+<p>Khi đã có callee và các argument, việc còn lại chỉ là thực hiện lời gọi. Ta làm điều đó bằng cách cast callee sang <span name="callable">LoxCallable</span> rồi gọi method <code>call()</code> trên nó. Bất kỳ object Lox nào trong Java có thể được gọi như một hàm sẽ implement interface này. Điều đó bao gồm các hàm do người dùng định nghĩa, tất nhiên, nhưng cũng có cả class object vì class được “gọi” để tạo instance mới. Chúng ta cũng sẽ dùng nó cho một mục đích nữa ngay sau đây.</p>
+<aside name="callable">
+<p>Tôi thêm chữ “Lox” vào trước tên để phân biệt với interface Callable của thư viện chuẩn Java. Tiếc là tất cả những cái tên đơn giản hay ho đều đã bị lấy mất.</p>
+</aside>
+<p>Interface mới này không có gì phức tạp.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxCallable.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.List</span>;
+
+<span class="k">interface</span> <span class="t">LoxCallable</span> {
+  <span class="t">Object</span> <span class="i">call</span>(<span class="t">Interpreter</span> <span class="i">interpreter</span>, <span class="t">List</span>&lt;<span class="t">Object</span>&gt; <span class="i">arguments</span>);
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxCallable.java</em>, create new file</div>
+
+<p>Ta truyền interpreter vào phòng khi class implement <code>call()</code> cần dùng. Ta cũng đưa vào danh sách các giá trị argument đã evaluate. Nhiệm vụ của implementer là trả về giá trị mà call expression tạo ra.</p>
+<h3><a href="#lỗi-kiểu-khi-gọi-h&agrave;m" id="lỗi-kiểu-khi-gọi-h&agrave;m"><small>10&#8202;.&#8202;1&#8202;.&#8202;3</small>Lỗi kiểu khi gọi h&agrave;m</a></h3>
+<p>Trước khi implement LoxCallable, ta cần làm cho visit method này “cứng cáp” hơn một chút. Hiện tại, nó bỏ qua một vài tình huống lỗi mà ta không thể giả vờ như sẽ không xảy ra. Đầu tiên, chuyện gì xảy ra nếu callee thực ra không phải thứ có thể gọi? Nếu bạn thử làm thế này:</p>
+<div class="codehilite"><pre><span class="s">&quot;totally not a function&quot;</span>();
+</pre></div>
+<p>String không callable trong Lox. Representation runtime của một Lox string là một Java string, nên khi ta cast nó sang LoxCallable, JVM sẽ ném ra ClassCastException. Ta không muốn interpreter “phun” ra một Java stack trace xấu xí rồi chết. Thay vào đó, ta cần tự kiểm tra kiểu trước.</p>
+<div class="codehilite"><pre class="insert-before">    }
+
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitCallExpr</em>()</div>
+<pre class="insert">    <span class="k">if</span> (!(<span class="i">callee</span> <span class="k">instanceof</span> <span class="t">LoxCallable</span>)) {
+      <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">expr</span>.<span class="i">paren</span>,
+          <span class="s">&quot;Can only call functions and classes.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    LoxCallable function = (LoxCallable)callee;
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitCallExpr</em>()</div>
+
+<p>Chúng ta vẫn ném exception, nhưng giờ là exception type của riêng mình, loại mà interpreter biết cách bắt và báo lỗi một cách êm đẹp.</p>
+<h3><a href="#checking-arity" id="checking-arity"><small>10&#8202;.&#8202;1&#8202;.&#8202;4</small>Checking arity</a></h3>
+<p>Vấn đề tiếp theo liên quan đến <strong>arity</strong> của hàm. Arity là thuật ngữ “sang chảnh” để chỉ số lượng argument mà một hàm hoặc một phép toán mong đợi. Toán tử unary có arity bằng một, toán tử binary là hai, v.v. Với hàm, arity được xác định bởi số lượng parameter mà nó khai báo.</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">add</span>(<span class="i">a</span>, <span class="i">b</span>, <span class="i">c</span>) {
+  <span class="k">print</span> <span class="i">a</span> + <span class="i">b</span> + <span class="i">c</span>;
+}
+</pre></div>
+<p>Hàm này định nghĩa ba parameter: <code>a</code>, <code>b</code> và <code>c</code>, nên arity của nó là ba và nó mong đợi ba argument. Vậy nếu bạn gọi nó như sau thì sao:</p>
+<div class="codehilite"><pre><span class="i">add</span>(<span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span>, <span class="n">4</span>); <span class="c">// Quá nhiều.</span>
+<span class="i">add</span>(<span class="n">1</span>, <span class="n">2</span>);       <span class="c">// Quá ít.</span>
+</pre></div>
+<p>Các ngôn ngữ khác nhau có cách tiếp cận khác nhau với vấn đề này. Tất nhiên, hầu hết các ngôn ngữ statically typed sẽ kiểm tra điều này ở compile time và từ chối compile nếu số lượng argument không khớp với arity của hàm. JavaScript thì bỏ qua bất kỳ argument thừa nào bạn truyền vào. Nếu bạn truyền thiếu, nó sẽ điền vào các parameter còn thiếu bằng giá trị “giống-null-nhưng-không-phải-null” đặc biệt là <code>undefined</code>. Python thì nghiêm khắc hơn: nó sẽ báo runtime error nếu danh sách argument quá ngắn hoặc quá dài.</p>
+<p>Tôi cho rằng cách sau là tốt hơn. Truyền sai số lượng argument gần như luôn là một bug, và đây là lỗi mà tôi thực sự hay mắc phải. Vì vậy, càng sớm implementation cảnh báo tôi về điều đó thì càng tốt. Với Lox, chúng ta sẽ chọn cách của Python. Trước khi gọi callable, ta sẽ kiểm tra xem độ dài danh sách argument có khớp với arity của callable hay không.</p>
+<div class="codehilite"><pre class="insert-before">    LoxCallable function = (LoxCallable)callee;
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitCallExpr</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">arguments</span>.<span class="i">size</span>() != <span class="i">function</span>.<span class="i">arity</span>()) {
+      <span class="k">throw</span> <span class="k">new</span> <span class="t">RuntimeError</span>(<span class="i">expr</span>.<span class="i">paren</span>, <span class="s">&quot;Expected &quot;</span> +
+          <span class="i">function</span>.<span class="i">arity</span>() + <span class="s">&quot; arguments but got &quot;</span> +
+          <span class="i">arguments</span>.<span class="i">size</span>() + <span class="s">&quot;.&quot;</span>);
+    }
+
+</pre><pre class="insert-after">    return function.call(this, arguments);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitCallExpr</em>()</div>
+
+<p>Điều này đòi hỏi một method mới trong interface LoxCallable để hỏi arity của nó.</p>
+<div class="codehilite"><pre class="insert-before">interface LoxCallable {
+</pre><div class="source-file"><em>lox/LoxCallable.java</em><br>
+in interface <em>LoxCallable</em></div>
+<pre class="insert">  <span class="t">int</span> <span class="i">arity</span>();
+</pre><pre class="insert-after">  Object call(Interpreter interpreter, List&lt;Object&gt; arguments);
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxCallable.java</em>, in interface <em>LoxCallable</em></div>
+
+<p>Chúng ta <em>có thể</em> đẩy việc kiểm tra arity xuống phần implement cụ thể của <code>call()</code>. Nhưng vì sẽ có nhiều class implement LoxCallable, cách đó sẽ dẫn đến việc lặp lại logic kiểm tra ở nhiều nơi. Đưa nó lên visit method cho phép ta làm ở một chỗ duy nhất.</p>
+<h2><a href="#native-functions" id="native-functions"><small>10&#8202;.&#8202;2</small>Native Functions</a></h2>
+<p>Về lý thuyết, chúng ta có thể gọi hàm, nhưng hiện tại chưa có hàm nào để gọi. Trước khi đến với hàm do người dùng định nghĩa, đây là thời điểm tốt để giới thiệu một khía cạnh quan trọng nhưng thường bị bỏ qua trong việc implement ngôn ngữ — <span name="native"><strong>native function</strong></span>. Đây là những hàm mà interpreter cung cấp cho code của người dùng nhưng được implement bằng ngôn ngữ host (trong trường hợp của chúng ta là Java), chứ không phải ngôn ngữ đang được implement (Lox).</p>
+<p>Đôi khi chúng còn được gọi là <strong>primitive</strong>, <strong>external function</strong>, hoặc <strong>foreign function</strong>. Vì những hàm này có thể được gọi khi chương trình của người dùng đang chạy, chúng là một phần của runtime của implementation. Nhiều sách về lập trình ngôn ngữ bỏ qua phần này vì nó không thú vị về mặt khái niệm. Chủ yếu đây là công việc “nặng nhọc”.</p>
+<aside name="native">
+<p>Thú vị là, hai tên gọi của những hàm này — “native” và “foreign” — lại là từ trái nghĩa. Có lẽ điều đó phụ thuộc vào góc nhìn của người đặt tên. Nếu bạn coi mình đang “sống” bên trong implementation của runtime (trong trường hợp của chúng ta là Java) thì các hàm viết bằng ngôn ngữ đó là “native”. Nhưng nếu bạn đứng ở góc nhìn của <em>người dùng</em> ngôn ngữ, thì runtime được implement bằng một ngôn ngữ “foreign” khác.</p>
+<p>Hoặc cũng có thể “native” ở đây ám chỉ ngôn ngữ machine code của phần cứng bên dưới. Trong Java, các method “native” là những method được implement bằng C hoặc C++ và compile thành native machine code.</p><img src="image/functions/foreign.png" class="above" alt="Tất cả chỉ là vấn đề góc nhìn." />
+</aside>
+<p>Nhưng khi nói đến việc khiến ngôn ngữ của bạn thực sự hữu ích, các native function mà implementation cung cấp là chìa khóa. Chúng cung cấp quyền truy cập vào các dịch vụ nền tảng mà mọi chương trình đều dựa vào. Nếu bạn không cung cấp native function để truy cập file system, người dùng sẽ gặp khó khăn lớn khi viết một chương trình đọc và <span name="print">hiển thị</span> nội dung file.</p>
+<aside name="print">
+<p>Một native function kinh điển mà hầu như ngôn ngữ nào cũng có là hàm in text ra stdout. Trong Lox, tôi đã biến <code>print</code> thành một statement built-in để chúng ta có thể đưa nội dung ra màn hình ngay từ các chương trước.</p>
+<p>Khi đã có function, ta có thể đơn giản hóa ngôn ngữ bằng cách bỏ cú pháp print cũ và thay bằng một native function. Nhưng làm vậy sẽ khiến các ví dụ ở đầu sách không chạy được trên interpreter của các chương sau và ngược lại. Vì vậy, trong cuốn sách này, tôi sẽ giữ nguyên.</p>
+<p>Nếu bạn đang xây dựng interpreter cho ngôn ngữ <em>của riêng mình</em>, bạn có thể cân nhắc điều này.</p>
+</aside>
+<p>Nhiều ngôn ngữ cũng cho phép người dùng tự cung cấp native function của họ. Cơ chế để làm điều đó được gọi là <strong>foreign function interface</strong> (<strong>FFI</strong>), <strong>native extension</strong>, <strong>native interface</strong>, hoặc tên tương tự. Đây là một tính năng hay vì nó giúp người implement ngôn ngữ không phải tự mình cung cấp quyền truy cập tới mọi khả năng mà nền tảng bên dưới hỗ trợ. Chúng ta sẽ không định nghĩa FFI cho jlox, nhưng sẽ thêm một native function để bạn hình dung nó trông như thế nào.</p>
+<h3><a href="#telling-time" id="telling-time"><small>10&#8202;.&#8202;2&#8202;.&#8202;1</small>Telling time</a></h3>
+<p>Khi chúng ta đến <a href="a-bytecode-virtual-machine.html">Phần III</a> và bắt đầu xây dựng một bản implement Lox hiệu quả hơn nhiều, chúng ta sẽ đặc biệt quan tâm đến hiệu năng. Công việc tối ưu hiệu năng đòi hỏi phải đo đạc, và điều đó đồng nghĩa với <strong>benchmark</strong>. Đây là những chương trình đo thời gian cần thiết để kiểm tra một phần nào đó của interpreter.</p>
+<p>Chúng ta <em>có thể</em> đo thời gian khởi động interpreter, chạy benchmark và thoát, nhưng cách đó thêm rất nhiều chi phí phụ — thời gian khởi động JVM, các tác vụ của hệ điều hành, v.v. Tất nhiên, những yếu tố đó cũng quan trọng, nhưng nếu bạn chỉ muốn kiểm chứng một tối ưu hóa ở một phần nào đó của interpreter, bạn sẽ không muốn chi phí phụ này che mờ kết quả.</p>
+<p>Một giải pháp hay hơn là để chính script benchmark đo thời gian trôi qua giữa hai điểm trong code. Để làm được điều đó, một chương trình Lox cần có khả năng đo thời gian. Hiện tại thì không thể — bạn không thể tự “chế” một chiếc đồng hồ hữu ích nếu không truy cập được đồng hồ của máy tính.</p>
+<p>Vì vậy, chúng ta sẽ thêm <code>clock()</code>, một native function trả về số giây đã trôi qua kể từ một mốc thời gian cố định. Hiệu giữa hai lần gọi liên tiếp sẽ cho bạn biết khoảng thời gian đã trôi qua. Hàm này được định nghĩa ở phạm vi global, nên hãy đảm bảo interpreter có thể truy cập nó.</p>
+<div class="codehilite"><pre class="insert-before">class Interpreter implements Expr.Visitor&lt;Object&gt;,
+                             Stmt.Visitor&lt;Void&gt; {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in class <em>Interpreter</em><br>
+replace 1 line</div>
+<pre class="insert">  <span class="k">final</span> <span class="t">Environment</span> <span class="i">globals</span> = <span class="k">new</span> <span class="t">Environment</span>();
+  <span class="k">private</span> <span class="t">Environment</span> <span class="i">environment</span> = <span class="i">globals</span>;
+</pre><pre class="insert-after">
+
+  void interpret(List&lt;Stmt&gt; statements) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in class <em>Interpreter</em>, replace 1 line</div>
+
+<p>Trường <code>environment</code> trong interpreter sẽ thay đổi khi chúng ta vào và ra khỏi các scope cục bộ. Nó theo dõi environment <em>hiện tại</em>. Trường <code>globals</code> mới này giữ một tham chiếu cố định đến environment global ngoài cùng.</p>
+<p>Khi khởi tạo một Interpreter, chúng ta sẽ đưa native function này vào scope global.</p>
+<div class="codehilite"><pre class="insert-before">  private Environment environment = globals;
+
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in class <em>Interpreter</em></div>
+<pre class="insert">  <span class="t">Interpreter</span>() {
+    <span class="i">globals</span>.<span class="i">define</span>(<span class="s">&quot;clock&quot;</span>, <span class="k">new</span> <span class="t">LoxCallable</span>() {
+      <span class="a">@Override</span>
+      <span class="k">public</span> <span class="t">int</span> <span class="i">arity</span>() { <span class="k">return</span> <span class="n">0</span>; }
+
+      <span class="a">@Override</span>
+      <span class="k">public</span> <span class="t">Object</span> <span class="i">call</span>(<span class="t">Interpreter</span> <span class="i">interpreter</span>,
+                         <span class="t">List</span>&lt;<span class="t">Object</span>&gt; <span class="i">arguments</span>) {
+        <span class="k">return</span> (<span class="t">double</span>)<span class="t">System</span>.<span class="i">currentTimeMillis</span>() / <span class="n">1000.0</span>;
+      }
+
+      <span class="a">@Override</span>
+      <span class="k">public</span> <span class="t">String</span> <span class="i">toString</span>() { <span class="k">return</span> <span class="s">&quot;&lt;native fn&gt;&quot;</span>; }
+    });
+  }
+
+</pre><pre class="insert-after">  void interpret(List&lt;Stmt&gt; statements) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in class <em>Interpreter</em></div>
+
+<p>Điều này định nghĩa một <span name="lisp-1">biến</span> tên là <code>"clock"</code>. Giá trị của nó là một Java anonymous class implement LoxCallable. Hàm <code>clock()</code> không nhận argument nào, nên arity của nó là 0. Phần implement của <code>call()</code> sẽ gọi hàm Java tương ứng và chuyển kết quả thành giá trị double tính bằng giây.</p>
+<aside name="lisp-1">
+<p>Trong Lox, function và variable dùng chung một namespace. Trong Common Lisp, hai thứ này tồn tại ở hai “thế giới” riêng. Một function và một variable có cùng tên sẽ không xung đột. Nếu bạn gọi tên đó, nó sẽ tìm function; nếu bạn tham chiếu, nó sẽ tìm variable. Điều này đòi hỏi một số thao tác bổ sung khi bạn muốn tham chiếu một function như một giá trị hạng nhất.</p>
+<p>Richard P. Gabriel và Kent Pitman đã đặt ra thuật ngữ “Lisp-1” để chỉ các ngôn ngữ như Scheme, nơi function và variable dùng chung namespace, và “Lisp-2” cho các ngôn ngữ như Common Lisp, nơi chúng được tách riêng. Dù tên gọi này khá “tối nghĩa”, chúng vẫn được dùng đến nay. Lox là một Lisp-1.</p>
+</aside>
+<p>Nếu muốn thêm các native function khác — đọc input từ người dùng, làm việc với file, v.v. — chúng ta có thể thêm mỗi hàm như một anonymous class riêng implement LoxCallable. Nhưng với cuốn sách này, chỉ cần một hàm này là đủ.</p>
+<p>Giờ thì hãy rời khỏi “nghiệp” định nghĩa hàm và để người dùng tự lo phần đó<span class="ellipse">&thinsp;.&thinsp;.&thinsp;.&nbsp;</span></p>
+<h2><a href="#function-declarations" id="function-declarations"><small>10&#8202;.&#8202;3</small>Function Declarations</a></h2>
+<p>Cuối cùng, chúng ta sẽ thêm một production mới vào rule <code>declaration</code> mà ta đã giới thiệu khi thêm variable. Function declaration, giống như variable, sẽ bind một <span name="name">tên</span> mới. Điều đó có nghĩa là chúng chỉ được phép xuất hiện ở những nơi cho phép declaration.</p>
+<aside name="name">
+<p>Một function declaration có tên thực ra không phải là một thao tác nguyên thủy duy nhất. Nó là syntactic sugar cho hai bước riêng biệt: (1) tạo một function object mới, và (2) bind một variable mới tới nó. Nếu Lox có cú pháp cho anonymous function, chúng ta sẽ không cần function declaration statement. Bạn chỉ cần viết:</p>
+<div class="codehilite"><pre><span class="k">var</span> <span class="i">add</span> = <span class="k">fun</span> (<span class="i">a</span>, <span class="i">b</span>) {
+  <span class="k">print</span> <span class="i">a</span> + <span class="i">b</span>;
+};
+</pre></div>
+<p>Tuy nhiên, vì function có tên là trường hợp phổ biến, tôi đã cho Lox cú pháp gọn gàng cho chúng.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">declaration</span>    → <span class="i">funDecl</span>
+               | <span class="i">varDecl</span>
+               | <span class="i">statement</span> ;
+</pre></div>
+<p>Rule <code>declaration</code> được cập nhật để tham chiếu rule mới này:</p>
+<div class="codehilite"><pre><span class="i">funDecl</span>        → <span class="s">&quot;fun&quot;</span> <span class="i">function</span> ;
+<span class="i">function</span>       → <span class="t">IDENTIFIER</span> <span class="s">&quot;(&quot;</span> <span class="i">parameters</span>? <span class="s">&quot;)&quot;</span> <span class="i">block</span> ;
+</pre></div>
+<p>Rule <code>funDecl</code> chính sử dụng một helper rule riêng là <code>function</code>. Một <em>function declaration statement</em> là từ khóa <code>fun</code> theo sau bởi phần “function” thực sự. Khi chúng ta làm việc với class, chúng ta sẽ tái sử dụng rule <code>function</code> này để khai báo method. Chúng trông khá giống function declaration, nhưng không có <span name="fun"><code>fun</code></span> ở trước.</p>
+<aside name="fun">
+<p>Method thì “quá sang” để mà “fun”.</p>
+</aside>
+<p>Bản thân function là một tên, theo sau là danh sách parameter trong ngoặc đơn và phần thân. Phần thân luôn là một block trong ngoặc nhọn, dùng cùng rule grammar với block statement. Danh sách parameter dùng rule này:</p>
+<div class="codehilite"><pre><span class="i">parameters</span>     → <span class="t">IDENTIFIER</span> ( <span class="s">&quot;,&quot;</span> <span class="t">IDENTIFIER</span> )* ;
+</pre></div>
+<p>Nó giống rule <code>arguments</code> trước đây, chỉ khác là mỗi parameter là một identifier, không phải một expression. Đây là khá nhiều cú pháp mới để parser xử lý, nhưng AST <span name="fun-ast">node</span> tạo ra thì không quá phức tạp.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Expression : Expr expression&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Function   : Token name, List&lt;Token&gt; params,&quot;</span> +
+                  <span class="s">&quot; List&lt;Stmt&gt; body&quot;</span>,
+</pre><pre class="insert-after">      &quot;If         : Expr condition, Stmt thenBranch,&quot; +
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="fun-ast">
+<p>Code được generated cho node mới này nằm trong <a href="appendix-ii.html#function-statement">Appendix II</a>.</p>
+</aside>
+<p>Một function node có tên, danh sách parameter (tên của chúng), và phần thân. Chúng ta lưu phần thân dưới dạng danh sách statement nằm trong cặp ngoặc nhọn.</p>
+<p>Bên phía parser, ta đưa thêm phần khai báo mới này vào.</p>
+<div class="codehilite"><pre class="insert-before">    try {
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>declaration</em>()</div>
+<pre class="insert">      <span class="k">if</span> (<span class="i">match</span>(<span class="i">FUN</span>)) <span class="k">return</span> <span class="i">function</span>(<span class="s">&quot;function&quot;</span>);
+</pre><pre class="insert-after">      if (match(VAR)) return varDeclaration();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>declaration</em>()</div>
+
+<p>Giống như các statement khác, một function được nhận diện bởi từ khóa ở đầu. Khi gặp <code>fun</code>, ta gọi <code>function</code>. Điều này tương ứng với rule <code>function</code> trong grammar vì ta đã match và consume từ khóa <code>fun</code>. Chúng ta sẽ xây dựng method này từng bước, bắt đầu với:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>expressionStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">function</span>(<span class="t">String</span> <span class="i">kind</span>) {
+    <span class="t">Token</span> <span class="i">name</span> = <span class="i">consume</span>(<span class="i">IDENTIFIER</span>, <span class="s">&quot;Expect &quot;</span> + <span class="i">kind</span> + <span class="s">&quot; name.&quot;</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>expressionStatement</em>()</div>
+
+<p>Hiện tại, nó chỉ consume token identifier cho tên hàm. Bạn có thể thắc mắc về tham số <code>kind</code> nhỏ bé kia. Cũng như việc ta tái sử dụng grammar rule, sau này ta sẽ tái sử dụng method <code>function()</code> để parse method bên trong class. Khi đó, ta sẽ truyền vào <code>"method"</code> cho <code>kind</code> để thông báo lỗi cụ thể hơn cho loại khai báo đang được parse.</p>
+<p>Tiếp theo, ta parse danh sách parameter và cặp ngoặc đơn bao quanh nó.</p>
+<div class="codehilite"><pre class="insert-before">    Token name = consume(IDENTIFIER, &quot;Expect &quot; + kind + &quot; name.&quot;);
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>function</em>()</div>
+<pre class="insert">    <span class="i">consume</span>(<span class="i">LEFT_PAREN</span>, <span class="s">&quot;Expect &#39;(&#39; after &quot;</span> + <span class="i">kind</span> + <span class="s">&quot; name.&quot;</span>);
+    <span class="t">List</span>&lt;<span class="t">Token</span>&gt; <span class="i">parameters</span> = <span class="k">new</span> <span class="t">ArrayList</span>&lt;&gt;();
+    <span class="k">if</span> (!<span class="i">check</span>(<span class="i">RIGHT_PAREN</span>)) {
+      <span class="k">do</span> {
+        <span class="k">if</span> (<span class="i">parameters</span>.<span class="i">size</span>() &gt;= <span class="n">255</span>) {
+          <span class="i">error</span>(<span class="i">peek</span>(), <span class="s">&quot;Can&#39;t have more than 255 parameters.&quot;</span>);
+        }
+
+        <span class="i">parameters</span>.<span class="i">add</span>(
+            <span class="i">consume</span>(<span class="i">IDENTIFIER</span>, <span class="s">&quot;Expect parameter name.&quot;</span>));
+      } <span class="k">while</span> (<span class="i">match</span>(<span class="i">COMMA</span>));
+    }
+    <span class="i">consume</span>(<span class="i">RIGHT_PAREN</span>, <span class="s">&quot;Expect &#39;)&#39; after parameters.&quot;</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>function</em>()</div>
+
+<p>Phần này giống code xử lý argument trong lời gọi hàm, chỉ khác là không tách ra thành helper method. <code>if</code> bên ngoài xử lý trường hợp không có parameter, và vòng lặp <code>while</code> bên trong parse các parameter miễn là còn tìm thấy dấu phẩy để phân tách. Kết quả là danh sách token cho tên từng parameter.</p>
+<p>Giống như với argument của lời gọi hàm, ta kiểm tra ngay tại thời điểm parse để đảm bảo bạn không vượt quá số lượng parameter tối đa mà một hàm được phép có.</p>
+<p>Cuối cùng, ta parse phần thân và gói tất cả lại thành một function node.</p>
+<div class="codehilite"><pre class="insert-before">    consume(RIGHT_PAREN, &quot;Expect ')' after parameters.&quot;);
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>function</em>()</div>
+<pre class="insert">
+
+    <span class="i">consume</span>(<span class="i">LEFT_BRACE</span>, <span class="s">&quot;Expect &#39;{&#39; before &quot;</span> + <span class="i">kind</span> + <span class="s">&quot; body.&quot;</span>);
+    <span class="t">List</span>&lt;<span class="t">Stmt</span>&gt; <span class="i">body</span> = <span class="i">block</span>();
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Function</span>(<span class="i">name</span>, <span class="i">parameters</span>, <span class="i">body</span>);
+</pre><pre class="insert-after">  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>function</em>()</div>
+
+<p>Lưu ý rằng ta consume dấu <code>{</code> ở đầu phần thân tại đây trước khi gọi <code>block()</code>. Lý do là <code>block()</code> giả định token ngoặc nhọn đã được match. Consume nó ở đây cho phép ta báo lỗi chính xác hơn nếu không tìm thấy <code>{</code>, vì ta biết nó đang ở ngữ cảnh của một function declaration.</p>
+<h2><a href="#function-objects" id="function-objects"><small>10&#8202;.&#8202;4</small>Function Objects</a></h2>
+<p>Chúng ta đã parse xong cú pháp, thường thì giờ là lúc interpret, nhưng trước hết cần nghĩ cách biểu diễn một Lox function trong Java. Ta cần lưu trữ parameter để bind chúng với giá trị argument khi hàm được gọi. Và tất nhiên, ta cần lưu code của phần thân để execute.</p>
+<p>Về cơ bản, đó chính là class <code>Stmt.Function</code>. Liệu ta có thể dùng luôn nó? Gần như được, nhưng chưa đủ. Ta còn cần một class implement <code>LoxCallable</code> để có thể gọi nó. Ta không muốn pha trộn giai đoạn runtime của interpreter vào các class cú pháp của front end, nên không để <code>Stmt.Function</code> tự implement. Thay vào đó, ta bọc nó trong một class mới.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">import</span> <span class="i">java.util.List</span>;
+
+<span class="k">class</span> <span class="t">LoxFunction</span> <span class="k">implements</span> <span class="t">LoxCallable</span> {
+  <span class="k">private</span> <span class="k">final</span> <span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">declaration</span>;
+  <span class="t">LoxFunction</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">declaration</span>) {
+    <span class="k">this</span>.<span class="i">declaration</span> = <span class="i">declaration</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, create new file</div>
+
+<p>Ta implement <code>call()</code> của <code>LoxCallable</code> như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+add after <em>LoxFunction</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Object</span> <span class="i">call</span>(<span class="t">Interpreter</span> <span class="i">interpreter</span>,
+                     <span class="t">List</span>&lt;<span class="t">Object</span>&gt; <span class="i">arguments</span>) {
+    <span class="t">Environment</span> <span class="i">environment</span> = <span class="k">new</span> <span class="t">Environment</span>(<span class="i">interpreter</span>.<span class="i">globals</span>);
+    <span class="k">for</span> (<span class="t">int</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="i">declaration</span>.<span class="i">params</span>.<span class="i">size</span>(); <span class="i">i</span>++) {
+      <span class="i">environment</span>.<span class="i">define</span>(<span class="i">declaration</span>.<span class="i">params</span>.<span class="i">get</span>(<span class="i">i</span>).<span class="i">lexeme</span>,
+          <span class="i">arguments</span>.<span class="i">get</span>(<span class="i">i</span>));
+    }
+
+    <span class="i">interpreter</span>.<span class="i">executeBlock</span>(<span class="i">declaration</span>.<span class="i">body</span>, <span class="i">environment</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, add after <em>LoxFunction</em>()</div>
+
+<p>Vài dòng code này là một trong những phần nền tảng và mạnh mẽ nhất của interpreter. Như ta đã thấy trong <a href="statements-and-state.html">chương về statement và <span name="env">state</span></a>, quản lý environment của tên là một phần cốt lõi của việc implement ngôn ngữ. Function gắn chặt với điều đó.</p>
+<aside name="env">
+<p>Chúng ta sẽ đào sâu hơn về environment trong <a href="resolving-and-binding.html">chương tiếp theo</a>.</p>
+</aside>
+<p>Parameter là cốt lõi của function, đặc biệt ở chỗ một function <em>đóng gói</em> các parameter của nó — không code nào bên ngoài function có thể thấy chúng. Điều này có nghĩa là mỗi function có environment riêng để lưu các biến đó.</p>
+<p>Hơn nữa, environment này phải được tạo động. Mỗi <em>lời gọi</em> function có environment riêng. Nếu không, recursion sẽ hỏng. Nếu có nhiều lời gọi cùng lúc tới cùng một function, mỗi lời gọi cần environment <em>riêng</em>, dù tất cả đều gọi cùng một function.</p>
+<p>Ví dụ, đây là một cách vòng vèo để đếm tới ba:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">count</span>(<span class="i">n</span>) {
+  <span class="k">if</span> (<span class="i">n</span> &gt; <span class="n">1</span>) <span class="i">count</span>(<span class="i">n</span> - <span class="n">1</span>);
+  <span class="k">print</span> <span class="i">n</span>;
+}
+
+<span class="i">count</span>(<span class="n">3</span>);
+</pre></div>
+<p>Hãy tưởng tượng ta dừng interpreter ngay tại điểm chuẩn bị in ra <code>1</code> trong lời gọi lồng nhau sâu nhất. Các lời gọi bên ngoài in <code>2</code> và <code>3</code> vẫn chưa in, nên chắc chắn đâu đó trong bộ nhớ vẫn còn các environment lưu rằng <code>n</code> được bind với <code>3</code> ở một context, <code>2</code> ở context khác, và <code>1</code> ở context trong cùng, như:</p><img src="image/functions/recursion.png" alt="Một environment riêng cho mỗi lời gọi đệ quy." />
+<p>Đó là lý do ta tạo environment mới ở mỗi <em>lời gọi</em>, không phải ở <em>khai báo</em> function. Method <code>call()</code> mà ta vừa thấy làm điều đó. Ngay khi bắt đầu lời gọi, nó tạo environment mới. Sau đó, nó duyệt song song danh sách parameter và argument. Với mỗi cặp, nó tạo biến mới với tên parameter và bind nó với giá trị argument.</p>
+<p>Với chương trình như sau:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">add</span>(<span class="i">a</span>, <span class="i">b</span>, <span class="i">c</span>) {
+  <span class="k">print</span> <span class="i">a</span> + <span class="i">b</span> + <span class="i">c</span>;
+}
+
+<span class="i">add</span>(<span class="n">1</span>, <span class="n">2</span>, <span class="n">3</span>);
+</pre></div>
+<p>Tại thời điểm gọi <code>add()</code>, interpreter tạo ra thứ như thế này:</p><img src="image/functions/binding.png" alt="Bind argument với parameter tương ứng." />
+<p>Sau đó, <code>call()</code> yêu cầu interpreter execute phần thân của function trong environment cục bộ mới này. Trước đó, environment hiện tại là environment nơi function được gọi. Giờ, ta “dịch chuyển” vào không gian parameter mới tạo cho function.</p>
+<p>Đây là tất cả những gì cần để truyền dữ liệu vào function. Bằng cách dùng environment khác nhau khi execute phần thân, các lời gọi cùng một function với cùng code có thể cho ra kết quả khác nhau.</p>
+<p>Khi phần thân function execute xong, <code>executeBlock()</code> loại bỏ environment cục bộ đó và khôi phục environment trước đó đang hoạt động tại callsite. Cuối cùng, <code>call()</code> trả về <code>null</code>, tức là <code>nil</code> cho caller. (Chúng ta sẽ thêm giá trị trả về sau.)</p>
+<p>Về mặt cơ học, code này khá đơn giản: duyệt vài danh sách, bind vài biến mới, gọi một method. Nhưng đây chính là lúc đoạn <em>code</em> tinh thể của function declaration trở thành một <em>lời gọi</em> sống động. Đây là một trong những đoạn tôi yêu thích nhất trong cả cuốn sách. Nếu muốn, bạn có thể dành chút thời gian để “thiền” về nó.</p>
+<p>Xong chưa? OK. Lưu ý rằng khi bind parameter, ta giả định danh sách parameter và argument có cùng độ dài. Điều này an toàn vì <code>visitCallExpr()</code> đã kiểm tra arity trước khi gọi <code>call()</code>. Nó dựa vào việc function báo lại arity của mình để làm điều đó.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+add after <em>LoxFunction</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">int</span> <span class="i">arity</span>() {
+    <span class="k">return</span> <span class="i">declaration</span>.<span class="i">params</span>.<span class="i">size</span>();
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, add after <em>LoxFunction</em>()</div>
+
+<p>Đó là hầu hết phần biểu diễn object của chúng ta. Nhân tiện, ta cũng implement luôn <code>toString()</code>.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+add after <em>LoxFunction</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">String</span> <span class="i">toString</span>() {
+    <span class="k">return</span> <span class="s">&quot;&lt;fn &quot;</span> + <span class="i">declaration</span>.<span class="i">name</span>.<span class="i">lexeme</span> + <span class="s">&quot;&gt;&quot;</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, add after <em>LoxFunction</em>()</div>
+
+<p>Điều này giúp output đẹp hơn nếu người dùng in ra giá trị function.</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">add</span>(<span class="i">a</span>, <span class="i">b</span>) {
+  <span class="k">print</span> <span class="i">a</span> + <span class="i">b</span>;
+}
+
+<span class="k">print</span> <span class="i">add</span>; <span class="c">// &quot;&lt;fn add&gt;&quot;.</span>
+</pre></div>
+<h3><a href="#interpreting-function-declarations" id="interpreting-function-declarations"><small>10&#8202;.&#8202;4&#8202;.&#8202;1</small>Interpreting function declarations</a></h3>
+<p>Chúng ta sẽ quay lại và tinh chỉnh LoxFunction sau, nhưng bấy nhiêu là đủ để bắt đầu. Giờ ta có thể visit một function declaration.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitExpressionStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitFunctionStmt</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">stmt</span>) {
+    <span class="t">LoxFunction</span> <span class="i">function</span> = <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">stmt</span>);
+    <span class="i">environment</span>.<span class="i">define</span>(<span class="i">stmt</span>.<span class="i">name</span>.<span class="i">lexeme</span>, <span class="i">function</span>);
+    <span class="k">return</span> <span class="k">null</span>;
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitExpressionStmt</em>()</div>
+
+<p>Điều này tương tự như cách ta interpret các literal expression khác. Ta lấy một <em>syntax node</em> của function — tức là biểu diễn ở compile-time của function — và chuyển nó thành biểu diễn ở runtime. Ở đây, đó là một LoxFunction bao bọc syntax node này.</p>
+<p>Function declaration khác với các literal node khác ở chỗ nó <em>cũng</em> bind object kết quả vào một biến mới. Vậy nên, sau khi tạo LoxFunction, ta tạo một binding mới trong environment hiện tại và lưu tham chiếu tới nó ở đó.</p>
+<p>Với điều này, ta có thể define và call function của riêng mình ngay trong Lox. Thử xem:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">sayHi</span>(<span class="i">first</span>, <span class="i">last</span>) {
+  <span class="k">print</span> <span class="s">&quot;Hi, &quot;</span> + <span class="i">first</span> + <span class="s">&quot; &quot;</span> + <span class="i">last</span> + <span class="s">&quot;!&quot;</span>;
+}
+
+<span class="i">sayHi</span>(<span class="s">&quot;Dear&quot;</span>, <span class="s">&quot;Reader&quot;</span>);
+</pre></div>
+<p>Không biết bạn thế nào, chứ với tôi thì trông nó đã giống một ngôn ngữ lập trình “thứ thiệt” rồi đấy.</p>
+<h2><a href="#return-statements" id="return-statements"><small>10&#8202;.&#8202;5</small>Return Statements</a></h2>
+<p>Chúng ta có thể đưa dữ liệu vào function bằng cách truyền parameter, nhưng hiện chưa có cách nào để lấy kết quả trả <em>ra</em> <span name="hotel"><em>out</em></span>. Nếu Lox là một ngôn ngữ định hướng expression như Ruby hoặc Scheme, phần thân sẽ là một expression mà giá trị của nó ngầm định là kết quả của function. Nhưng trong Lox, phần thân của function là một danh sách statement không tạo ra giá trị, nên ta cần cú pháp riêng để trả về kết quả. Nói cách khác, là câu lệnh <code>return</code>. Tôi chắc bạn đã đoán được grammar rồi.</p>
+<aside name="hotel">
+<p>Hotel California của dữ liệu.</p>
+</aside>
+<div class="codehilite"><pre><span class="i">statement</span>      → <span class="i">exprStmt</span>
+               | <span class="i">forStmt</span>
+               | <span class="i">ifStmt</span>
+               | <span class="i">printStmt</span>
+               | <span class="i">returnStmt</span>
+               | <span class="i">whileStmt</span>
+               | <span class="i">block</span> ;
+
+<span class="i">returnStmt</span>     → <span class="s">&quot;return&quot;</span> <span class="i">expression</span>? <span class="s">&quot;;&quot;</span> ;
+</pre></div>
+<p>Chúng ta có thêm một production nữa — thực tế là production cuối cùng — trong rule <code>statement</code> lâu đời. Một <code>return</code> statement là từ khóa <code>return</code> theo sau bởi một expression tùy chọn và kết thúc bằng dấu chấm phẩy.</p>
+<p>Giá trị trả về là tùy chọn để hỗ trợ việc thoát sớm khỏi một function không trả về giá trị hữu ích. Trong các ngôn ngữ statically typed, hàm “void” không trả về giá trị, còn hàm non-void thì có. Vì Lox là dynamically typed, không có hàm void thực sự. Compiler không thể ngăn bạn lấy giá trị trả về của một call tới function không chứa câu lệnh <code>return</code>.</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">procedure</span>() {
+  <span class="k">print</span> <span class="s">&quot;don&#39;t return anything&quot;</span>;
+}
+
+<span class="k">var</span> <span class="i">result</span> = <span class="i">procedure</span>();
+<span class="k">print</span> <span class="i">result</span>; <span class="c">// ?</span>
+</pre></div>
+<p>Điều này có nghĩa là mọi function trong Lox đều phải trả về <em>một thứ gì đó</em>, ngay cả khi nó không chứa câu lệnh <code>return</code> nào. Chúng ta dùng <code>nil</code> cho trường hợp này, đó là lý do implement <code>call()</code> của LoxFunction trả về <code>null</code> ở cuối. Tương tự, nếu bạn bỏ qua giá trị trong câu lệnh <code>return</code>, ta sẽ coi nó tương đương với:</p>
+<div class="codehilite"><pre><span class="k">return</span> <span class="k">nil</span>;
+</pre></div>
+<p>Bên phía AST generator, ta thêm một <span name="return-ast">node mới</span>.</p>
+<div class="codehilite"><pre class="insert-before">      &quot;Print      : Expr expression&quot;,
+</pre><div class="source-file"><em>tool/GenerateAst.java</em><br>
+in <em>main</em>()</div>
+<pre class="insert">      <span class="s">&quot;Return     : Token keyword, Expr value&quot;</span>,
+</pre><pre class="insert-after">      &quot;Var        : Token name, Expr initializer&quot;,
+</pre></div>
+<div class="source-file-narrow"><em>tool/GenerateAst.java</em>, in <em>main</em>()</div>
+
+<aside name="return-ast">
+<p>Code được generated cho node mới này nằm trong <a href="appendix-ii.html#return-statement">Appendix II</a>.</p>
+</aside>
+<p>Node này giữ token từ khóa <code>return</code> để ta có thể dùng vị trí của nó khi báo lỗi, và giá trị được trả về (nếu có). Ta parse nó giống như các statement khác, bắt đầu bằng việc nhận diện từ khóa mở đầu.</p>
+<div class="codehilite"><pre class="insert-before">    if (match(PRINT)) return printStatement();
+</pre><div class="source-file"><em>lox/Parser.java</em><br>
+in <em>statement</em>()</div>
+<pre class="insert">    <span class="k">if</span> (<span class="i">match</span>(<span class="i">RETURN</span>)) <span class="k">return</span> <span class="i">returnStatement</span>();
+</pre><pre class="insert-after">    if (match(WHILE)) return whileStatement();
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, in <em>statement</em>()</div>
+
+<p>Từ đó rẽ nhánh sang:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Parser.java</em><br>
+add after <em>printStatement</em>()</div>
+<pre>  <span class="k">private</span> <span class="t">Stmt</span> <span class="i">returnStatement</span>() {
+    <span class="t">Token</span> <span class="i">keyword</span> = <span class="i">previous</span>();
+    <span class="t">Expr</span> <span class="i">value</span> = <span class="k">null</span>;
+    <span class="k">if</span> (!<span class="i">check</span>(<span class="i">SEMICOLON</span>)) {
+      <span class="i">value</span> = <span class="i">expression</span>();
+    }
+
+    <span class="i">consume</span>(<span class="i">SEMICOLON</span>, <span class="s">&quot;Expect &#39;;&#39; after return value.&quot;</span>);
+    <span class="k">return</span> <span class="k">new</span> <span class="t">Stmt</span>.<span class="t">Return</span>(<span class="i">keyword</span>, <span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Parser.java</em>, add after <em>printStatement</em>()</div>
+
+<p>Sau khi lấy token <code>return</code> đã được consume trước đó, ta tìm một expression cho giá trị trả về. Vì có rất nhiều token khác nhau có thể bắt đầu một expression, nên khó để biết chắc là có giá trị trả về <em>hay không</em>. Thay vào đó, ta kiểm tra xem nó <em>vắng mặt</em>. Vì dấu chấm phẩy không thể bắt đầu một expression, nếu token tiếp theo là dấu chấm phẩy, ta biết chắc là không có giá trị nào.</p>
+<h3><a href="#returning-from-calls" id="returning-from-calls"><small>10&#8202;.&#8202;5&#8202;.&#8202;1</small>Returning from calls</a></h3>
+<p>Việc interpret một câu lệnh <code>return</code> khá phức tạp. Bạn có thể return từ bất kỳ đâu trong phần thân của function, thậm chí sâu bên trong các statement khác. Khi <code>return</code> được execute, interpreter cần nhảy ra khỏi toàn bộ context hiện tại và khiến function call kết thúc, giống như một dạng control flow “tăng lực” nào đó.</p>
+<p>Ví dụ, giả sử chúng ta đang chạy chương trình này và chuẩn bị execute câu lệnh <code>return</code>:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">count</span>(<span class="i">n</span>) {
+  <span class="k">while</span> (<span class="i">n</span> &lt; <span class="n">100</span>) {
+    <span class="k">if</span> (<span class="i">n</span> == <span class="n">3</span>) <span class="k">return</span> <span class="i">n</span>; <span class="c">// &lt;--</span>
+    <span class="k">print</span> <span class="i">n</span>;
+    <span class="i">n</span> = <span class="i">n</span> + <span class="n">1</span>;
+  }
+}
+
+<span class="i">count</span>(<span class="n">1</span>);
+</pre></div>
+<p>Java call stack lúc này trông đại khái như sau:</p>
+<div class="codehilite"><pre>Interpreter.visitReturnStmt()
+Interpreter.visitIfStmt()
+Interpreter.executeBlock()
+Interpreter.visitBlockStmt()
+Interpreter.visitWhileStmt()
+Interpreter.executeBlock()
+LoxFunction.call()
+Interpreter.visitCallExpr()
+</pre></div>
+<p>Chúng ta cần đi từ đỉnh stack quay lại tận <code>call()</code>. Không biết bạn thế nào, chứ với tôi thì điều này nghe rất giống việc dùng exception. Khi execute một câu lệnh <code>return</code>, chúng ta sẽ dùng exception để “tháo” interpreter ra khỏi tất cả các visit method của những statement bao quanh, quay lại đoạn code bắt đầu execute phần thân.</p>
+<p>Visit method cho AST node mới của chúng ta trông như sau:</p>
+<div class="codehilite"><div class="source-file"><em>lox/Interpreter.java</em><br>
+add after <em>visitPrintStmt</em>()</div>
+<pre>  <span class="a">@Override</span>
+  <span class="k">public</span> <span class="t">Void</span> <span class="i">visitReturnStmt</span>(<span class="t">Stmt</span>.<span class="t">Return</span> <span class="i">stmt</span>) {
+    <span class="t">Object</span> <span class="i">value</span> = <span class="k">null</span>;
+    <span class="k">if</span> (<span class="i">stmt</span>.<span class="i">value</span> != <span class="k">null</span>) <span class="i">value</span> = <span class="i">evaluate</span>(<span class="i">stmt</span>.<span class="i">value</span>);
+
+    <span class="k">throw</span> <span class="k">new</span> <span class="t">Return</span>(<span class="i">value</span>);
+  }
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, add after <em>visitPrintStmt</em>()</div>
+
+<p>Nếu có giá trị trả về, ta evaluate nó, nếu không thì dùng <code>nil</code>. Sau đó, ta lấy giá trị này, bọc nó trong một custom exception class và ném ra.</p>
+<div class="codehilite"><div class="source-file"><em>lox/Return.java</em><br>
+create new file</div>
+<pre><span class="k">package</span> <span class="i">com.craftinginterpreters.lox</span>;
+
+<span class="k">class</span> <span class="t">Return</span> <span class="k">extends</span> <span class="t">RuntimeException</span> {
+  <span class="k">final</span> <span class="t">Object</span> <span class="i">value</span>;
+
+  <span class="t">Return</span>(<span class="t">Object</span> <span class="i">value</span>) {
+    <span class="k">super</span>(<span class="k">null</span>, <span class="k">null</span>, <span class="k">false</span>, <span class="k">false</span>);
+    <span class="k">this</span>.<span class="i">value</span> = <span class="i">value</span>;
+  }
+}
+</pre></div>
+<div class="source-file-narrow"><em>lox/Return.java</em>, create new file</div>
+
+<p>Class này bọc giá trị trả về cùng với những thứ Java yêu cầu cho một runtime exception class. Lời gọi constructor cha với các tham số <code>null</code> và <code>false</code> kia sẽ vô hiệu hóa một số cơ chế của JVM mà ta không cần. Vì chúng ta dùng exception class này cho mục đích <span name="exception">control flow</span> chứ không phải xử lý lỗi thực sự, nên ta không cần những chi phí phụ như stack trace.</p>
+<aside name="exception">
+<p>Nói cho rõ, tôi thường không thích dùng exception cho control flow. Nhưng bên trong một tree-walk interpreter đệ quy nặng, đây là cách hợp lý. Vì việc evaluate syntax tree của chúng ta gắn chặt với Java call stack, đôi khi ta buộc phải thao tác mạnh với call stack, và exception là công cụ tiện lợi cho việc đó.</p>
+</aside>
+<p>Chúng ta muốn việc này “tháo” ra đến tận nơi function call bắt đầu, tức method <code>call()</code> trong LoxFunction.</p>
+<div class="codehilite"><pre class="insert-before">          arguments.get(i));
+    }
+
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in <em>call</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="k">try</span> {
+      <span class="i">interpreter</span>.<span class="i">executeBlock</span>(<span class="i">declaration</span>.<span class="i">body</span>, <span class="i">environment</span>);
+    } <span class="k">catch</span> (<span class="t">Return</span> <span class="i">returnValue</span>) {
+      <span class="k">return</span> <span class="i">returnValue</span>.<span class="i">value</span>;
+    }
+</pre><pre class="insert-after">    return null;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in <em>call</em>(), replace 1 line</div>
+
+<p>Ta bọc lời gọi <code>executeBlock()</code> trong một khối try-catch. Khi bắt được return exception, ta lấy giá trị bên trong và dùng nó làm giá trị trả về từ <code>call()</code>. Nếu không bắt được exception nào, nghĩa là function đã chạy đến cuối phần thân mà không gặp câu lệnh <code>return</code>. Khi đó, nó ngầm định trả về <code>nil</code>.</p>
+<p>Hãy thử xem. Giờ chúng ta đã đủ sức để hỗ trợ ví dụ kinh điển này — một function đệ quy tính số Fibonacci:</p>
+<p><span name="slow"></span></p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">fib</span>(<span class="i">n</span>) {
+  <span class="k">if</span> (<span class="i">n</span> &lt;= <span class="n">1</span>) <span class="k">return</span> <span class="i">n</span>;
+  <span class="k">return</span> <span class="i">fib</span>(<span class="i">n</span> - <span class="n">2</span>) + <span class="i">fib</span>(<span class="i">n</span> - <span class="n">1</span>);
+}
+
+<span class="k">for</span> (<span class="k">var</span> <span class="i">i</span> = <span class="n">0</span>; <span class="i">i</span> &lt; <span class="n">20</span>; <span class="i">i</span> = <span class="i">i</span> + <span class="n">1</span>) {
+  <span class="k">print</span> <span class="i">fib</span>(<span class="i">i</span>);
+}
+</pre></div>
+<p>Chương trình nhỏ này sử dụng gần như mọi tính năng ngôn ngữ mà chúng ta đã implement trong nhiều chương vừa qua — expression, phép toán số học, rẽ nhánh, vòng lặp, biến, function, function call, parameter binding, và return.</p>
+<aside name="slow">
+<p>Bạn có thể nhận thấy nó chạy khá chậm. Rõ ràng, recursion không phải cách hiệu quả nhất để tính số Fibonacci, nhưng như một microbenchmark, nó kiểm tra khá tốt tốc độ interpreter của chúng ta khi thực hiện function call.</p>
+<p>Như bạn thấy, câu trả lời là “không nhanh lắm”. Không sao cả. Interpreter viết bằng C của chúng ta sẽ nhanh hơn.</p>
+</aside>
+<h2><a href="#local-functions-&-closures" id="local-functions-&-closures"><small>10&#8202;.&#8202;6</small>Local Functions &amp; Closures</a></h2>
+<p>Các function của chúng ta giờ đã khá đầy đủ tính năng, nhưng vẫn còn một lỗ hổng cần vá. Thực tế, đây là một khoảng trống đủ lớn để chúng ta sẽ dành phần lớn <a href="resolving-and-binding.html">chương tiếp theo</a> để xử lý triệt để, nhưng ngay bây giờ ta có thể bắt đầu.</p>
+<p>Phần implement <code>call()</code> của LoxFunction sẽ tạo một environment mới để bind các parameter của function. Khi tôi cho bạn xem đoạn code đó, tôi đã lướt qua một điểm quan trọng: <em>parent</em> của environment đó là gì?</p>
+<p>Hiện tại, nó luôn là <code>globals</code>, tức environment global ngoài cùng. Nhờ vậy, nếu một identifier không được định nghĩa bên trong phần thân function, interpreter có thể tìm ra nó ở phạm vi global bên ngoài function. Trong ví dụ Fibonacci, đây là cách interpreter tìm được lời gọi đệ quy tới <code>fib</code> ngay trong phần thân của chính function đó — <code>fib</code> là một biến global.</p>
+<p>Nhưng hãy nhớ rằng trong Lox, function declaration được phép xuất hiện <em>bất cứ nơi nào</em> một tên có thể được bind. Điều này bao gồm cả cấp cao nhất của script Lox, nhưng cũng có thể nằm bên trong block hoặc bên trong function khác. Lox hỗ trợ <strong>local function</strong> được định nghĩa bên trong một function khác, hoặc lồng trong một block.</p>
+<p>Xem ví dụ kinh điển này:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">makeCounter</span>() {
+  <span class="k">var</span> <span class="i">i</span> = <span class="n">0</span>;
+  <span class="k">fun</span> <span class="i">count</span>() {
+    <span class="i">i</span> = <span class="i">i</span> + <span class="n">1</span>;
+    <span class="k">print</span> <span class="i">i</span>;
+  }
+
+  <span class="k">return</span> <span class="i">count</span>;
+}
+
+<span class="k">var</span> <span class="i">counter</span> = <span class="i">makeCounter</span>();
+<span class="i">counter</span>(); <span class="c">// &quot;1&quot;.</span>
+<span class="i">counter</span>(); <span class="c">// &quot;2&quot;.</span>
+</pre></div>
+<p>Ở đây, <code>count()</code> sử dụng <code>i</code>, biến này được khai báo bên ngoài nó, trong function chứa nó là <code>makeCounter()</code>. <code>makeCounter()</code> trả về một tham chiếu tới function <code>count()</code> rồi phần thân của nó kết thúc hoàn toàn.</p>
+<p>Trong khi đó, code ở cấp cao nhất gọi function <code>count()</code> được trả về. Điều này execute phần thân của <code>count()</code>, vốn gán và đọc <code>i</code>, mặc dù function nơi <code>i</code> được định nghĩa đã thoát.</p>
+<p>Nếu bạn chưa từng gặp ngôn ngữ có nested function, điều này có thể nghe hơi “điên rồ”, nhưng người dùng mong nó hoạt động. Tiếc là, nếu chạy ngay bây giờ, bạn sẽ nhận lỗi undefined variable khi gọi <code>counter()</code> và phần thân <code>count()</code> cố tìm <code>i</code>. Nguyên nhân là vì chuỗi environment lúc này trông như sau:</p><img src="image/functions/global.png" alt="Chuỗi environment từ phần thân count() tới global scope." />
+<p>Khi ta call <code>count()</code> (thông qua tham chiếu được lưu trong <code>counter</code>), ta tạo một environment trống mới cho phần thân function. Parent của nó là environment global. Chúng ta đã mất environment của <code>makeCounter()</code> nơi <code>i</code> được bind.</p>
+<p>Hãy quay ngược thời gian một chút. Đây là chuỗi environment ngay khi ta khai báo <code>count()</code> bên trong phần thân <code>makeCounter()</code>:</p><img src="image/functions/body.png" alt="Chuỗi environment bên trong phần thân makeCounter()." />
+<p>Tại thời điểm function được khai báo, ta có thể thấy <code>i</code>. Nhưng khi return khỏi <code>makeCounter()</code> và thoát phần thân của nó, interpreter loại bỏ environment đó. Vì interpreter không giữ lại environment bao quanh <code>count()</code>, nên chính function object phải tự giữ nó.</p>
+<p>Cấu trúc dữ liệu này được gọi là <span name="closure"><strong>closure</strong></span> vì nó “đóng” (close over) và giữ lại các biến bao quanh nơi function được khai báo. Closure đã tồn tại từ thời kỳ đầu của Lisp, và các lập trình viên ngôn ngữ đã nghĩ ra đủ cách để implement chúng. Với jlox, ta sẽ làm cách đơn giản nhất mà vẫn hoạt động. Trong LoxFunction, ta thêm một field để lưu environment.</p>
+<aside name="closure">
+<p>&ldquo;Closure&rdquo; lại là một thuật ngữ khác do Peter J. Landin đặt ra. Tôi đoán trước khi ông xuất hiện, các nhà khoa học máy tính chỉ giao tiếp với nhau bằng những tiếng gầm gừ nguyên thủy và các động tác tay.</p>
+</aside>
+<div class="codehilite"><pre class="insert-before">  private final Stmt.Function declaration;
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in class <em>LoxFunction</em></div>
+<pre class="insert">  <span class="k">private</span> <span class="k">final</span> <span class="t">Environment</span> <span class="i">closure</span>;
+
+</pre><pre class="insert-after">  LoxFunction(Stmt.Function declaration) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in class <em>LoxFunction</em></div>
+
+<p>Ta khởi tạo nó trong constructor.</p>
+<div class="codehilite"><div class="source-file"><em>lox/LoxFunction.java</em><br>
+constructor <em>LoxFunction</em>()<br>
+replace 1 line</div>
+<pre class="insert">  <span class="t">LoxFunction</span>(<span class="t">Stmt</span>.<span class="t">Function</span> <span class="i">declaration</span>, <span class="t">Environment</span> <span class="i">closure</span>) {
+    <span class="k">this</span>.<span class="i">closure</span> = <span class="i">closure</span>;
+</pre><pre class="insert-after">    this.declaration = declaration;
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, constructor <em>LoxFunction</em>(), replace 1 line</div>
+
+<p>Khi tạo một LoxFunction, ta sẽ capture environment hiện tại.</p>
+<div class="codehilite"><pre class="insert-before">  public Void visitFunctionStmt(Stmt.Function stmt) {
+</pre><div class="source-file"><em>lox/Interpreter.java</em><br>
+in <em>visitFunctionStmt</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">LoxFunction</span> <span class="i">function</span> = <span class="k">new</span> <span class="t">LoxFunction</span>(<span class="i">stmt</span>, <span class="i">environment</span>);
+</pre><pre class="insert-after">    environment.define(stmt.name.lexeme, function);
+</pre></div>
+<div class="source-file-narrow"><em>lox/Interpreter.java</em>, in <em>visitFunctionStmt</em>(), replace 1 line</div>
+
+<p>Đây là environment đang hoạt động khi function được <em>khai báo</em>, không phải khi nó được <em>call</em>, và đó chính là điều ta muốn. Nó đại diện cho lexical scope bao quanh function declaration. Cuối cùng, khi ta call function, ta dùng environment này làm parent cho call thay vì trỏ thẳng tới <code>globals</code>.</p>
+<div class="codehilite"><pre class="insert-before">                     List&lt;Object&gt; arguments) {
+</pre><div class="source-file"><em>lox/LoxFunction.java</em><br>
+in <em>call</em>()<br>
+replace 1 line</div>
+<pre class="insert">    <span class="t">Environment</span> <span class="i">environment</span> = <span class="k">new</span> <span class="t">Environment</span>(<span class="i">closure</span>);
+</pre><pre class="insert-after">    for (int i = 0; i &lt; declaration.params.size(); i++) {
+</pre></div>
+<div class="source-file-narrow"><em>lox/LoxFunction.java</em>, in <em>call</em>(), replace 1 line</div>
+
+<p>Điều này tạo ra một chuỗi environment từ phần thân function đi ra qua các environment nơi function được khai báo, cho tới global scope. Chuỗi environment ở runtime khớp với cấu trúc lồng nhau của source code như ta mong muốn. Kết quả cuối cùng khi ta call function đó trông như sau:</p><img src="image/functions/closure.png" alt="Chuỗi environment với closure." />
+<p>Giờ thì, như bạn thấy, interpreter vẫn có thể tìm <code>i</code> khi cần vì nó nằm ở giữa chuỗi environment. Hãy thử chạy lại ví dụ <code>makeCounter()</code>. Nó hoạt động rồi!</p>
+<p>Function cho phép chúng ta trừu tượng hóa, tái sử dụng và kết hợp code. Lox giờ đã mạnh mẽ hơn nhiều so với chiếc máy tính số học sơ khai ban đầu. Tiếc là, trong lúc vội vàng nhét closure vào, chúng ta đã để lọt một chút dynamic scoping vào interpreter. Trong <a href="resolving-and-binding.html">chương tiếp theo</a>, chúng ta sẽ khám phá sâu hơn về lexical scope và bịt kín lỗ hổng đó.</p>
+<div class="challenges">
+<h2><a href="#thử-thách" id="thử-thách"><small>10&#8202;.&#8202;7</small>Thử thách</a></h2>
+<ol>
+<li>
+<p>Interpreter của chúng ta cẩn thận kiểm tra xem số lượng argument được truyền vào một function có khớp với số lượng parameter mà nó mong đợi hay không. Vì việc kiểm tra này được thực hiện ở runtime cho mỗi lần call, nó sẽ có chi phí hiệu năng. Các implementation của Smalltalk lại không gặp vấn đề này. Tại sao vậy?</p>
+</li>
+<li>
+<p>Cú pháp function declaration của Lox thực hiện hai thao tác độc lập. Nó tạo ra một function và đồng thời bind nó với một tên. Điều này cải thiện khả năng sử dụng cho trường hợp phổ biến khi bạn muốn gắn một tên với function.<br />
+Nhưng trong code theo phong cách functional, bạn thường muốn tạo một function để truyền ngay cho một function khác hoặc return nó. Trong trường hợp đó, nó không cần tên.</p>
+<p>Các ngôn ngữ khuyến khích phong cách functional thường hỗ trợ <strong>anonymous function</strong> hoặc <strong>lambda</strong> — một cú pháp expression tạo ra function mà không bind nó với tên. Hãy thêm cú pháp anonymous function vào Lox để đoạn code này hoạt động:</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">thrice</span>(<span class="i">fn</span>) {
+  <span class="k">for</span> (<span class="k">var</span> <span class="i">i</span> = <span class="n">1</span>; <span class="i">i</span> &lt;= <span class="n">3</span>; <span class="i">i</span> = <span class="i">i</span> + <span class="n">1</span>) {
+    <span class="i">fn</span>(<span class="i">i</span>);
+  }
+}
+
+<span class="i">thrice</span>(<span class="k">fun</span> (<span class="i">a</span>) {
+  <span class="k">print</span> <span class="i">a</span>;
+});
+<span class="c">// &quot;1&quot;.</span>
+<span class="c">// &quot;2&quot;.</span>
+<span class="c">// &quot;3&quot;.</span>
+</pre></div>
+<p>Bạn sẽ xử lý thế nào với trường hợp khó khi một anonymous function expression xuất hiện trong một expression statement:</p>
+<div class="codehilite"><pre><span class="k">fun</span> () {};
+</pre></div>
+</li>
+<li>
+<p>Chương trình này có hợp lệ không?</p>
+<div class="codehilite"><pre><span class="k">fun</span> <span class="i">scope</span>(<span class="i">a</span>) {
+  <span class="k">var</span> <span class="i">a</span> = <span class="s">&quot;local&quot;</span>;
+}
+</pre></div>
+<p>Nói cách khác, parameter của một function có nằm trong <em>cùng</em> scope với các biến local của nó, hay ở một scope bên ngoài? Lox xử lý thế nào? Còn các ngôn ngữ khác mà bạn biết thì sao? Theo bạn, một ngôn ngữ <em>nên</em> làm gì?</p>
+</li>
+</ol>
+</div>
+
+<footer>
+<a href="resolving-and-binding.html" class="next">
+  Đọc tiếp Chapter: &ldquo;Resolving and Binding&rdquo; &rarr;
+</a>
+Handcrafted by Robert Nystrom&ensp;&mdash;&ensp;<a href="https://github.com/munificent/craftinginterpreters/blob/master/LICENSE" target="_blank">&copy; 2015&hairsp;&ndash;&hairsp;2021</a>
+</footer>
+</article>
+
+</div>
+</body>
+</html>
